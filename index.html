@@ -1,0 +1,3332 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="4LnPiOb06cFtMb2DvLTs3K">
+<head data-page-node-id="SMHbRdgkaBpNIsTSAbCtcE">
+<meta charset="utf-8" data-page-node-id="24umd8gCSLjNJXS8GGR1Mv">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" data-page-node-id="ZvJ6uN3dW5TUqR2aDEqeYN">
+<title>中秋博饼 · 闽南掷骰大碗</title>
+<meta name="description" content="闽南中秋博饼小游戏 —— 六颗骰子丢进大红碗博状元。2-6 人传阅、单人挑战、状元可夺、实时概率统计，打开就能玩。">
+<meta name="theme-color" content="#5c0709">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:type" content="website">
+<meta property="og:title" content="中秋博饼 · 闽南掷骰大碗">
+<meta property="og:description" content="六颗骰子丢进大红碗博状元 —— 状元插金花最大，状元饼随时可能被夺走。打开就能玩。">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9JyNjMjE3MWYnLz48Y2lyY2xlIGN4PSczMicgY3k9JzMyJyByPScyOScgZmlsbD0nbm9uZScgc3Ryb2tlPScjZThiODRiJyBzdHJva2Utd2lkdGg9JzMnLz48Y2lyY2xlIGN4PScyMScgY3k9JzIzJyByPSc1JyBmaWxsPScjZmZmZGY2Jy8+PGNpcmNsZSBjeD0nNDMnIGN5PScyMycgcj0nNScgZmlsbD0nI2ZmZmRmNicvPjxjaXJjbGUgY3g9JzMyJyBjeT0nNDEnIHI9JzYnIGZpbGw9JyNmZmZkZjYnLz48L3N2Zz4=">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9JyNjMjE3MWYnLz48Y2lyY2xlIGN4PSczMicgY3k9JzMyJyByPScyOScgZmlsbD0nbm9uZScgc3Ryb2tlPScjZThiODRiJyBzdHJva2Utd2lkdGg9JzMnLz48Y2lyY2xlIGN4PScyMScgY3k9JzIzJyByPSc1JyBmaWxsPScjZmZmZGY2Jy8+PGNpcmNsZSBjeD0nNDMnIGN5PScyMycgcj0nNScgZmlsbD0nI2ZmZmRmNicvPjxjaXJjbGUgY3g9JzMyJyBjeT0nNDEnIHI9JzYnIGZpbGw9JyNmZmZkZjYnLz48L3N2Zz4=">
+<style>
+/* ============================================================
+   ① 主题变量
+   ============================================================ */
+:root{
+  /* 一个红、一个白（照用户给的实物参考图）：
+     碗的红 == 骰子红四点的红 == --red；碗内高光的白 == 骰子的白 == --die-white */
+  --red:#d92b20; --red-d:#8b0f16; --red-l:#ff6a52;
+  --die-white:#fffdf6; --die-white-d:#efe2ca;
+  --gold:#e8b84b; --gold-l:#ffe6a3;
+  --ink:#2a0a0c; --paper:#fff8ee; --muted:rgba(255,248,238,.62);
+  --panel:rgba(58,10,14,.72); --panel-b:rgba(232,184,75,.28);
+  --ok:#7ed957; --warn:#ffcf5c;
+  --die:40px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{
+  font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",system-ui,-apple-system,sans-serif;
+  color:var(--paper);
+  background:
+    radial-gradient(1100px 620px at 50% -12%, #7d141d 0%, rgba(125,20,29,0) 62%),
+    radial-gradient(760px 520px at 6% 104%, #5a0d13 0%, rgba(90,13,19,0) 58%),
+    radial-gradient(620px 420px at 96% 8%, #4a2a05 0%, rgba(74,42,5,0) 55%),
+    linear-gradient(180deg,#1b0508 0%,#250709 46%,#130306 100%);
+  background-attachment:fixed;
+  overflow-x:hidden;
+}
+h1,h2,h3{margin:0;font-weight:700}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+
+/* ============================================================
+   ② 骨架 / 顶栏
+   ============================================================ */
+#app{max-width:1180px;margin:0 auto;padding:12px 12px 26px}
+.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.moon{width:44px;height:44px;border-radius:50%;flex:0 0 auto;
+  background:radial-gradient(circle at 34% 30%,#fffbe4,#f6dc94 56%,#d6ab52);
+  box-shadow:0 0 22px 5px rgba(246,220,148,.42),inset -6px -6px 12px rgba(120,80,20,.18);}
+.brand{display:flex;flex-direction:column;line-height:1.25}
+.brand b{font-size:19px;letter-spacing:2px}
+.brand span{font-size:11.5px;color:var(--muted);letter-spacing:.6px}
+.topbar .spacer{flex:1 1 auto}
+.tbtn{font-size:12.5px;padding:7px 12px;border-radius:999px;border:1px solid var(--panel-b);
+  background:rgba(255,255,255,.05);color:var(--paper);transition:.18s;white-space:nowrap}
+.tbtn:hover{background:rgba(232,184,75,.16);border-color:var(--gold)}
+.tbtn.on{background:rgba(232,184,75,.22);border-color:var(--gold);color:var(--gold-l)}
+
+/* 阶段横幅 */
+.phasebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--panel);border:1px solid var(--panel-b);border-radius:14px;
+  padding:9px 13px;margin-bottom:12px;backdrop-filter:blur(6px)}
+.phasebar .who{font-size:14.5px;font-weight:700}
+.phasebar .who em{color:var(--gold-l);font-style:normal;font-size:16px;
+  padding:0 4px;text-shadow:0 0 12px rgba(232,184,75,.6)}
+.phasebar .meta{font-size:12px;color:var(--muted)}
+.phasebar .pill{font-size:11.5px;padding:3px 9px;border-radius:999px;
+  background:rgba(255,255,255,.08);border:1px solid var(--panel-b)}
+.phasebar .pill.hot{background:rgba(207,32,39,.4);border-color:var(--red-l);color:#ffdede}
+
+/* ============================================================
+   ③ 布局
+   ============================================================ */
+.layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(330px,.9fr);gap:14px;align-items:start}
+.col-right{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--panel-b);border-radius:16px;
+  padding:12px;backdrop-filter:blur(6px)}
+.card > h3{font-size:13px;letter-spacing:1.4px;color:var(--gold-l);margin-bottom:9px;
+  display:flex;align-items:center;gap:8px}
+.card > h3::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--panel-b),transparent)}
+
+/* ============================================================
+   ④ 红色大碗 + 3D 骰子
+   ============================================================ */
+.stage{display:flex;flex-direction:column;gap:10px}
+/* 完整碗型（照 R.jpg 建的模）：碗口椭圆 + 外壁 + 圈足，整只碗用一只内联 SVG 画。
+   SVG viewBox = 1000×840，下面所有 HTML 层的百分比都直接由 viewBox 坐标换算，保证严格对齐。
+   比例取自照片：碗口高/宽 ≈ 0.49（抬高视角后取 0.55）、碗口下方碗身 ≈ 0.22 碗宽、整碗高 ≈ 0.76 碗宽。 */
+.bowl-wrap{position:relative;width:100%;aspect-ratio:1000/840;max-width:560px;margin:0 auto;
+  perspective:1200px;perspective-origin:50% 36%}
+/* 碗在桌上的落影（紧贴碗底，别让碗看着悬空） */
+.bowl-wrap::after{content:"";position:absolute;left:16%;right:16%;bottom:0;height:6%;z-index:0;
+  border-radius:50%;
+  background:radial-gradient(closest-side,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
+.bowl-svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;z-index:1}
+/* 骰子落区 = SVG 里碗底椭圆的外接矩形（cx500 cy378 rx352 ry194，viewBox 1000×840）
+   → 左/右 (500-352)/1000 = 14.8%，上 184/840 = 21.9%，下 (840-572)/840 = 31.9% */
+.bowl-inner{position:absolute;left:14.8%;right:14.8%;top:21.9%;bottom:31.9%;z-index:3}
+/* 骰子落区平面：微微后仰，能看到骰子一点厚度，正面点数仍基本正对镜头（保可读） */
+.dice-field{position:absolute;inset:0;perspective:1500px;transform-style:preserve-3d;
+  transform:rotateX(18deg);
+  transform-origin:50% 50%}
+.die-wrap{position:absolute;left:50%;top:50%;width:var(--die);height:var(--die);margin:0;
+  transform-style:preserve-3d;will-change:transform}   /* 位置与旋转都交给 WAAPI，不再用 CSS transition */
+/* 接触阴影：投在碗底平面上（骰子整体被抬高半个边长坐在碗底，影子要落回平面） */
+.die-wrap::before{content:"";position:absolute;left:50%;top:99%;width:90%;height:9%;
+  transform:translate(-50%,-50%) translateZ(calc(var(--die) / -2));
+  border-radius:50%;
+  background:radial-gradient(closest-side,rgba(0,0,0,.42),rgba(0,0,0,0));pointer-events:none}
+.cube{position:absolute;inset:0;transform-style:preserve-3d}
+/* 骰面：倒角 + 象牙白微渐变，不是一块死白方块 */
+.face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(3,1fr);padding:13%;border-radius:22%;
+  background:
+    radial-gradient(58% 40% at 30% 15%, rgba(255,255,255,.7) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.18) 0%, rgba(150,110,50,0) 72%),
+    linear-gradient(150deg,var(--die-white) 0%, #f8f1e0 44%, #eadfc6 78%, var(--die-white-d) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(105,66,20,.28),
+    inset 0 0 0 3px rgba(255,252,240,.5),
+    inset -3px -4px 6px rgba(130,92,36,.28),
+    inset 2px 2px 4px rgba(255,255,255,.9);
+  backface-visibility:visible}
+.cell{display:grid;place-items:center;width:100%;height:100%}
+/* 点数：真内凹 —— 坑口一圈暗边、坑内有阴影、坑底一点反光 */
+.pip{display:block;width:76%;height:76%;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#553d31 0%,#2a170d 58%,#150a04 100%);
+  box-shadow:
+    0 0 0 1px rgba(120,80,30,.25),
+    inset 0 2px 2.5px rgba(0,0,0,.65),
+    inset 0 -1.5px 1.5px rgba(255,255,255,.2),
+    0 .75px .5px rgba(255,255,255,.6)}
+.pip.red{background:radial-gradient(circle at 38% 32%,#ffa8a8 0%,#e03028 46%,#9c1114 100%);
+  box-shadow:
+    0 0 0 1px rgba(140,20,20,.35),
+    inset 0 2px 2.5px rgba(70,0,0,.6),
+    inset 0 -1.5px 1.5px rgba(255,255,255,.28),
+    0 .75px .5px rgba(255,255,255,.55)}
+
+/* 结果条 */
+.result{margin:0 auto;width:100%;max-width:560px;min-height:66px;
+  border-radius:14px;border:1px dashed var(--panel-b);background:rgba(0,0,0,.22);
+  display:flex;align-items:center;gap:12px;padding:10px 14px;transition:.25s}
+.result .rname{font-size:17px;font-weight:700;letter-spacing:1px}
+.result .rdesc{font-size:12.5px;color:var(--muted);line-height:1.5}
+.result .rdice{font-size:12px;color:var(--gold-l);letter-spacing:2px}
+.result.hit{border-style:solid;border-color:var(--gold);background:rgba(232,184,75,.13);
+  box-shadow:0 0 22px rgba(232,184,75,.22) inset}
+.result.zy{border-color:#ff5a5a;background:radial-gradient(120% 140% at 50% 0%,rgba(255,90,90,.34),rgba(120,10,16,.5));
+  box-shadow:0 0 30px rgba(255,80,80,.34) inset}
+.result.miss{border-color:rgba(255,255,255,.14)}
+
+/* 博一次按钮 */
+.rollbar{display:flex;justify-content:center;gap:10px;align-items:center;flex-wrap:wrap}
+.btn-roll{position:relative;font-size:17px;font-weight:800;letter-spacing:3px;
+  padding:13px 40px;border-radius:999px;color:#40080c;
+  background:linear-gradient(160deg,#ffe9b0,#e8b84b 42%,#b9862a);
+  box-shadow:0 8px 0 #7d0f14, 0 12px 26px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.8);
+  transition:transform .1s, box-shadow .1s, filter .2s}
+.btn-roll:active{transform:translateY(5px);box-shadow:0 3px 0 #7d0f14,0 6px 14px rgba(0,0,0,.5)}
+.btn-roll[disabled]{filter:grayscale(.6) brightness(.8);cursor:not-allowed}
+.btn-ghost{font-size:13px;padding:10px 16px;border-radius:999px;border:1px solid var(--panel-b);
+  background:rgba(255,255,255,.06)}
+.btn-ghost:hover{border-color:var(--gold)}
+
+/* ============================================================
+   ⑤ 玩家 / 奖池 / 日志
+   ============================================================ */
+.players{display:flex;flex-direction:column;gap:8px}
+.pcard{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:13px;
+  border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.045);transition:.2s}
+.pcard.active{border-color:var(--gold);background:rgba(232,184,75,.14);
+  box-shadow:0 0 0 1px rgba(232,184,75,.35),0 6px 18px rgba(0,0,0,.35)}
+.pcard .pav{width:34px;height:34px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;
+  font-size:19px;background:radial-gradient(circle at 35% 30%,#5c1116,#2c0507);
+  border:1px solid var(--panel-b)}
+.pcard .pinfo{flex:1 1 auto;min-width:0}
+.pcard .pname{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+.pcard .pname .badge{font-size:10px;padding:1px 6px;border-radius:999px;
+  background:linear-gradient(160deg,#ffe9b0,#e8b84b);color:#4a1206;font-weight:800}
+.pcard .pdetail{font-size:11px;color:var(--muted);margin-top:3px;
+  display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.pcard .pdetail .pempty{opacity:.6}
+.pchip{font-size:10.5px;line-height:1.5;padding:1px 6px;border-radius:999px;
+  background:rgba(232,184,75,.14);border:1px solid rgba(232,184,75,.30);color:var(--gold-l);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.pchip.zy{background:linear-gradient(160deg,#ffe9b0,#e8b84b);color:#4a1206;border-color:transparent;font-weight:800}
+.pcard .ptotal{font-size:19px;font-weight:800;color:var(--gold-l);flex:0 0 auto;text-align:right;line-height:1}
+.pcard .ptotal small{display:block;font-size:10px;color:var(--muted);font-weight:400}
+
+.pool{display:flex;flex-direction:column;gap:6px}
+.prow{display:grid;grid-template-columns:44px 1fr 46px 46px;align-items:center;gap:7px;font-size:12.5px}
+.prow .pd{text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prow.empty .pd{color:rgba(255,248,238,.3)}
+.prow .pn{color:var(--gold-l)}
+.prow .pb{height:8px;border-radius:99px;background:rgba(0,0,0,.34);overflow:hidden}
+.prow .pb i{display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--gold),var(--red-l));transition:width .35s}
+.prow .pc{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.prow.empty .pn,.prow.empty .pc{color:rgba(255,248,238,.34)}
+.prow.zy{grid-template-columns:44px 1fr;padding:4px 0 7px;border-bottom:1px dashed rgba(255,255,255,.1);
+  margin-bottom:4px}
+.prow.zy .pc2{font-size:12px;text-align:right;color:var(--gold-l);font-weight:700}
+.prow.zy .pc2.none{color:rgba(255,248,238,.4);font-weight:400}
+
+.log{max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;
+  padding-right:4px;scrollbar-width:thin}
+.log::-webkit-scrollbar{width:6px}
+.log::-webkit-scrollbar-thumb{background:rgba(232,184,75,.35);border-radius:9px}
+.lrow{font-size:12px;line-height:1.5;padding:6px 9px;border-radius:9px;
+  background:rgba(0,0,0,.22);border-left:3px solid rgba(255,255,255,.16)}
+.lrow b{color:var(--gold-l)}
+.lrow .tag{font-size:10px;padding:1px 6px;border-radius:99px;margin-left:6px;
+  background:rgba(255,255,255,.12)}
+.lrow.g-zy{border-left-color:#ff5a5a;background:rgba(180,20,26,.3)}
+.lrow.g-zy .tag{background:#ff5a5a;color:#3b0206;font-weight:800}
+.lrow.g-hit{border-left-color:var(--gold)}
+.lrow.g-hit .tag{background:rgba(232,184,75,.9);color:#3b2402;font-weight:700}
+.lrow.g-miss{border-left-color:rgba(255,255,255,.2);opacity:.72}
+.lrow .dice{color:var(--muted)}
+.empty-tip{font-size:12px;color:var(--muted);text-align:center;padding:12px 0}
+
+/* ============================================================
+   ⑥ 设置页 / 弹层
+   ============================================================ */
+.setupwrap{max-width:620px;margin:0 auto}
+.setup-note{font-size:12.5px;color:var(--muted);line-height:1.7;margin:10px 0 14px}
+.prow-setup{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.prow-setup .av{width:40px;height:40px;flex:0 0 auto;border-radius:50%;font-size:21px;
+  display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#5c1116,#2c0507);
+  border:1px solid var(--panel-b)}
+.prow-setup input{flex:1 1 auto;min-width:0;font-size:14px;padding:10px 12px;border-radius:11px;
+  border:1px solid var(--panel-b);background:rgba(0,0,0,.28);color:var(--paper);font-family:inherit}
+.prow-setup input:focus{outline:none;border-color:var(--gold)}
+.prow-setup .del{width:34px;height:34px;border-radius:50%;font-size:17px;color:#ffb3b3;
+  border:1px solid rgba(255,120,120,.35);background:rgba(255,0,0,.1)}
+.setup-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.setup-h4{font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px}
+.setup-h4 small{font-weight:400;color:var(--muted);font-size:11px;margin-left:6px;letter-spacing:0}
+/* 奖项数量：5 个非状元等级（状元固定 1 份） */
+.quotaset{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.qrow{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.045)}
+.qrow .qn{font-size:12px;color:var(--gold-l);flex:1 1 auto;white-space:nowrap}
+.qrow input{width:48px;text-align:center;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;
+  background:rgba(0,0,0,.32);border:1px solid var(--panel-b);border-radius:8px;color:var(--paper);padding:3px 4px}
+.qrow input:focus{outline:none;border-color:var(--gold)}
+/* 本局掷骰分布 */
+.stat-note{font-size:11px;color:var(--muted);line-height:1.7;margin-top:10px}
+.stable{display:flex;flex-direction:column;gap:4px}
+.srow{display:grid;grid-template-columns:1fr 58px 68px 68px 64px;gap:8px;align-items:center;
+  font-size:11.5px;padding:6px 9px;border-radius:9px;background:rgba(0,0,0,.22);
+  font-variant-numeric:tabular-nums}
+.srow.head{background:transparent;color:var(--muted);font-size:10.5px;padding:0 9px 2px}
+.srow .sn{color:var(--gold-l);font-weight:700}
+.srow.top .sn{color:#ff9a92}
+.srow .sn em{font-style:normal;font-weight:400;color:var(--muted);font-size:10px;margin-left:5px}
+.srow .sn .sbar{display:block;height:4px;border-radius:9px;background:rgba(0,0,0,.36);overflow:hidden;margin-top:4px}
+.srow .sn .sbar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--gold),var(--red-l))}
+.srow .sc,.srow .sp,.srow .st,.srow .sd{text-align:right}
+.srow .sp{font-weight:700}
+.srow .st,.srow .sd{color:var(--muted)}
+.srow .sd.more{color:var(--warn)}
+.srow .sd.less{color:var(--ok)}
+.pdist{display:flex;flex-direction:column;gap:4px}
+.pdist .drow{display:grid;grid-template-columns:96px 1fr 44px 62px 58px;gap:8px;align-items:center;
+  font-size:11.5px;padding:3px 2px}
+.pdist .drow .dn{color:var(--gold-l);font-weight:700}
+.pdist .drow .db{height:6px;border-radius:99px;background:rgba(0,0,0,.34);overflow:hidden}
+.pdist .drow .db i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold),var(--red-l))}
+.pdist .drow .dc,.pdist .drow .dp{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.pdist .drow .dt{text-align:right;font-variant-numeric:tabular-nums;color:rgba(255,248,238,.45)}
+.btn-primary{font-size:15px;font-weight:800;letter-spacing:2px;padding:12px 30px;border-radius:999px;
+  color:#40080c;background:linear-gradient(160deg,#ffe9b0,#e8b84b 45%,#c08f2c);
+  box-shadow:0 6px 0 #7d0f14,0 10px 20px rgba(0,0,0,.45)}
+.btn-primary:active{transform:translateY(4px);box-shadow:0 2px 0 #7d0f14}
+.chipset{display:flex;gap:6px;flex-wrap:wrap}
+.chipset .chip{font-size:12.5px;padding:7px 14px;border-radius:999px;border:1px solid var(--panel-b);
+  background:rgba(255,255,255,.05)}
+.chipset .chip.on{background:rgba(232,184,75,.22);border-color:var(--gold);color:var(--gold-l);font-weight:700}
+
+.modal{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+  padding:16px;background:rgba(10,2,3,.72);backdrop-filter:blur(4px)}
+.modal.show{display:flex}
+.sheet{width:100%;max-width:660px;max-height:86vh;overflow-y:auto;border-radius:18px;padding:16px;
+  background:linear-gradient(180deg,#3a0a0e,#260609);border:1px solid var(--panel-b);
+  box-shadow:0 30px 70px rgba(0,0,0,.65)}
+.sheet h2{font-size:17px;letter-spacing:1.4px;color:var(--gold-l);display:flex;align-items:center;gap:10px}
+.sheet h2 .x{margin-left:auto;font-size:20px;color:var(--muted);padding:0 6px}
+.sheet h4{font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px}
+.sheet p,.sheet li{font-size:12.5px;line-height:1.75;color:rgba(255,248,238,.85)}
+.sheet ul{margin:6px 0;padding-left:20px}
+.sheet::-webkit-scrollbar{width:8px}
+.sheet::-webkit-scrollbar-thumb{background:rgba(232,184,75,.32);border-radius:9px}
+
+/* 规则表 */
+.rtable{display:flex;flex-direction:column;gap:7px}
+.rrow{display:grid;grid-template-columns:116px 1fr 50px 104px;gap:8px;align-items:center;
+  padding:8px;border-radius:11px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.07)}
+.rrow.top{border-color:rgba(255,90,90,.5);background:linear-gradient(90deg,rgba(180,20,26,.35),rgba(0,0,0,.22))}
+.rrow .rname{font-size:12.5px;font-weight:700;line-height:1.35}
+.rrow .rname .mk{display:inline-block;font-size:9.5px;padding:1px 5px;border-radius:99px;
+  background:linear-gradient(160deg,#ffe9b0,#e8b84b);color:#4a1206;margin-left:4px;vertical-align:1px}
+.rrow .rdesc{font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px}
+.rrow .rcount{font-size:11.5px;text-align:right;color:var(--gold-l);line-height:1.4}
+.rrow .rcount small{display:block;color:var(--muted);font-size:10px}
+.rrow .rodd{text-align:right;line-height:1.45}
+.rrow .rodd b{display:block;font-size:11px;color:var(--gold-l);font-weight:700}
+.rrow .rodd small{display:block;font-size:9.5px;color:var(--muted)}
+.minidice{display:flex;gap:3px;flex-wrap:wrap}
+.md{width:17px;height:17px;border-radius:4px;background:linear-gradient(155deg,#fffdf6,#e6d8bf);
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:2px;
+  box-shadow:inset 0 0 0 1px rgba(90,50,10,.35)}
+.md i{border-radius:50%;background:#241209;place-self:center;width:68%;height:68%}
+.md i.r{background:#c2171f}
+.md i.e{background:transparent}
+
+/* 战绩 */
+.hist{display:flex;flex-direction:column;gap:7px}
+.hrow{font-size:12px;padding:8px 10px;border-radius:11px;background:rgba(0,0,0,.22);
+  border:1px solid rgba(255,255,255,.07);line-height:1.6}
+.hrow .h1{display:flex;gap:8px;align-items:center;color:var(--gold-l);font-weight:700;font-size:12.5px}
+.hrow .h1 .t{margin-left:auto;color:var(--muted);font-weight:400;font-size:11px}
+.hrow .h2{color:var(--muted);font-size:11.5px}
+
+/* 结算 */
+.rank{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.rk{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;
+  background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.08)}
+.rk.first{border-color:var(--gold);background:linear-gradient(90deg,rgba(232,184,75,.2),rgba(0,0,0,.24))}
+.rk .no{width:22px;text-align:center;font-weight:800;color:var(--gold-l);font-size:14px}
+.rk .av{font-size:19px}
+.rk .nm{flex:1 1 auto;font-size:13.5px;font-weight:700;min-width:0}
+.rk .nm small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px}
+.rk .tt{font-size:17px;font-weight:800;color:var(--gold-l)}
+
+/* ============================================================
+   ⑦ 特效层
+   ============================================================ */
+#fx{position:fixed;inset:0;pointer-events:none;z-index:70;overflow:hidden}
+#fx .fxtitle{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) scale(.4);
+  font-size:clamp(30px,9vw,68px);font-weight:900;letter-spacing:6px;white-space:nowrap;
+  color:#fff2cf;text-shadow:0 0 18px #ff5a5a,0 0 42px #ff2a2a,0 6px 0 #7c0f14;
+  opacity:0}
+#fx.show .fxtitle{animation:fxpop 1.9s cubic-bezier(.2,1.2,.3,1) forwards}
+#fx .fxtip{position:absolute;left:50%;top:47%;transform:translateX(-50%);
+  font-size:15px;letter-spacing:2px;color:#ffe6a3;opacity:0;white-space:nowrap}
+#fx.show .fxtip{animation:fxtip 2.1s .18s ease-out forwards}
+@keyframes fxpop{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.35) rotate(-6deg)}
+  22%{opacity:1;transform:translate(-50%,-50%) scale(1.12) rotate(2deg)}
+  38%{transform:translate(-50%,-50%) scale(1) rotate(0)}
+  80%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-56%) scale(1.04)}
+}
+@keyframes fxtip{0%{opacity:0;transform:translate(-50%,6px)}20%{opacity:1}78%{opacity:1}100%{opacity:0}}
+#fx .conf{position:absolute;left:50%;top:40%;width:9px;height:14px;border-radius:2px;
+  background:linear-gradient(160deg,#ffe9b0,#e8b84b);opacity:0}
+#fx.show .conf{animation:confly var(--dur) var(--delay) cubic-bezier(.2,.7,.4,1) forwards}
+@keyframes confly{
+  0%{opacity:0;transform:translate(-50%,-50%) rotate(0deg) scale(.6)}
+  8%{opacity:1}
+  100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--rot)) scale(1)}
+}
+/* （碗不再晃动：用户要求博出结果时碗保持静止，只由骰子与特效表达） */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+  z-index:80;background:rgba(38,6,9,.94);border:1px solid var(--panel-b);color:var(--paper);
+  font-size:13px;padding:10px 18px;border-radius:999px;opacity:0;transition:.28s;pointer-events:none;
+  box-shadow:0 12px 30px rgba(0,0,0,.5)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============================================================
+   ⑧ 响应式
+   ============================================================ */
+@media (max-width:899px){
+  #app{padding:10px 10px 22px}
+  .layout{grid-template-columns:1fr}
+  .bowl-wrap{aspect-ratio:1000/840;max-width:none}
+  .log{max-height:170px}
+  .players{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .pcard{padding:7px 8px}
+  .pcard .ptotal{font-size:17px}
+  .btn-roll{padding:13px 34px;font-size:16px}
+  .rrow{grid-template-columns:88px 1fr 44px 78px;gap:6px}
+  .rrow .rodd b{font-size:10px}
+  .rrow .rodd small{font-size:9px}
+  .rrow .rname{font-size:11.5px}
+  .pdist .drow{grid-template-columns:74px 1fr 34px 54px 0px;gap:5px;font-size:10.5px}
+  .pdist .drow .dt{display:none}
+  .srow{grid-template-columns:1fr 46px 56px 56px;gap:6px;font-size:10.5px}
+  .srow .sd{display:none}
+  .srow.head span:nth-child(5){display:none}
+  .md{width:14px;height:14px}
+  .quotaset{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:600px){
+  .topbar{gap:8px}
+  .brand span{display:none}
+  .tbtn{padding:7px 10px;font-size:12px}
+  .moon{width:38px;height:38px}
+  .phasebar{padding:8px 10px;gap:7px}
+  .phasebar .who{font-size:13.5px}
+  .phasebar .pill{font-size:11px;padding:2px 7px}
+  .phasebar .tbtn{font-size:11px;padding:5px 9px}
+}
+@media (max-width:400px){
+  .players{grid-template-columns:1fr}
+  .brand b{font-size:17px}
+}
+</style>
+</head>
+<body data-page-node-id="ZPNBYQFNlC6GPLvxbqMHgq">
+<div id="app" data-page-node-id="xjunw39noWMDaUXLNmNACa">
+
+  <!-- 顶栏 -->
+  <div class="topbar" data-page-node-id="33vkngPpEAd7OfG4hAPEHx">
+    <div class="moon" data-page-node-id="cDON8q8C7HEIn8lCX5miUd"></div>
+    <div class="brand" data-page-node-id="Lt0GDZJxK65EkLtfgP1qGI"><b data-page-node-id="fGB2uyuEuVqEsPRVHAowOd">中秋博饼</b><span data-page-node-id="CIR0QLg2VadTCylDogyv2M">闽南掷骰大碗 · 博个状元好彩头</span></div>
+    <div class="spacer" data-page-node-id="E2VY6aUB1xy2KAZLBZoLkS"></div>
+    <button class="tbtn" id="btn-rules" data-page-node-id="wgPzYSnU18o3OMNlYr3bbL">规则</button>
+    <button class="tbtn" id="btn-hist" data-page-node-id="m8v5z2KdnDHTrpUOKV0E0k">战绩</button>
+    <button class="tbtn" id="btn-stat">概率</button>
+    <button class="tbtn on" id="btn-sound" data-page-node-id="yrvLfou7T9QyEtbGEQOzQB">音效 开</button>
+  </div>
+
+  <!-- 设置页 -->
+  <div id="view-setup" class="setupwrap" data-page-node-id="sWlIXXT7mMwGwHmltWof8d">
+    <div class="card" data-page-node-id="xzlHOgnUb5L6hPAJgk5Nac">
+      <h3 data-page-node-id="jD6jXtwA1KFMXbISv5mtM6">开桌设置</h3>
+      <p class="setup-note" data-page-node-id="KAhiimQFoyeyAmLZM0UWH6">
+        本地多人轮流博——同一台电脑或手机，围一圈轮流点「博一次」。<br data-page-node-id="Mu7ntiaHxzoTDPt021yKuV">
+        选「1 人」就是<b>单人挑战</b>：自己一桌刷手气，看第几把能博出状元。<br>
+        <span id="setup-quota-note">默认六骰六十三份：状元 1 · 对堂 2 · 三红 4 · 四进 8 · 二举 16 · 一秀 32</span>。
+      </p>
+      <div class="chipset" id="count-set" data-page-node-id="nyWIAkWGKV3v9G7Wz4QcGM">
+        <button class="chip" data-n="1">1 人 · 单人挑战</button>
+        <button class="chip" data-n="2" data-page-node-id="4aIjB9q2CJiRbnLF2pB5r0">2 人</button>
+        <button class="chip" data-n="3" data-page-node-id="MNEiwDALp58cYlCh2vDhx6">3 人</button>
+        <button class="chip on" data-n="4" data-page-node-id="jJbydhFEHaS9rgR5i5DIDf">4 人</button>
+        <button class="chip" data-n="5" data-page-node-id="x2dMqX46cewgtHw3SPHIbg">5 人</button>
+        <button class="chip" data-n="6" data-page-node-id="kx5UxfoLWGHSG9fQqvaIfV">6 人</button>
+      </div>
+      <h4 style="font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px" data-page-node-id="qqtRbxKDK0mt8Vi8bk3lBs">玩家</h4>
+      <div id="setup-players" data-page-node-id="9li9UEPNB1YnBsyQnC6iyU"></div>
+      <h4 class="setup-h4">奖项数量<small id="quota-total"></small></h4>
+      <div class="quotaset" id="quota-set"></div>
+      <div class="setup-actions" data-page-node-id="5uuYKKy9av6m2RLdKKJQMQ">
+        <button class="btn-primary" id="btn-start" data-page-node-id="4jV5TcCFT6fxUTTKZcIIRP">开 桌</button>
+        <button class="btn-ghost" id="btn-rules2" data-page-node-id="TxOiYmmc1njFtRrBHXQ50O">先看规则</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 牌桌 -->
+  <div id="view-table" style="display:none" data-page-node-id="aw81Uytvr2eGJlm6hFTBM0">
+    <div class="phasebar" data-page-node-id="1oH8Emofjo2ErusVpq5PsW">
+      <span class="who" id="bar-who" data-page-node-id="7fQd9CdrPreqoRHP7OqFCc">轮到 <em data-page-node-id="kJPomecwsfGSvWYtoB9fK2">玩家1</em> 博饼</span>
+      <span class="pill" id="bar-round" data-page-node-id="jNUwFUtj7ygjaEalWCxr4B">第 1 轮</span>
+      <span class="pill" id="bar-left" data-page-node-id="72s32didK76U1FfNN9KMLn">场上剩 63 份</span>
+      <span class="spacer" style="flex:1" data-page-node-id="Ex6n8OnAgdfeAlnQglkUGE"></span>
+      <button class="tbtn" id="btn-restart" data-page-node-id="djWhEViP2QlMtJiJ4yz6pm">重开一局</button>
+    </div>
+
+    <div class="layout" data-page-node-id="jQkMbW7DXSISwfhOeetUMw">
+      <!-- 左：碗 -->
+      <div class="stage" data-page-node-id="rk6bBL2C3C1l2fYzewU8dF">
+        <div class="bowl-wrap" id="bowl-wrap" data-page-node-id="mhDMYkXGAHh0QLIbkuCWf9">
+          <!-- 完整碗型：碗口椭圆(494×272 ≈ 1:0.55) + 外壁 + 圈足 + 碗底，整只碗用内联 SVG 画 -->
+          <svg class="bowl-svg" id="bowl-svg" viewBox="0 0 1000 840" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <defs>
+              <radialGradient id="gOuter" cx="40%" cy="16%" r="92%">
+                <stop offset="0%" stop-color="#ee5a38"/>
+                <stop offset="24%" stop-color="#d92b20"/>
+                <stop offset="60%" stop-color="#b31a16"/>
+                <stop offset="100%" stop-color="#630a0e"/>
+              </radialGradient>
+              <radialGradient id="gInner" cx="46%" cy="18%" r="92%">
+                <stop offset="0%" stop-color="#ea5b3d"/>
+                <stop offset="26%" stop-color="#d32c1d"/>
+                <stop offset="60%" stop-color="#a81614"/>
+                <stop offset="88%" stop-color="#6d0a0d"/>
+                <stop offset="100%" stop-color="#4a0507"/>
+              </radialGradient>
+              <radialGradient id="gFloor" cx="42%" cy="30%" r="86%">
+                <stop offset="0%" stop-color="#b8241b"/>
+                <stop offset="40%" stop-color="#911412"/>
+                <stop offset="72%" stop-color="#6b0b0d"/>
+                <stop offset="100%" stop-color="#520709"/>
+              </radialGradient>
+              <radialGradient id="gFoot" cx="50%" cy="22%" r="78%">
+                <stop offset="0%" stop-color="#b01a1f"/>
+                <stop offset="55%" stop-color="#7d0e13"/>
+                <stop offset="100%" stop-color="#4a0507"/>
+              </radialGradient>
+              <linearGradient id="gGold" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#ffe6a3"/>
+                <stop offset="28%" stop-color="#e8b84b"/>
+                <stop offset="52%" stop-color="#a97b1c"/>
+                <stop offset="76%" stop-color="#ffe6a3"/>
+                <stop offset="100%" stop-color="#c79a2c"/>
+              </linearGradient>
+              <linearGradient id="gGloss" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#fffdf6" stop-opacity=".62"/>
+                <stop offset="100%" stop-color="#fffdf6" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- 圈足：必须画在碗身【之前】—— 这样它的上半圈被碗身盖住，只露出前缘一道月牙。
+                 而且椭圆比例 82.59/150 = 0.5506，与碗口(272/494)、碗底(194/352) 是同一个视角。 -->
+            <ellipse id="bowl-foot-el" cx="500" cy="717.41" rx="150" ry="82.59" fill="url(#gFoot)"/>
+            <path d="M350,717.41 A150,82.59 0 0 0 650,717.41" fill="none" stroke="#ef6a52" stroke-width="3" opacity=".40"/>
+            <!-- 碗身外壁：底曲线上抬到中心 y=742，圈足底在 800 —— 于是只露出前缘月牙 -->
+            <path id="bowl-body-path"
+              d="M6,305 C28,500 195,668 372,722 Q500,762 628,722 C805,668 972,500 994,305 Z"
+              fill="url(#gOuter)"/>
+            <!-- 碗口内腔（内壁） -->
+            <ellipse cx="500" cy="305" rx="494" ry="272" fill="url(#gInner)"/>
+            <!-- 远端内壁的亮釉带 -->
+            <path d="M10,305 A490,268 0 0 1 990,305 A430,200 0 0 0 10,305 Z"
+              fill="url(#gGloss)" opacity=".5"/>
+            <!-- 釉面高光（和骰子同一个白）：碗内两处 + 外壁一处 -->
+            <ellipse cx="336" cy="268" rx="148" ry="66" fill="url(#gGloss)" opacity=".42" transform="rotate(-19 336 268)"/>
+            <ellipse cx="632" cy="238" rx="78" ry="36" fill="url(#gGloss)" opacity=".28" transform="rotate(-15 632 238)"/>
+            <ellipse cx="262" cy="486" rx="126" ry="56" fill="url(#gGloss)" opacity=".20" transform="rotate(-27 262 486)"/>
+            <!-- 碗底（骰子落区）：软边过渡到近侧内壁，一眼看出碗内比碗外深 -->
+            <ellipse id="bowl-floor-el" cx="500" cy="378" rx="352" ry="194" fill="url(#gFloor)"/>
+            <ellipse cx="500" cy="380" rx="352" ry="194" fill="none" stroke="#3a0406" stroke-width="26" opacity=".16"/>
+            <path d="M148,378 A352,194 0 0 1 852,378" fill="none" stroke="#2e0305" stroke-width="22" opacity=".26"/>
+            <!-- 碗口金边 -->
+            <ellipse id="bowl-rim-el" cx="500" cy="305" rx="494" ry="272" fill="none"
+              stroke="url(#gGold)" stroke-width="14"/>
+          </svg>
+          <div class="bowl-inner" id="bowl-inner" data-page-node-id="Ps9GtvwU84fv88Q0QbCieA">
+            <div class="dice-field" id="dice-field" data-page-node-id="WuojffUJBFESOdUle87xNX"></div>
+          </div>
+        </div>
+        <div class="result" id="result" data-page-node-id="dKabsdVlyTEnbVI6MryJgS">
+          <div style="flex:1 1 auto" data-page-node-id="Y4cgWgTmA0oCAKXzWiWeUS">
+            <div class="rname" id="res-name" data-page-node-id="bQtbPs5b2kCpxirJo0gz7J">准备开博</div>
+            <div class="rdice" id="res-dice" data-page-node-id="zbayVtBDVm0pBOXxNtGE5C">—</div>
+            <div class="rdesc" id="res-desc" data-page-node-id="VGo5PnhMASNfABosBoi5QR">点下面的按钮把六颗骰子丢进大碗</div>
+          </div>
+        </div>
+        <div class="rollbar" data-page-node-id="2pi8g9FLXMhrCcAWtZFWZe">
+          <button class="btn-roll" id="btn-roll" data-page-node-id="Cy6z70elymwHpn4qMqMvnH">博 一 次</button>
+        </div>
+      </div>
+
+      <!-- 右：面板 -->
+      <div class="col-right" data-page-node-id="sndEh7uyLdIQb1fScxLe5A">
+        <div class="card" data-page-node-id="hjxbKzdzXeifrDQ27UCVJE">
+          <h3 data-page-node-id="01YMvEZBahaz7XD3AyF79J">奖项</h3>
+          <div class="pool" id="pool" data-page-node-id="gUet9mG4wkBdohtTIk2eLe"></div>
+        </div>
+        <div class="card" data-page-node-id="awxqf6Q73knRRGugiKiCMq">
+          <h3 data-page-node-id="iyBAUVPXhLWj34kTBezw6R">战绩</h3>
+          <div class="players" id="players" data-page-node-id="yzGuODzXxrY9FPOfbsackC"></div>
+        </div>
+        <div class="card" data-page-node-id="rvqhzd3i4Vf74fEpSsZnHE">
+          <h3 data-page-node-id="vYItGp0R0jsFp0RAuiyryU">博饼记录</h3>
+          <div class="log" id="log" data-page-node-id="NlEh65PSjJA1fOKM1jWGNZ"><div class="empty-tip" data-page-node-id="TuO0HW6aPSbebGOBdgFo5F">还没有人下碗</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 规则弹层 -->
+<div class="modal" id="modal-rules" data-page-node-id="ByhvSqYzEz9UkPzPNvPeXG">
+  <div class="sheet" data-page-node-id="UB9rkZJDUUAakTJ0Af4o0e">
+    <h2 data-page-node-id="N2OzmTxVOJ4Qkby53GwbtX">博饼规则 <button class="x" data-close data-page-node-id="aLiPGnp0kDI9QCBKjB7NyF">×</button></h2>
+    <p data-page-node-id="AY518gOQ83EQGlPn4MUD5o">六颗骰子丢进大碗，看红四点（4 点）的多少定科名。本级奖项发完了就<b data-page-node-id="BhHGevB4BfT3CalqSqYi7i">空手</b>，不作他用；<b data-page-node-id="wy7EYeoacozH1CZHeECtGv">状元只有一块，随时可能被更大的状元夺走</b>。</p>
+    <h4 data-page-node-id="ZReUxAoeVia88m9nAblvZZ">奖项一览（由大到小）</h4>
+    <div class="rtable" id="rules-table" data-page-node-id="ZjZlt8hiRm2oXT7VIRqXf9"></div>
+    <h4>奖项数量（共 <span id="rules-quota-total">63</span> 份）</h4>
+    <p data-page-node-id="Ur8HcXRB10e9KkL3omfT56"><span id="rules-quota-list">状元 1 · 对堂 2 · 三红 4 · 四进 8 · 二举 16 · 一秀 32</span>。取七九六十三之数，是延平郡王的吉数。</p>
+    <h4 data-page-node-id="4AIpVRp8xA9uWriYyInPfM">状元内部的比较</h4>
+    <ul data-page-node-id="GBSxIXl18s3X7VIR0usYEe">
+      <li data-page-node-id="rpXjJumAWUH6lJrKR8RnjS"><b data-page-node-id="JhHxb27DM6sni6H7P7shbO">状元插金花最大</b>（四粒红四带两粒红一）。</li>
+      <li data-page-node-id="Jg2q0pN2oF39VlhpHODgtg">五红（五王）：比“带”的那颗骰子点数；五红大于任何五子登科。</li>
+      <li data-page-node-id="bIdiu3uCkIyowYBbd8pAIb">五子登科：比剩余那一颗骰子（带点）的大小。</li>
+      <li data-page-node-id="SBgg9FlbfGb3aKiGjIaiEb">四点红：比另外两颗骰子点数之和，即“状元带几”，状元带 3 最小、状元带 12 最大。</li>
+      <li data-page-node-id="XdOzlMGtAcDjcO6zDAZtBh">两方完全同级同点：不算夺，先博到的人保留。</li>
+    </ul>
+    <h4 data-page-node-id="YIVd0qKBo9j3gtcZXCcHaC">收官轮</h4>
+    <p data-page-node-id="5BNab1pqhtDrtJmhFMoi2E">非状元的 <span id="rules-nonzy">62</span> 份全部发完后，还有<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">最后一轮（收官轮）</b>：每人再各博一次，这一轮里博到状元级仍可夺状元，博到其他科名只作展示。收官轮跑完即结算；若此时状元还没有主，就再开一轮，直到状元名花有主。</p>
+    <h4 data-page-node-id="J4igrP9OLHzkv2hkAXxhHp">各地口径</h4>
+    <p data-page-node-id="COE95vN4MRV47GKhpcnx5x">古法有「六抔红 &gt; 五红 &gt; 五子 &gt; 插金花」的排法，厦门现行玩法公认<b data-page-node-id="3Bu2KkGHKmWsmHifAA55kj">状元插金花最大</b>，本游戏按后者执行。关于“五子登科”内部比大小，各地亦有分别，本桌按“比带点”执行。</p>
+  </div>
+</div>
+
+<!-- 战绩弹层 -->
+<div class="modal" id="modal-hist" data-page-node-id="9Jkbyxn0UL17pXZiTPJhMa">
+  <div class="sheet" data-page-node-id="VzmlH5Z3TJdn3JJqdRWAcB">
+    <h2 data-page-node-id="kBp0Wv2EhRbTfuVteYetYf">战绩 <button class="x" data-close data-page-node-id="6DnwzkMD8DN3OKv6S8lHhH">×</button></h2>
+    <h4 style="margin-top:10px" data-page-node-id="2c6HUQILZofgUVLiQ6d2rt">本局记录</h4>
+    <div class="hist" id="hist-now" data-page-node-id="MnwZicfpTEy3H3aL1vDrif"><div class="empty-tip" data-page-node-id="8Ydizpf4hpZFHVAFCwtRl0">本局还没有记录</div></div>
+    <h4 data-page-node-id="dL87bms2sNabZ5k9BI8sGE">历史对局<button class="btn-ghost" id="btn-clear-hist" style="float:right;font-size:11px;padding:5px 12px" data-page-node-id="IDNLV4EM1ZcT97bT2i1l6F">清空</button></h4>
+    <div class="hist" id="hist-all" data-page-node-id="2GXjxl8AcdtXLpJdfXtymD"></div>
+  </div>
+</div>
+
+<!-- 结算弹层 -->
+<!-- 概率统计弹层：理论概率 + 本局实时频率（博的时候一直更新） -->
+<div class="modal" id="modal-stat">
+  <div class="sheet">
+    <h2>概率统计 <button class="x" data-close>×</button></h2>
+    <p id="stat-summary" style="margin-top:8px"></p>
+    <div class="stable" id="stat-table"></div>
+    <p class="stat-note">理论概率 = 6⁶ = 46656 种骰面组合里该等级占的比例（穷举算出，固定不变）。
+      本局频率 = 本局该等级出现次数 ÷ 本局总掷骰数。掷得越多，两者越接近 —— 这也是检验骰子有没有被做手脚的办法。</p>
+  </div>
+</div>
+
+<div class="modal" id="modal-result" data-page-node-id="BqQOUXN9ezkih3YSuS4FFq">
+  <div class="sheet" data-page-node-id="CjKMb6XGRzKMDUkwKBDAzB">
+    <h2 data-page-node-id="BERAYy1972DwYiLGeSBJTm">博饼结果 <button class="x" data-close data-page-node-id="DEyMlA6xN437sENb3SuhaB">×</button></h2>
+    <p id="res-summary" style="margin-top:8px" data-page-node-id="aIFKKbrIX2UDioNLKAEQf3"></p>
+    <div class="rank" id="rank" data-page-node-id="OJl4H8r0CbbsqMbgqjipz9"></div>
+    <h4 style="font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px">本局掷骰分布</h4>
+    <div class="pdist" id="res-dist"></div>
+    <div class="setup-actions" data-page-node-id="9uoYLD1hxG76VAbk9EMRBO">
+      <button class="btn-primary" id="btn-again" data-page-node-id="2CvCQgg0AbfcPaCGIp1zED">再来一局</button>
+      <button class="btn-ghost" data-close data-page-node-id="atTEBBWXMsnKnjQcl99WhV">先看看</button>
+    </div>
+  </div>
+</div>
+
+<div id="fx" data-page-node-id="JB6AFz4lJWleNsdcv0YYoT"><div class="fxtitle" id="fx-title" data-page-node-id="VRpFhV8tsH15zzbDSluS6g"></div><div class="fxtip" id="fx-tip" data-page-node-id="zSZdSREASGKrKyocyktq5L"></div></div>
+<div id="toast" data-page-node-id="ywM2G2VFJrnoJTrFuGelHp"></div>
+
+<script>
+/* ============================================================================
+   全局错误捕获（自检探针要用）
+   ============================================================================ */
+window.__errors = [];
+window.__logErr = function (m) { window.__errors.push(String(m)); };
+window.onerror = function (m, s, l, c) { window.__logErr('onerror: ' + m + ' @' + l + ':' + c); };
+window.addEventListener('unhandledrejection', function (e) { window.__logErr('reject: ' + e.reason); });
+
+/* ============================================================================
+   ① 配置：奖项 / 等级 / 概率
+   ============================================================================ */
+var CAKE_ORDER = ['zhuangyuan', 'duitang', 'sanhong', 'sijin', 'erju', 'yixiu'];
+var CAKE = {
+  zhuangyuan: { name: '状元', quota: 1,  cn: '状元' },
+  duitang:    { name: '对堂', quota: 2,  cn: '对堂' },
+  sanhong:    { name: '三红', quota: 4,  cn: '三红' },
+  sijin:      { name: '四进', quota: 8,  cn: '四进' },
+  erju:       { name: '二举', quota: 16, cn: '二举' },
+  yixiu:      { name: '一秀', quota: 32, cn: '一秀' }
+};
+/* 非状元 5 级 + 状元。份数可在设置页自定义，总数随之变化。
+   状元固定 1 份不可改 —— "状元唯一、随时可被更大的状元夺走"是核心规则。 */
+var NONZY_KEYS = ['duitang', 'sanhong', 'sijin', 'erju', 'yixiu'];
+/* 奖池的 key（小写连写）↔ 等级表的 key —— 统计本局各等级次数时要用 */
+var CAKE_GRADE = { duitang: 'duiTang', sanhong: 'sanHong', sijin: 'siJin', erju: 'erJu', yixiu: 'yiXiu' };
+var QUOTA_DEFAULT = { duitang: 2, sanhong: 4, sijin: 8, erju: 16, yixiu: 32 };
+var QUOTA = Object.assign({}, QUOTA_DEFAULT);         /* 当前生效的一份（单一真源） */
+var GRADE_KEYS = ['jinHua', 'liuPouHong', 'bianDiJin', 'heiLiuBo', 'wuHong', 'wuZi',
+                  'siDianHong', 'duiTang', 'sanHong', 'siJin', 'erJu', 'yiXiu', 'none'];
+/* 理论概率：6^6 = 46656 种组合里各等级出现多少次。
+   这张表由 ?selftest=exhaustive 逐项与真穷举结果比对，所以不会悄悄漂。 */
+var THEORY = { jinHua: 15, liuPouHong: 1, bianDiJin: 1, heiLiuBo: 4, wuHong: 30, wuZi: 150,
+               siDianHong: 360, duiTang: 720, sanHong: 2500, siJin: 1875, erJu: 9300,
+               yiXiu: 17400, none: 14300 };
+var THEORY_TOTAL = 46656;
+function quotaOf(k) { return k === 'zhuangyuan' ? 1 : QUOTA[k]; }
+function sumQuota() { var t = 0, i; for (i = 0; i < NONZY_KEYS.length; i++) t += QUOTA[NONZY_KEYS[i]]; return t; }
+function totalAll() { return 1 + sumQuota(); }
+function totalNonZy() { return sumQuota(); }
+/* 归一化一次配额（越界/非法一律回落到默认值），返回实际生效的值 */
+function setQuota(q) {
+  for (var i = 0; i < NONZY_KEYS.length; i++) {
+    var k = NONZY_KEYS[i], raw = q ? q[k] : undefined;
+    /* 没给 / 非数字 → 回落默认；给了数字就夹到 [0,99] 并取整（负数和超大值都算越界） */
+    if (raw === undefined || raw === null || raw === '' || !isFinite(Number(raw))) {
+      QUOTA[k] = QUOTA_DEFAULT[k];
+    } else {
+      QUOTA[k] = Math.max(0, Math.min(99, Math.floor(Number(raw))));
+    }
+  }
+  return QUOTA;
+}
+function quotaSummary() {
+  var out = ['状元 1'];
+  for (var i = 0; i < NONZY_KEYS.length; i++) {
+    var k = NONZY_KEYS[i];
+    out.push(CAKE[k].name + ' ' + QUOTA[k]);
+  }
+  return out.join(' · ');
+}
+/* 理论概率 → 可读百分比 */
+function oddsPct(cnt, total) {
+  var p = (cnt / (total || THEORY_TOTAL)) * 100;
+  if (!(p > 0)) return '0%';
+  /* 小于 1% 要多给一位小数，否则"插金花 0.03%"这种把最关键的差别抹掉了 */
+  return p >= 1 ? p.toFixed(2) + '%' : p.toFixed(3) + '%';
+}
+
+/* 等级表：tier 数字越大越高级；zy=状元级；cake=对应奖项 */
+var GRADE = {
+  jinHua:     { key: 'jinHua',     name: '状元插金花', tier: 100, zy: true,  cake: 'zhuangyuan' },
+  liuPouHong: { key: 'liuPouHong', name: '六抔红',     tier: 99,  zy: true,  cake: 'zhuangyuan' },
+  bianDiJin:  { key: 'bianDiJin',  name: '遍地锦',     tier: 98,  zy: true,  cake: 'zhuangyuan' },
+  heiLiuBo:   { key: 'heiLiuBo',   name: '黑六勃',     tier: 97,  zy: true,  cake: 'zhuangyuan' },
+  wuHong:     { key: 'wuHong',     name: '五红（五王）', tier: 96, zy: true, cake: 'zhuangyuan' },
+  wuZi:       { key: 'wuZi',       name: '五子登科',   tier: 95,  zy: true,  cake: 'zhuangyuan' },
+  siDianHong: { key: 'siDianHong', name: '四点红',     tier: 94,  zy: true,  cake: 'zhuangyuan' },
+  duiTang:    { key: 'duiTang',    name: '对堂',       tier: 80,  zy: false, cake: 'duitang' },
+  sanHong:    { key: 'sanHong',    name: '三红',       tier: 70,  zy: false, cake: 'sanhong' },
+  siJin:      { key: 'siJin',      name: '四进',       tier: 60,  zy: false, cake: 'sijin' },
+  erJu:       { key: 'erJu',       name: '二举',       tier: 50,  zy: false, cake: 'erju' },
+  yiXiu:      { key: 'yiXiu',      name: '一秀',       tier: 40,  zy: false, cake: 'yixiu' },
+  none:       { key: 'none',       name: '无',         tier: 0,   zy: false, cake: null }
+};
+
+var CN = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+function cn(n) { return CN[n] || String(n); }
+
+/* ============================================================================
+   ② 判定引擎
+   ============================================================================ */
+function evaluate(dice) {
+  var c = [0, 0, 0, 0, 0, 0, 0], sum = 0, i;
+  for (i = 0; i < dice.length; i++) { c[dice[i]]++; sum += dice[i]; }
+  var k4 = c[4];
+  var isSeq = (c[1] === 1 && c[2] === 1 && c[3] === 1 && c[4] === 1 && c[5] === 1 && c[6] === 1);
+  function sixOf(ex) { for (var f = 1; f <= 6; f++) { if (ex.indexOf(f) < 0 && c[f] === 6) return f; } return 0; }
+  function fiveOf(ex) { for (var f = 1; f <= 6; f++) { if (ex.indexOf(f) < 0 && c[f] === 5) return f; } return 0; }
+  function fourOf(ex) { for (var f = 1; f <= 6; f++) { if (ex.indexOf(f) < 0 && c[f] === 4) return f; } return 0; }
+  function G(key, kicker, label) {
+    var g = Object.create(GRADE[key]);
+    g.kicker = kicker || 0;
+    g.label = label || g.name;
+    return g;
+  }
+  // ---- 状元级，由高到低 ----
+  if (k4 === 4 && c[1] === 2) return G('jinHua', 0, '四粒红四带两粒红一');
+  if (k4 === 6) return G('liuPouHong', 0, '六粒红四·满堂通红');
+  if (c[1] === 6) return G('bianDiJin', 0, '六粒红一');
+  var f6 = sixOf([1, 4]);
+  if (f6) return G('heiLiuBo', f6, '六粒' + cn(f6) + '·六六大顺');
+  if (k4 === 5) { var kk = sum - 20; return G('wuHong', kk, '五粒红四带' + cn(kk)); }
+  var f5 = fiveOf([4]);
+  if (f5) { var k5 = sum - 5 * f5; return G('wuZi', k5, '五粒' + cn(f5) + '带' + cn(k5)); }
+  if (k4 === 4) { var kd = sum - 16; return G('siDianHong', kd, '状元带' + cn(kd)); }
+  // ---- 非状元 ----
+  if (isSeq) return G('duiTang', 0, '一二三四五六各一点');
+  if (k4 === 3) return G('sanHong', 0, '三粒红四');
+  var f4 = fourOf([4]);
+  if (f4) return G('siJin', f4, '四粒' + cn(f4));
+  if (k4 === 2) return G('erJu', 0, '两粒红四');
+  if (k4 === 1) return G('yiXiu', 0, '一粒红四');
+  return G('none', 0, '无红四');
+}
+
+/* 同等级比大小：a 与 b 都是 {tier, kicker}，返回 1/-1/0 */
+function compareGrade(a, b) {
+  if (!a) return -1;
+  if (!b) return 1;
+  if (a.tier !== b.tier) return a.tier > b.tier ? 1 : -1;
+  if ((a.kicker || 0) !== (b.kicker || 0)) return (a.kicker || 0) > (b.kicker || 0) ? 1 : -1;
+  return 0;
+}
+
+/* ============================================================================
+   ③ 音效（WebAudio 现场合成，不引外部文件）
+   ============================================================================ */
+var Sfx = (function () {
+  var ctx = null, enabled = true, primed = false;
+  function build() {
+    if (ctx) return ctx;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    /* 上下文状态一变就刷新按钮文案（解锁是异步的，文案不能只靠点击那一刻去读） */
+    ctx.onstatechange = function () {
+      if (typeof refreshSoundBtn === 'function') refreshSoundBtn();
+    };
+    /* iOS 静音键：Safari 里 WebAudio 默认跟随硬件静音键 —— 手机一调静音就完全没声。
+       设成 playback 才会无视静音键（Safari 16.4+）。想改回"跟随静音键"删掉这行即可。 */
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
+    return ctx;
+  }
+  function ensure() {
+    if (!enabled) return null;
+    try {
+      var c = build();
+      if (!c) return null;
+      if (c.state === 'suspended') c.resume();
+      return c;
+    } catch (e) { window.__logErr('audio: ' + e.message); return null; }
+  }
+  /* 首次手势的同步调用栈里解锁：resume + 播一段 1 采样的静音把音频通道顶开。
+     iOS 只认用户手势，且 resume() 是异步的 —— 不先顶开，第一次调度的声音会被丢掉。
+     幂等：touchstart / pointerdown / click 都会调，重复调没有副作用。 */
+  function unlock() {
+    var c = ensure();
+    if (!c) return false;
+    if (!primed) {
+      try {
+        var b = c.createBuffer(1, 1, c.sampleRate);
+        var s = c.createBufferSource();
+        s.buffer = b; s.connect(c.destination); s.start(0);
+        primed = true;
+      } catch (e) { }
+    }
+    /* 有些移动端浏览器 resume() 要过一小会儿才真的生效：隔一点时间补一次。
+       同时顺手把按钮文案刷新 —— 否则标签会一直停在"点击开启"。 */
+    setTimeout(function () {
+      if (ctx && ctx.state !== 'running') { try { ctx.resume(); } catch (e) { } }
+      if (typeof refreshSoundBtn === 'function') refreshSoundBtn();
+    }, 120);
+    return true;
+  }
+  /* 已经能出声了没有：primed 之后就算数 —— 不等 ctx.state 变 running，
+     因为那个变化是异步的，拿它做判断会让按钮文案卡住。 */
+  function isReady() { return primed || (ctx && ctx.state === 'running'); }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('touchstart', unlock, { passive: true });
+    document.addEventListener('pointerdown', unlock, { passive: true });
+    document.addEventListener('click', unlock, { passive: true });
+    /* 切出去再回来，iOS 会把 AudioContext 挂起 —— 不恢复就永久静音 */
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) return;
+      var c = ensure();
+      if (c && c.state !== 'running') { try { c.resume(); } catch (e) { } }
+    });
+  }
+  function burst(at, dur, freq, gain) {
+    var c = ctx, n = Math.floor(c.sampleRate * dur);
+    var buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) {
+      var env = Math.pow(1 - i / n, 2.6);
+      d[i] = (Math.random() * 2 - 1) * env;
+    }
+    var src = c.createBufferSource(); src.buffer = buf;
+    var bp = c.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = freq; bp.Q.value = 1.1;
+    var g = c.createGain(); g.gain.value = gain;
+    src.connect(bp); bp.connect(g); g.connect(c.destination);
+    src.start(at);
+  }
+  function tone(at, freq, dur, type, vol) {
+    var c = ctx;
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type || 'triangle'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol || 0.16, at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(at); o.stop(at + dur + 0.03);
+  }
+  /* 击打瞬态：极短噪声 + 高 Q 带通 —— 高 Q 才"嗒"得脆，低 Q 就变成"嘶"的闷响 */
+  function tick(at, gain, freq, q, dur) {
+    var c = ctx, n = Math.max(12, Math.floor(c.sampleRate * (dur || 0.0022)));
+    var buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 1.6);
+    var src = c.createBufferSource(); src.buffer = buf;
+    var bp = c.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.value = freq; bp.Q.value = q || 5;
+    var g = c.createGain(); g.gain.value = gain;
+    src.connect(bp); bp.connect(g); g.connect(c.destination);
+    src.start(at);
+  }
+  /* 骰子撞陶瓷碗 = 两层高 Q 瞬态（"嗒"，3~9kHz）+ 5 个非谐分音（"叮"，2~10kHz）。
+     清脆三要素：分音高且非整数倍、衰减极短（15~40ms）、基本不带低频。 */
+  function ceramicHit(at, freq, gain, life) {
+    tick(at, gain * 0.9, 3400 + Math.random() * 1700, 6, 0.0022);
+    tick(at, gain * 0.42, 7600 + Math.random() * 1800, 4, 0.0016);
+    var ratios = [1, 1.63, 2.41, 3.17, 4.06];
+    for (var k = 0; k < ratios.length; k++) {
+      var c = ctx;
+      var f0 = freq * ratios[k] * (1 + (Math.random() * 0.04 - 0.02));
+      if (f0 > 15500) continue;
+      var o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0 * 0.975, at);         /* 一点上滑：瓷的"叮"是往上"开"的 */
+      o.frequency.linearRampToValueAtTime(f0, at + 0.012);
+      var g = c.createGain();
+      var peak = gain * (k === 0 ? 1 : 0.5 / Math.pow(k, 0.72));
+      var dec = Math.max(0.014, (life || 0.04) * (1 - k * 0.18));
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(peak, at + 0.0015);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dec);
+      o.connect(g); g.connect(c.destination);
+      o.start(at); o.stop(at + dec + 0.02);
+    }
+  }
+  /* 最后停稳：两声干净的瓷音（纯五度），余韵留长一点，收尾要好听 */
+  function settleChime(at, gain) {
+    var seq = [[2480, 0], [3720, 0.075]];
+    for (var i = 0; i < seq.length; i++) {
+      var c = ctx, f = seq[i][0], t0 = at + seq[i][1];
+      var o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f * 0.988, t0);
+      o.frequency.linearRampToValueAtTime(f, t0 + 0.022);
+      var o2 = c.createOscillator(); o2.type = 'sine';       /* 八度上的弱分音 → 更亮更"瓷" */
+      o2.frequency.setValueAtTime(f * 2.005, t0);
+      var g = c.createGain(), g2 = c.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gain * (i ? 0.68 : 1), t0 + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.36);
+      g2.gain.setValueAtTime(0.0001, t0);
+      g2.gain.exponentialRampToValueAtTime(gain * (i ? 0.2 : 0.28), t0 + 0.004);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      o.connect(g); g.connect(c.destination);
+      o2.connect(g2); g2.connect(c.destination);
+      o.start(t0); o.stop(t0 + 0.4); o2.start(t0); o2.stop(t0 + 0.24);
+    }
+    tick(at, gain * 0.55, 4400, 6, 0.002);
+  }
+  /* 碗体共鸣：很低很轻的一层，只用来托一下底，别多（多了就"沉闷"） */
+  function bowlBody(at, gain) {
+    var c = ctx;
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, at);
+    o.frequency.exponentialRampToValueAtTime(120, at + 0.08);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.1);
+    o.connect(g); g.connect(c.destination);
+    o.start(at); o.stop(at + 0.12);
+  }
+  return {
+    setEnabled: function (v) { enabled = !!v; if (v) unlock(); },
+    isEnabled: function () { return enabled; },
+    isReady: isReady,
+    wake: function () { return unlock(); },
+    unlock: unlock,
+    /* --- 以下两个只给自检探针用 --- */
+    rawState: function () { return ctx ? ctx.state : 'none'; },
+    /* 人为挂起上下文 = 造出"解锁刚发生、resume 还没生效"的那一瞬间 */
+    suspendForTest: function () { try { if (ctx) ctx.suspend(); } catch (e) { } },
+    /* 音效按钮显示用：'off' 已关 / 'none' 还没建上下文 / 'wait' 开着但没解锁 / 'running' 正常 */
+    status: function () {
+      if (!enabled) return 'off';
+      if (isReady()) return 'running';
+      return ctx ? 'wait' : 'none';
+    },
+    /* 骰子入碗那一下 */
+    shake: function () {
+      if (!ensure()) return;
+      var t = ctx.currentTime + 0.008;
+      ceramicHit(t, 1850 + Math.random() * 260, 0.22, 0.05);
+      ceramicHit(t + 0.045, 2250 + Math.random() * 300, 0.15, 0.042);
+      bowlBody(t, 0.026);
+    },
+    /* 单次碰撞：动画按每次触地的时间点调用，越弹越轻（声画同步）。
+       这里刻意不加低频托底 —— 逐次叠加低频就是"沉闷"的来源。 */
+    hit: function (strength) {
+      if (!ensure()) return;
+      var s = Math.max(.12, Math.min(1, strength == null ? 1 : strength));
+      ceramicHit(ctx.currentTime + 0.003, 2050 + Math.random() * 950, 0.19 * s, 0.02 + Math.random() * 0.022);
+    },
+    /* 最后停稳：两声干净的瓷音收尾（动画在最后一颗骰子落定时调用） */
+    settle: function (gain) {
+      if (!ensure()) return;
+      settleChime(ctx.currentTime + 0.004, gain == null ? 0.1 : gain);
+    },
+    /* 兜底：没有动画时的一整串骰子声（音效开关试听也用这个） */
+    clatter: function (dur) {
+      if (!ensure()) return;
+      var span = Math.max(0.45, ((dur || 1300) / 1000) * 0.76);
+      var t = ctx.currentTime + 0.01;
+      var hits = 6 + Math.floor(Math.random() * 4);
+      var at = t, i;
+      for (i = 0; i < hits; i++) {
+        at += span / hits * (0.55 + Math.random() * 0.9);
+        ceramicHit(at, 1700 + Math.random() * 1000, 0.16 * (1 - i / hits * 0.5), 0.045 + Math.random() * 0.05);
+      }
+      bowlBody(t, 0.05);
+    },
+    award: function (tier) {
+      if (!ensure()) return;
+      var t = ctx.currentTime + 0.02;
+      var sc = [523, 659, 784, 1047];
+      var up = tier >= 70 ? 4 : 2;
+      for (var i = 0; i < up; i++) tone(t + i * 0.075, sc[i], 0.22, 'triangle', 0.13);
+      ceramicHit(t, 3000, 0.1, 0.045);
+    },
+    fanfare: function () {
+      if (!ensure()) return;
+      var t = ctx.currentTime + 0.02;
+      var sc = [523, 587, 659, 784, 880, 1047, 1319];
+      for (var i = 0; i < sc.length; i++) tone(t + i * 0.085, sc[i], 0.34, 'triangle', 0.15);
+      ceramicHit(t + 0.06, 2800, 0.18, 0.1);
+      ceramicHit(t + 0.42, 3400, 0.16, 0.1);
+      ceramicHit(t + 0.64, 4000, 0.14, 0.1);
+      settleChime(t + 0.72, 0.12);
+    },
+    empty: function () {
+      if (!ensure()) return;
+      var t = ctx.currentTime + 0.02;
+      tone(t, 330, 0.16, 'sine', 0.09); tone(t + 0.1, 247, 0.2, 'sine', 0.08);
+    },
+    /* 自检探针用：把几种音都合成一遍（不进扬声器之外没有任何副作用） */
+    selftestProbe: function () {
+      if (!ensure()) return 'no-audio-context';
+      var t = ctx.currentTime + 0.02;
+      ceramicHit(t, 2100, 0.12, 0.05);
+      ceramicHit(t + 0.05, 2600, 0.1, 0.04);
+      settleChime(t + 0.09, 0.08);
+      bowlBody(t, 0.03);
+      return 'ok';
+    }
+  };
+})();
+
+
+/* ============================================================================
+   ④ 状态
+   ============================================================================ */
+var AVATARS = ['🐰', '🥮', '🌕', '🏮', '🍂', '🎲', '🐇', '🦊'];
+var state = null;
+var FAST = false;          /* 自检时跳过动画 */
+var GAME_TIMER = null;     /* 全局秒表（每秒刷新一次状态栏里的用时） */
+var SKIP = null;           /* 动画进行中：点一下就能跳过（下一把不用干等） */
+/* spin: 抛掷动画总时长；after: 落定后再等多久才解锁。
+   从 1600+220 收到 1150+140 —— 一轮少等约 0.5 秒，一局几十轮就是十几秒。 */
+var TIMING = { spin: 1150, after: 140, jitter: 0 };   /* 六颗同时抛出（轨迹由物理模拟给出，没有逐颗延迟） */
+
+function newGame(cfg) {
+  cfg = cfg || {};
+  /* 配额：优先用本局传来的，其次用设置页当前的，最后回落默认 */
+  if (cfg.quotas) setQuota(cfg.quotas);
+  var quotaSnap = Object.assign({}, QUOTA);
+  var pool0 = {};
+  for (var qi = 0; qi < NONZY_KEYS.length; qi++) pool0[NONZY_KEYS[qi]] = QUOTA[NONZY_KEYS[qi]];
+  var players = (cfg.players || []).map(function (p, i) {
+    return {
+      id: i, name: p.name || ('玩家' + (i + 1)), av: p.av || AVATARS[i % AVATARS.length],
+      cakes: { zhuangyuan: 0, duitang: 0, sanhong: 0, sijin: 0, erju: 0, yixiu: 0 },
+      rolls: 0, best: null
+    };
+  });
+  state = {
+    phase: 'playing',            /* playing | final | over */
+    players: players,
+    pool: pool0,                 /* 各等级还剩多少份（按当前配额初始化） */
+    quota: quotaSnap,            /* 本局的配额快照，进度条分母用这个，设置页改动不影响在局 */
+    zyHolder: null,              /* player id 或 null */
+    zyGrade: null,               /* {tier,kicker,name,label} */
+    zyDice: null,
+    zyStealCount: 0,
+    current: 0,
+    round: 1,
+    rollCount: 0,
+    poolEmpty: false,
+    finalRoundNo: 0,
+    finalRolls: 0,
+    log: [],
+    startedAt: Date.now(),
+    dice: [1, 2, 3, 4, 5, 6],
+    lastGrade: null,
+    busy: false,
+    mode: 'local',               /* local（多人轮流）| solo（单人挑战） */
+    solo: { firstZyRoll: null, zyRefresh: 0, endedAt: null },
+    endedAt: null,               /* 本局结束时刻（多人局也算用时） */
+    dist: (function () { var d = {}, i; for (i = 0; i < GRADE_KEYS.length; i++) d[GRADE_KEYS[i]] = 0; return d; })(),
+    cfg: { playerCount: players.length, names: players.map(function (p) { return p.name; }) }
+  };
+  state.mode = cfg.mode || (players.length === 1 ? 'solo' : 'local');
+  if (cfg.fast !== undefined) FAST = !!cfg.fast;   /* 不传则保持当前模式（自检用） */
+  /* 全局秒表：所有模式都要显示用时。
+     只改 bar-round 那一个节点 —— 重渲整条状态栏会白白重排十几个元素。 */
+  clearInterval(GAME_TIMER); GAME_TIMER = null;
+  GAME_TIMER = setInterval(function () {
+    if (!state) return;
+    if (state.phase !== 'over') {
+      var el = document.getElementById('bar-round');
+      if (el) el.textContent = roundPillText();
+    }
+    var sm = document.getElementById('modal-stat');
+    if (sm && sm.classList.contains('show')) renderStatModal();   /* 用时每秒跟着走 */
+  }, 1000);
+  renderAll();
+  return state;
+}
+
+function totalLeft() {
+  var n = 0, i;
+  for (i = 0; i < NONZY_KEYS.length; i++) n += state.pool[NONZY_KEYS[i]];
+  if (state.zyHolder === null) n += 1;      /* 状元还没发出去 */
+  return n;
+}
+function awardedCount(p) {
+  var t = 0, i;
+  for (i = 0; i < NONZY_KEYS.length; i++) t += p.cakes[NONZY_KEYS[i]];
+  return t;
+}
+/* 本局进度条的分母：用本局快照，不用全局 QUOTA（设置页改了不能影响在局） */
+function poolQuota(k) { return (state && state.quota) ? state.quota[k] : QUOTA[k]; }
+
+/* ============================================================================
+   ⑤ 掷骰 + 结算逻辑
+   ============================================================================ */
+function randomDice() {
+  var d = [];
+  for (var i = 0; i < 6; i++) d.push(1 + Math.floor(Math.random() * 6));
+  return d;
+}
+
+/* 真实掷一次（带规则结算）。diceOrNull 为 null 则随机；silent 为 true 时跳过动画 */
+function doRoll(diceOrNull, silent) {
+  if (!state) return null;
+  if (state.phase === 'over') return null;
+  if (state.busy && !silent) return null;
+  var dice = diceOrNull || randomDice();
+  state.dice = dice.slice();
+  var grade = evaluate(dice);
+  if (state.dist) state.dist[grade.key] = (state.dist[grade.key] || 0) + 1;   /* 本局等级分布 */
+  var res = applyRoll(state.current, dice, grade);
+  if (silent) { afterRoll(silent); return res; }
+  state.busy = true;
+  updateRollButton();
+  var settled = false;
+  var finish = function () {
+    if (settled) return;              /* 跳过后再走一次收尾也不许放两次特效 */
+    settled = true;
+    SKIP = null;
+    state.busy = false;
+    playSoundFor(res);                 /* 落定之后才响奖项音，不再抢在骰子前面 */
+    showResult(grade, res);
+    playFx(grade, res);
+    afterRoll(false);
+    updateRollButton();
+  };
+  /* 点一下跳过：手快的人不用干等 1.3 秒 */
+  SKIP = function () { snapDice(dice); finish(); };
+  spinDice(dice, finish);
+  return res;
+}
+
+/* 落定后才播的奖项音效（'fanfare' 状元级 / 'award' 得饼 / 'empty' 空手） */
+function playSoundFor(res) {
+  if (!res || !res.sound) return;
+  if (res.sound === 'fanfare') Sfx.fanfare();
+  else if (res.sound === 'award') Sfx.award(res.tier);
+  else if (res.sound === 'empty') Sfx.empty();
+}
+
+/* 结算一次掷骰结果 */
+function applyRoll(pIdx, dice, grade) {
+  var p = state.players[pIdx];
+  p.rolls++;
+  if (!p.best || compareGrade(grade, p.best) > 0) p.best = { tier: grade.tier, kicker: grade.kicker, name: grade.name };
+
+  var entry = {
+    pIdx: pIdx, name: p.name, av: p.av, dice: dice.slice(),
+    grade: grade.name, label: grade.label, tier: grade.tier,
+    action: '', msg: '', cls: 'g-miss'
+  };
+
+  if (grade.zy) {
+    if (state.zyHolder === null) {
+      state.zyHolder = p.id; state.zyGrade = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label };
+      state.zyDice = dice.slice();
+      p.cakes.zhuangyuan = 1;
+      entry.action = '得状元'; entry.cls = 'g-zy';
+      entry.msg = '博得状元！' + grade.label;
+      if (state.mode === 'solo') state.solo.firstZyRoll = state.rollCount + 1;   /* 第几把博出状元 */
+      entry.sound = 'fanfare';
+    } else if (state.zyHolder === p.id) {
+      var selfCmp = compareGrade(grade, state.zyGrade);
+      if (selfCmp > 0) {
+        state.zyGrade = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label };
+        state.zyDice = dice.slice();
+      }
+      entry.action = '稳状元'; entry.cls = 'g-zy';
+      entry.msg = '又博出' + grade.name + '，状元仍是自己的' + (selfCmp > 0 ? '（把自己的状元成绩又刷新高了）' : '');
+      if (selfCmp > 0 && state.mode === 'solo') state.solo.zyRefresh++;         /* 自己刷新状元成绩的次数 */
+      entry.sound = 'fanfare';
+    } else {
+      var old = state.players[state.zyHolder];
+      var cmp = compareGrade(grade, state.zyGrade);
+      if (cmp > 0) {
+        old.cakes.zhuangyuan = 0;
+        state.zyHolder = p.id;
+        state.zyGrade = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label };
+        state.zyDice = dice.slice();
+        p.cakes.zhuangyuan = 1;
+        state.zyStealCount++;
+        entry.action = '夺状元'; entry.cls = 'g-zy';
+        entry.msg = '以「' + grade.label + '」夺走了 ' + old.name + ' 的状元！';
+        entry.sound = 'fanfare';
+      } else if (cmp === 0) {
+        entry.action = '夺状元失败'; entry.cls = 'g-zy';
+        entry.msg = '同为「' + grade.name + '」且点数相同，未能夺走 ' + old.name + ' 的状元';
+      } else {
+        entry.action = '夺状元失败'; entry.cls = 'g-zy';
+        entry.msg = '「' + grade.label + '」小于 ' + old.name + ' 的「' + state.zyGrade.label + '」，状元保住了';
+      }
+    }
+  } else if (grade.cake) {
+    if (state.pool[grade.cake] > 0) {
+      state.pool[grade.cake]--;
+      p.cakes[grade.cake]++;
+      entry.action = '得奖'; entry.cls = 'g-hit';
+      entry.msg = '博得 ' + CAKE[grade.cake].name;
+      entry.sound = 'award';
+    } else {
+      entry.action = '空手'; entry.cls = 'g-miss';
+      entry.msg = CAKE[grade.cake].name + ' 已经博完，本轮空手';
+      entry.sound = 'empty';
+    }
+  } else {
+    entry.action = '无'; entry.cls = 'g-miss';
+    entry.msg = '一粒红四都没有，下轮再来';
+  }
+  state.log.unshift(entry);
+  return entry;
+}
+
+/* 掷完后推进流程：换人 / 收官轮 / 结束 */
+function afterRoll(silent) {
+  var n = state.players.length;
+  state.rollCount++;
+  var nonLeft = state.pool.duitang + state.pool.sanhong + state.pool.sijin + state.pool.erju + state.pool.yixiu;
+  if (nonLeft === 0) state.poolEmpty = true;
+
+  var wrapped = (state.current === n - 1);
+
+  if (state.phase === 'playing') {
+    state.current = (state.current + 1) % n;
+    if (wrapped) {
+      state.round++;
+      if (state.poolEmpty) enterFinalRound();
+    }
+  } else if (state.phase === 'final') {
+    state.finalRolls++;
+    state.current = (state.current + 1) % n;
+    if (state.finalRolls >= n) {
+      if (state.zyHolder !== null) { finishGame(); }
+      else {
+        state.finalRoundNo++;
+        state.finalRolls = 0;
+        nextFinalRound();
+      }
+    }
+  }
+  renderAll();
+}
+
+function enterFinalRound() {
+  state.phase = 'final';
+  state.finalRoundNo = 1;
+  state.finalRolls = 0;
+  state.current = state.current % state.players.length;
+  pushSystemLog('🀄 非状元奖项已全部发完 —— 进入<strong>收官轮（最后一轮）</strong>，每人再各博一次，这一轮仍可夺状元！');
+  toast('收官轮开始！最后一博，还能夺状元');
+}
+
+function nextFinalRound() {
+  pushSystemLog('状元虚位，再来一轮收官轮（第 ' + (state.finalRoundNo + 1) + ' 轮）');
+  toast('状元还没有主，再来一轮');
+}
+
+function pushSystemLog(html) {
+  state.log.unshift({ sys: true, html: html });
+}
+
+function finishGame() {
+  state.phase = 'over';
+  var now = Date.now();
+  state.endedAt = now;                 /* 多人局也要算用时 */
+  state.solo.endedAt = now;
+  var zy = state.zyHolder === null ? null : state.players[state.zyHolder];
+  pushSystemLog('🏁 全部奖项各有其主，本局结束。' + (zy ? '状元是 <strong>' + escapeHtml(zy.name) + '</strong>！' : '状元无人博得。'));
+  saveGameRecord();
+  renderAll();
+  showResultModal();
+}
+
+/* ============================================================================
+   ⑥ 3D 骰子
+   ============================================================================ */
+var PIP = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+/* 显示 N 点时的基础角度 */
+var FACE_ROT = {
+  1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 2: [-90, 0], 5: [90, 0]
+};
+var diceEls = [];
+var dieSize = 40;
+var DIE_MIN = 22, DIE_MAX = 44;      /* 下限只是兜底：正常都取"碗宽/14"，这样各视口的松紧一致 */
+
+function norm360(v) { return ((v % 360) + 360) % 360; }
+
+function buildDice() {
+  var field = document.getElementById('dice-field');
+  if (!field) return;
+  var wrapBox = document.getElementById('bowl-wrap') || field;
+  var bowlW = wrapBox.clientWidth || 420;
+  /* 比例：碗宽 ≈ 14 个骰子宽（用户：比一开始的 7.5 小，但比照图的 20 大，得保证点数看得清） */
+  var size = Math.round(Math.min(DIE_MAX, Math.max(DIE_MIN, bowlW / 14)));
+  dieSize = size;
+  document.documentElement.style.setProperty('--die', size + 'px');
+  field.innerHTML = '';
+  diceEls = [];
+  var h = size / 2;
+  var faceTrans = {
+    1: 'translateZ(' + h + 'px)',
+    6: 'rotateY(180deg) translateZ(' + h + 'px)',
+    3: 'rotateY(90deg) translateZ(' + h + 'px)',
+    4: 'rotateY(-90deg) translateZ(' + h + 'px)',
+    2: 'rotateX(90deg) translateZ(' + h + 'px)',
+    5: 'rotateX(-90deg) translateZ(' + h + 'px)'
+  };
+  for (var i = 0; i < 6; i++) {
+    var wrap = document.createElement('div');
+    wrap.className = 'die-wrap';
+    var cube = document.createElement('div');
+    cube.className = 'cube';
+    for (var v = 1; v <= 6; v++) {
+      var f = document.createElement('div');
+      f.className = 'face';
+      f.setAttribute('data-v', v);
+      f.style.transform = faceTrans[v];
+      var idx = PIP[v];
+      for (var k = 0; k < 9; k++) {
+        var cell = document.createElement('span');
+        cell.className = 'cell';
+        if (idx.indexOf(k) >= 0) {
+          var pip = document.createElement('i');
+          pip.className = 'pip' + ((v === 1 || v === 4) ? ' red' : '');
+          cell.appendChild(pip);
+        }
+        f.appendChild(cell);
+      }
+      cube.appendChild(f);
+    }
+    wrap.appendChild(cube);
+    field.appendChild(wrap);
+    diceEls.push({ wrap: wrap, cube: cube, x: 0, y: 0, rot: 0, rotX: 0, rotY: 0, x0: 0, y0: 0, rot0: 0 });
+  }
+  layoutDice(true);
+}
+
+/* 一颗骰子的 transform。z 默认抬半个边长（让它"坐"在碗底平面上）；
+   腾空时可以额外抬高，六颗骰子各占一层高度 → 空中不会互相穿模 */
+function poseStr(x, y, rot, z) {
+  var zz = (z == null ? dieSize / 2 : z);
+  return 'translate(-50%,-50%) translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,' +
+    zz.toFixed(1) + 'px) rotateZ(' + rot.toFixed(1) + 'deg)';
+}
+
+/* 落点/碰撞的几何常数 */
+/* 骰子间距：两颗"边长 R、各自转了角度"的方块不重叠，按分离轴定理，沿最优轴只要
+      need = R/2 · (1 + |cosΔ| + |sinΔ|)      （Δ = 两颗的转角差）
+   就够了。Δ=0 时等于 R（贴齐摆放只要一个边长）；最坏在 Δ=45°，need = 1.207R。
+   所以分离距离取 1.21R 就够了 —— 硬按 2·(R·√2/2) = 1.414R 会白白浪费空间，
+   把骰子推得满碗都是（用户要的是"骰子拢在碗底附近"）。 */
+function pairNeed(rotA, rotB, R) {
+  var d = rotA - rotB;
+  return R / 2 * (1 + Math.abs(Math.cos(d)) + Math.abs(Math.sin(d)));
+}
+var MIN_SEP_F = 1.24;                    /* 实际施加的圆盘分离距离（紧界 1.207R，外加解算残余的余量） */
+var MIN_SEP_TIGHT = 1.207;               /* 真·任何角度都不重叠的紧界，断言按这个查 */
+var TWIST_LO = 20, TWIST_HI = 40;        /* 落定时在初始朝向上再拧这么多度（有转动感，又不至于乱转） */
+
+/* 骰子可活动区：以"碗底椭圆"为基准再往里收一圈 ——
+   ① 收窄：现实中骰子是落在碗底那一小块，不会摊满整只碗；
+   ② 圆心比碗底心更靠远侧一点：往碗里看，碗底近侧离碗口金边只剩一线，
+      骰子摆过去就会跟碗口贴到一起。宽高比跟碗底一致，怎么落都在碗底那一圈里。 */
+var AREA_RX_F = 0.62, AREA_RY_F = 0.58, AREA_DY_F = -0.08;
+
+function diceArea() {
+  var f = document.getElementById('dice-field');
+  var W = (f && f.clientWidth) || 260, H = (f && f.clientHeight) || 120;
+  return { rx: W / 2 * AREA_RX_F, ry: H / 2 * AREA_RY_F, cy: H / 2 * AREA_DY_F };
+}
+
+/* 骰子外缘到碗口金边必须留的余量：外缘到碗口的归一化距离要 ≤ RIM_MARGIN（1 = 正好贴到金边）。
+   只要求"不越出"是不够的 —— 贴着金边也算合格，看起来就像跟碗口重合了。 */
+var RIM_MARGIN = 0.85;
+var FOOT_R = 0.71;                       /* 方块绕法线任意角度的外接半径系数 = √2/2 */
+
+/* 防穿模的根治手段：把落点互相推开，直到任意两颗的中心距 ≥ 骰子边长×1.21，
+   并始终把每颗都夹回"碗底那一小圈"里。只靠随机取点保证不了不重叠。 */
+function relaxSpots(pts) {
+  var f = document.getElementById('dice-field');
+  if (!f || pts.length < 2) return pts;
+  var ar = diceArea();
+  var minD = dieSize * MIN_SEP_F, i, j, it, moved;
+  /* 夹回椭圆：沿原点方向等比缩放，方向不变 */
+  function clamp(p) {
+    var dy = p.y - ar.cy;
+    var e = Math.sqrt((p.x / ar.rx) * (p.x / ar.rx) + (dy / ar.ry) * (dy / ar.ry));
+    if (e > 1) { p.x /= e; p.y = ar.cy + dy / e; }
+  }
+  for (i = 0; i < pts.length; i++) clamp(pts[i]);
+  for (it = 0; it < 40; it++) {
+    moved = false;
+    for (i = 0; i < pts.length; i++) {
+      for (j = i + 1; j < pts.length; j++) {
+        var dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
+        var d = Math.hypot(dx, dy);
+        if (d >= minD) continue;
+        var ux = d < 0.01 ? 1 : dx / d, uy = d < 0.01 ? 0 : dy / d;
+        var need = (minD - d) / 2 + 0.4;
+        pts[i].x -= ux * need; pts[i].y -= uy * need;
+        pts[j].x += ux * need; pts[j].y += uy * need;
+        moved = true;
+      }
+      clamp(pts[i]);
+    }
+    if (!moved) break;
+  }
+  for (i = 0; i < pts.length; i++) clamp(pts[i]);
+  /* 兜底：万一推不开，就直接按 3×2 的六宫格摆 —— 位置确定，间距必然达标。
+     （注意：不能靠"整体缩小"来解，缩小只会让间距更小，那是反的。） */
+  var worst = Infinity;
+  for (i = 0; i < pts.length; i++) {
+    for (j = i + 1; j < pts.length; j++) {
+      var dw = Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y);
+      if (dw < worst) worst = dw;
+    }
+  }
+  if (worst < minD) {
+    var gapX = Math.min(ar.rx * 2 / 3, minD), gapY = Math.min(ar.ry, minD);
+    for (i = 0; i < pts.length; i++) {
+      var col = i % 3, row = (i - col) / 3;
+      pts[i].x = (col - 1) * gapX;
+      pts[i].y = ar.cy + (row - 0.5) * gapY;
+    }
+  }
+  return pts;
+}
+
+function randomSpots(n) {
+  var ar = diceArea();
+  var pts = [], tries;
+  for (var i = 0; i < n; i++) {
+    var best = null, bestD = -1;
+    for (tries = 0; tries < 60; tries++) {
+      var a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random());
+      var x = Math.cos(a) * ar.rx * r, y = ar.cy + Math.sin(a) * ar.ry * r;
+      var d = 1e9;
+      for (var j = 0; j < i; j++) {
+        var dd = Math.hypot(x - pts[j].x, y - pts[j].y);
+        if (dd < d) d = dd;
+      }
+      if (d > bestD) { bestD = d; best = { x: x, y: y }; }
+      if (bestD > dieSize * MIN_SEP_F * 1.05) break;
+    }
+    pts.push(best);
+  }
+  return relaxSpots(pts);
+}
+
+/* 摆一次落位（开局、窗口尺寸变化时用），同时把"上一落位"对齐 */
+function layoutDice(instant) {
+  var pts = randomSpots(diceEls.length);
+  for (var i = 0; i < diceEls.length; i++) {
+    var d = diceEls[i], p = pts[i] || { x: 0, y: 0 };
+    d.x = p.x; d.y = p.y;
+    d.rot = Math.round(Math.random() * 36 - 18);
+    d.x0 = d.x; d.y0 = d.y; d.rot0 = d.rot;
+    d.wrap.style.transform = poseStr(d.x, d.y, d.rot);
+  }
+}
+
+/* 只规划下一落点，不立即生效（留给动画从旧落点抛过去） */
+function planLanding() {
+  var pts = randomSpots(diceEls.length);
+  for (var i = 0; i < diceEls.length; i++) {
+    var d = diceEls[i], p = pts[i] || { x: 0, y: 0 };
+    d.x0 = d.x; d.y0 = d.y; d.rot0 = d.rot;
+    d.x = p.x; d.y = p.y;
+    d.rot = d.rot0 + (Math.random() < 0.5 ? -1 : 1) * (TWIST_LO + Math.random() * (TWIST_HI - TWIST_LO));
+  }
+}
+
+/* 纯函数：从 cur 角度滚到"目标点数"，顺向至少滚 minTurns 整圈，落定角 ≡ 目标角 (mod 360) */
+function spinPlan(curX, curY, value, minTurns) {
+  var t = FACE_ROT[value] || [0, 0];
+  var base = 360 * (minTurns == null ? 2 : minTurns);
+  var toX = curX + base + norm360(t[0] - curX);
+  var toY = curY + base + norm360(t[1] - curY);
+  return {
+    fromX: curX, fromY: curY, toX: toX, toY: toY,
+    turnsX: (toX - curX) / 360, turnsY: (toY - curY) / 360
+  };
+}
+
+/* ============================================================================
+   抛掷物理：先跑一个 2D 刚体小模拟，把六颗骰子"抛起 → 弹跳 → 互相碰撞 → 碗壁反弹 → 停稳"
+   的真实轨迹算出来，再采样成 WAAPI 关键帧去播。
+   为什么这么做：靠"给每颗骰子分一层高度"是躲不掉穿模的 —— 只要两颗的水平投影重叠，
+   屏幕上就是插在一起。碰撞必须真的解算出来。
+   ============================================================================ */
+function simulateThrow(start, rx, ry, dur, cy) {
+  var R = dieSize, g = R * 58;
+  var cY = cy || 0;
+  var dt = 1 / 120, steps = Math.max(40, Math.round(dur / 1000 / dt));   /* 1/120 够用，计算量省一半 */
+  var n = start.length, B = [], i, j, s, it;
+  for (i = 0; i < n; i++) {
+    var sp = start[i];
+    var tx = (Math.random() - 0.5) * rx * 0.9, ty = cY + (Math.random() - 0.5) * ry * 0.9;
+    var dx = tx - sp.x, dy = ty - sp.y, dl = Math.hypot(dx, dy) || 1;
+    var spd = R * (3.2 + Math.random() * 4.2);
+    B.push({
+      x: sp.x, y: sp.y,
+      vx: dx / dl * spd + (Math.random() - 0.5) * R * 2,
+      vy: dy / dl * spd + (Math.random() - 0.5) * R * 2,
+      h: R * (0.1 + Math.random() * 0.3),
+      vh: R * (9 + Math.random() * 7)          /* 抛起来的高度 ≈ 0.7~4 个骰子 */
+    });
+  }
+  /* 把两颗推开到 ≥ minD，并交换法向速度（等质量碰撞，杜绝"下一步又撞回来"） */
+  function separateAll(doImpulse) {
+    for (i = 0; i < n; i++) {
+      for (j = i + 1; j < n; j++) {
+        var A = B[i], C = B[j];
+        var ddx = C.x - A.x, ddy = C.y - A.y;
+        var dd = Math.hypot(ddx, ddy);
+        var minD = R * MIN_SEP_F;
+        if (dd >= minD) continue;
+        var ux = dd < 0.001 ? 1 : ddx / dd, uy = dd < 0.001 ? 0 : ddy / dd;
+        var push = (minD - dd) / 2 + 0.5;
+        A.x -= ux * push; A.y -= uy * push;
+        C.x += ux * push; C.y += uy * push;
+        if (!doImpulse) continue;
+        var va = A.vx * ux + A.vy * uy, vb = C.vx * ux + C.vy * uy;
+        if (va - vb > 0) {
+          var im2 = (va - vb) * 0.92;
+          A.vx -= im2 * ux; A.vy -= im2 * uy;
+          C.vx += im2 * ux; C.vy += im2 * uy;
+          if (im2 > R * 0.9 && crash.length < 40) crash.push({ t: s * dt * 1000, s: Math.min(0.75, im2 / (R * 10)) });
+        }
+      }
+    }
+  }
+  function wallAll() { for (i = 0; i < n; i++) wallClamp(B[i]); }
+  var path = [], hits = [], crash = [];
+  for (i = 0; i < n; i++) path.push([]);
+  /* 碗壁投影：把骰子中心夹回椭圆内，并按法向做反弹 */
+  function wallClamp(b) {
+    var by = b.y - cY;
+    var e = (b.x / rx) * (b.x / rx) + (by / ry) * (by / ry);
+    if (e <= 1) return;
+    var k = 1 / Math.sqrt(e);
+    b.x *= k; by *= k; b.y = cY + by;
+    var nx = b.x / (rx * rx), ny = by / (ry * ry);
+    var nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+    var vn = b.vx * nx + b.vy * ny;
+    if (vn > 0) {
+      b.vx -= 1.5 * vn * nx; b.vy -= 1.5 * vn * ny;
+      if (vn > R * 1.2 && crash.length < 40) crash.push({ t: s * dt * 1000, s: Math.min(0.5, vn / (R * 8)) });
+    }
+  }
+  for (s = 0; s < steps; s++) {
+    /* ① 积分：重力 / 位移 / 触地反弹 / 摩擦 */
+    for (i = 0; i < n; i++) {
+      var b = B[i];
+      b.vh -= g * dt;
+      b.h += b.vh * dt;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.h <= 0) {
+        var imp = Math.abs(b.vh);
+        b.h = 0;
+        b.vh = imp > R * 0.4 ? imp * 0.42 : 0;
+        b.vx *= 0.62; b.vy *= 0.62;
+        if (imp > R * 1.1 && hits.length < 60) hits.push({ t: s * dt * 1000, s: Math.min(1, imp / (R * 9)) });
+      } else {
+        b.vx *= 1 - 0.6 * dt; b.vy *= 1 - 0.6 * dt;
+      }
+      if (b.h <= 0 && Math.hypot(b.vx, b.vy) < R * 0.35) { b.vx = 0; b.vy = 0; }
+    }
+    /* ② 迭代求解约束：碗壁 + 骰子间碰撞交替投影（Gauss-Seidel）。
+          骰子挤在碗边、或骰子相对碗偏大时（手机窄屏骰子有 30px 下限），
+          只做几轮分离会被墙壁再次推回去，所以要投影到收敛为止。 */
+    for (it = 0; it < 16; it++) { wallAll(); separateAll(true); }
+    wallAll();
+    /* 壁面夹取会把骰子重新挤到一起（骰子相对碗偏大时尤其明显），所以最后再纯分离几轮
+       把残余穿透压掉。这几轮不再夹壁面 —— 最多让骰子超出活动区一两个像素，
+       而骰子离碗口金边还留着十几像素的余量，肉眼看不出来。 */
+    for (it = 0; it < 6; it++) separateAll(false);
+    for (i = 0; i < n; i++) path[i].push({ x: B[i].x, y: B[i].y, h: B[i].h });
+  }
+  return { path: path, hits: hits, crash: crash, dt: dt };
+}
+
+/* 这颗骰子"停稳"的时间点（占总时长的比例）：从轨迹末尾往前找最后一帧还在明显移动的。 */
+function settleFraction(path, dt, total) {
+  for (var s = total; s > 0; s--) {
+    var q1 = path[s], q0 = path[s - 1];
+    var mov = Math.hypot(q1.x - q0.x, q1.y - q0.y) + Math.abs(q1.h - q0.h) * 0.6;
+    if (mov / dt > dieSize * 0.25) return s / total;
+  }
+  return 1;
+}
+
+/* 本体翻转该转多久：物理上停稳了就不许再转（留一点余量，别卡在停稳那一帧上） */
+function rotDuration(stopF, dur) {
+  return Math.min(dur, Math.max(dur * 0.3, dur * stopF * 0.8));
+}
+
+/* 原地拧转（wrapper 的 rotateZ）的进度：同样要在停稳之前就转完，停稳后恒为 1。
+   上一版漏了这个 —— wrapper 的 rotateZ 沿整段时长线性插值，于是骰子停稳后还会原地拧。
+   收尾提前到停稳时刻的 80%：这条减速曲线的尾巴很长，卡到最后一帧会有零点几度的残转。 */
+function twistAt(f, stopF) {
+  if (!(stopF > 0)) return 1;
+  var span = Math.max(0.02, stopF * 0.8);
+  var u = Math.min(1, f / span);
+  return 1 - Math.pow(1 - u, 2.2);
+}
+
+/* 六颗骰子一起被抛起来，各自弹跳、在空中互相撞、撞碗壁，最后一起停稳 */
+function spinDice(dice, done) {
+  if (FAST || !diceEls.length) { settle(dice, true); if (done) done(); return; }
+  var field = document.getElementById('dice-field');
+  var W = (field && field.clientWidth) || 260, H = (field && field.clientHeight) || 120;
+  var ar = diceArea();
+  var start = diceEls.map(function (d) { return { x: d.x, y: d.y }; });
+  var sim = simulateThrow(start, ar.rx, ar.ry, TIMING.spin, ar.cy);
+  var n = diceEls.length, dur = TIMING.spin, i, s;
+  Sfx.shake();
+  var total = sim.path[0].length - 1;
+  var step = Math.max(1, Math.round(total / 46));          /* 每颗采 ~46 帧 */
+  for (i = 0; i < n; i++) {
+    var d = diceEls[i], pth = sim.path[i], last = pth[total];
+    d.x0 = d.x; d.y0 = d.y; d.rot0 = d.rot;
+    d.x = last.x; d.y = last.y;
+    d.rot = d.rot0 + (Math.random() < 0.5 ? -1 : 1) * (TWIST_LO + Math.random() * (TWIST_HI - TWIST_LO));
+    /* 停稳时刻：位置、原地拧转、本体翻转三者都以它为准，停稳后一律不许再动 */
+    var stopF = settleFraction(pth, sim.dt, total);
+    var rotDur = rotDuration(stopF, dur);
+    d.hEnd = last.h < dieSize * 0.15 ? 0 : last.h;
+    var p = spinPlan(d.rotX, d.rotY, dice[i], 2);
+    var kf = [];
+    for (s = 0; s <= total; s += step) {
+      var q = pth[s], f = s / total;
+      kf.push({
+        offset: f,
+        transform: poseStr(q.x, q.y, d.rot0 + (d.rot - d.rot0) * twistAt(f, stopF), dieSize / 2 + q.h)
+      });
+    }
+    var kfLast = kf[kf.length - 1];
+    if (kfLast.offset < 1) {
+      kf.push({ offset: 1, transform: poseStr(last.x, last.y, d.rot, dieSize / 2 + d.hEnd) });
+    } else {
+      kfLast.transform = poseStr(last.x, last.y, d.rot, dieSize / 2 + d.hEnd);
+    }
+    var a1 = d.wrap.animate(kf, { duration: dur, easing: 'linear', fill: 'forwards' });
+    /* 本体翻转也只转到"停稳"为止，且不再带任何回弹过冲 */
+    var a2 = d.cube.animate([
+      { transform: 'rotateX(' + p.fromX + 'deg) rotateY(' + p.fromY + 'deg)' },
+      { transform: 'rotateX(' + p.toX + 'deg) rotateY(' + p.toY + 'deg)' }
+    ], { duration: rotDur, easing: 'cubic-bezier(.2,.62,.24,1)', fill: 'forwards' });
+    finishAnim(d, a1, a2, p, dur);
+  }
+  /* 碰撞声：触地 / 撞碗壁 / 骰子撞骰子，全部按物理时间点触发（声画同步） */
+  var all = sim.hits.concat(sim.crash).sort(function (a, b) { return a.t - b.t; });
+  var quota = 0;
+  for (i = 0; i < all.length; i++) {
+    if (all[i].s < 0.28 || quota >= 16) continue;
+    quota++;
+    scheduleHit(all[i].t, all[i].s);
+  }
+  scheduleSettle(Math.max(0, dur * 0.84));
+  setTimeout(function () { if (done) done(); }, dur + TIMING.after);
+}
+
+function scheduleSettle(at) {
+  if (FAST || !Sfx.isEnabled()) return;
+  setTimeout(function () { Sfx.settle(0.1); }, Math.max(0, Math.round(at)));
+}
+
+/* 按动画时间点排一声碰撞（声画同步的关键：不是提前播一串，而是跟着触地响） */
+function scheduleHit(at, strength) {
+  if (FAST || !Sfx.isEnabled()) return;
+  setTimeout(function () { Sfx.hit(strength); }, Math.max(0, Math.round(at)));
+}
+
+/* 动画收尾：把终值写回 inline style 再取消动画（避免 fill:forwards 一直挂着、越积越多） */
+function finishAnim(d, a1, a2, p, at) {
+  setTimeout(function () {
+    d.rotX = norm360(p.toX); d.rotY = norm360(p.toY);
+    d.cube.style.transform = 'rotateX(' + d.rotX + 'deg) rotateY(' + d.rotY + 'deg)';
+    d.wrap.style.transform = poseStr(d.x, d.y, d.rot, dieSize / 2 + (d.hEnd || 0));
+    try { a1.cancel(); a2.cancel(); } catch (e) { }
+  }, at + 20);
+}
+
+/* 瞬时精确摆位（自检探针、?demo= 快进用） */
+function settle(dice, instant) {
+  for (var i = 0; i < diceEls.length; i++) {
+    var r = FACE_ROT[dice[i]] || [0, 0];
+    var d = diceEls[i];
+    d.rotX = r[0]; d.rotY = r[1];
+    d.cube.style.transform = 'rotateX(' + r[0] + 'deg) rotateY(' + r[1] + 'deg)';
+  }
+}
+
+/* 跳过动画：把 WAAPI 全部取消，再把位置/朝向直接摆到最终姿态。
+   注意 wrap 的位置也必须显式写回 —— 取消动画会让它弹回动画前的旧位置。 */
+function snapDice(dice) {
+  for (var i = 0; i < diceEls.length; i++) {
+    var d = diceEls[i];
+    try {
+      if (d.wrap.getAnimations) d.wrap.getAnimations().forEach(function (a) { a.cancel(); });
+      if (d.cube.getAnimations) d.cube.getAnimations().forEach(function (a) { a.cancel(); });
+    } catch (e) { }
+    var r = FACE_ROT[dice[i]] || [0, 0];
+    d.rotX = norm360(r[0]); d.rotY = norm360(r[1]);
+    d.cube.style.transform = 'rotateX(' + d.rotX + 'deg) rotateY(' + d.rotY + 'deg)';
+    d.wrap.style.transform = poseStr(d.x, d.y, d.rot, dieSize / 2);
+  }
+}
+function skipAnim() {
+  if (!SKIP) return false;
+  var fn = SKIP;
+  SKIP = null;
+  try { fn(); } catch (e) { window.__logErr('skip: ' + e.message); }
+  return true;
+}
+
+/* ============================================================================
+   ⑦ 渲染
+   ============================================================================ */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (m) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+  });
+}
+
+function renderAll() {
+  if (!state) return;
+  renderPhaseBar();
+  renderPool();
+  renderPlayers();
+  renderLog();
+  updateRollButton();
+  renderRulesOdds();                       /* 规则页的"本局 N 次"要跟着掷骰实时走 */
+  var sm = document.getElementById('modal-stat');
+  if (sm && sm.classList.contains('show')) renderStatModal();   /* 概率弹层开着时才重建 */
+}
+
+/* 本局用时（多人局也算）。state.endedAt 在 finishGame 里写入，未结束时按当前时间算。 */
+function fmtDur(ms) {
+  var s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + '秒';
+  var mm = Math.floor(s / 60), ss = s % 60;
+  if (mm < 60) return mm + '分' + (ss ? ss + '秒' : '');
+  return Math.floor(mm / 60) + '小时' + (mm % 60) + '分';
+}
+function gameElapsed() {
+  var end = state.endedAt || state.solo.endedAt || Date.now();
+  return fmtDur(end - state.startedAt);
+}
+function soloElapsed() { return gameElapsed(); }
+/* 状态栏中间那颗胶囊的文字（秒表每秒只改这一个节点） */
+function roundPillText() {
+  var solo = state.mode === 'solo';
+  if (state.phase === 'over') {
+    return solo ? ('共 ' + state.rollCount + ' 把 · 用时 ' + gameElapsed())
+                : ('共 ' + state.round + ' 轮 · 用时 ' + gameElapsed());
+  }
+  if (state.phase === 'final') {
+    return solo ? ('收官第 ' + state.finalRoundNo + ' 轮 · 第 ' + (state.rollCount + 1) + ' 把')
+                : ('收官第 ' + state.finalRoundNo + ' 轮（' + state.finalRolls + '/' + state.players.length + '）');
+  }
+  return solo ? ('用时 ' + gameElapsed()) : ('第 ' + state.round + ' 轮 · 用时 ' + gameElapsed());
+}
+function soloVerdict(n) {
+  if (!n) return '这碗有点沉，下把转运';
+  if (n <= 3) return '手气爆棚！前三把就摸到状元';
+  if (n <= 10) return '锦鲤附体，手气相当旺';
+  if (n <= 30) return '稳当，是正经博饼的手气';
+  if (n <= 80) return '慢慢来，博饼讲的是缘分';
+  return '这碗有点沉，下把转运';
+}
+
+function renderPhaseBar() {
+  var p = state.players[state.current];
+  var who = document.getElementById('bar-who');
+  var round = document.getElementById('bar-round');
+  var left = document.getElementById('bar-left');
+  var solo = state.mode === 'solo';
+  if (state.phase === 'over') {
+    who.innerHTML = '本局结束';
+    round.className = 'pill';
+  } else if (state.phase === 'final') {
+    who.innerHTML = solo
+      ? '收官轮 · 最后一博，还能夺状元'
+      : '收官轮 · 轮到 <em>' + escapeHtml(p.name) + '</em> 博最后一博';
+    round.className = 'pill hot';
+  } else {
+    who.innerHTML = solo
+      ? '单人挑战 · 第 <em>' + (state.rollCount + 1) + '</em> 把'
+      : '轮到 <em>' + escapeHtml(p.name) + '</em> 博饼';
+    round.className = 'pill';
+  }
+  round.textContent = roundPillText();
+  left.textContent = solo
+    ? ('已博到 ' + (awardedCount(p) + p.cakes.zhuangyuan) + ' 份 · 场上剩 ' + totalLeft() + ' 份')
+    : ('场上剩 ' + totalLeft() + ' 份');
+}
+
+/* 概率弹层：每个奖项的「理论概率 vs 本局实际频率」。
+   本局没博过也能看（只看理论那一列），博的过程中实时刷新。 */
+function renderStatModal() {
+  var box = document.getElementById('stat-table');
+  if (!box) return;
+  var rolls = (state && state.rollCount) || 0;
+  var dist = (state && state.dist) || {};
+  var sum = document.getElementById('stat-summary');
+  if (sum) {
+    if (!state) sum.textContent = '还没开桌 — 先看理论概率。';
+    else if (!rolls) sum.innerHTML = '本局还没博过，下面是理论概率；一开博这里会实时更新。';
+    else {
+      var zy = state.zyHolder === null ? null : state.players[state.zyHolder];
+      sum.innerHTML = '本局已博 <b>' + rolls + '</b> 次、用时 <b>' + gameElapsed() + '</b>；' +
+        (zy ? ('状元归 <b>' + escapeHtml(zy.name) + '</b>') : '状元尚未博出') + '。';
+    }
+  }
+  var html = '<div class="srow head"><span>奖项</span><span>本局次数</span>' +
+    '<span>本局频率</span><span>理论概率</span><span>偏差</span></div>';
+  var rows = RULES_ROWS.concat([{ key: 'none', name: '无红四' }]);
+  for (var i = 0; i < rows.length; i++) {
+    var k = rows[i].key;
+    var g = GRADE[k];
+    var name = rows[i].name || g.name;
+    var cnt = dist[k] || 0;
+    var act = rolls ? cnt / rolls : 0;
+    var th = THEORY[k] / THEORY_TOTAL;
+    /* 偏差用"百分点"表示（实际 - 理论），掷得少的时候摆动很大是正常的 */
+    var dpp = (act - th) * 100;
+    var dCls = 'sd' + (Math.abs(dpp) < 0.01 ? '' : (dpp > 0 ? ' more' : ' less'));
+    html += '<div class="srow' + (g.tier >= 100 ? ' top' : '') + '" id="sr-' + k + '">' +
+      '<span class="sn">' + name +
+        (rolls ? '<span class="sbar"><i style="width:' + Math.min(100, act * 100).toFixed(1) + '%"></i></span>' : '') +
+      '</span>' +
+      '<span class="sc">' + cnt + ' 次</span>' +
+      '<span class="sp">' + (rolls ? oddsPct(cnt, rolls) : '—') + '</span>' +
+      '<span class="st">' + oddsPct(THEORY[k]) + '</span>' +
+      '<span class="' + dCls + '">' + (!rolls ? '—' : (dpp >= 0 ? '+' : '') + dpp.toFixed(1)) + '</span>' +
+      '</div>';
+  }
+  box.innerHTML = html;
+}
+
+function renderPool() {
+  var el = document.getElementById('pool');
+  if (!el) return;
+  var html = '';
+  /* 状元行 */
+  var zy = state.zyHolder === null ? null : state.players[state.zyHolder];
+  html += '<div class="prow zy"><span class="pn">状元</span><span class="pc2' + (zy ? '' : ' none') + '">' +
+    (zy ? escapeHtml(zy.name) + ' 持有' + (state.zyGrade ? '（' + state.zyGrade.name + '）' : '') : '尚未博出') +
+    '</span></div>';
+  for (var i = 1; i < CAKE_ORDER.length; i++) {
+    var k = CAKE_ORDER[i], left = state.pool[k], q = poolQuota(k);
+    var pct = q ? (left / q * 100) : 0;
+    html += '<div class="prow' + (left === 0 ? ' empty' : '') + '">' +
+      '<span class="pn">' + CAKE[k].name + '</span>' +
+      '<span class="pb"><i style="width:' + pct.toFixed(1) + '%"></i></span>' +
+      '<span class="pc">' + left + '/' + q + '</span>' +
+      '<span class="pd">' + ((state.dist && state.dist[CAKE_GRADE[k]]) || 0) + ' 次</span></div>';
+  }
+  el.innerHTML = html;
+}
+
+function renderPlayers() {
+  var el = document.getElementById('players');
+  if (!el) return;
+  var html = '';
+  for (var i = 0; i < state.players.length; i++) {
+    var p = state.players[i];
+    var cnt = awardedCount(p) + p.cakes.zhuangyuan;
+    var parts = [];
+    for (var j = 0; j < CAKE_ORDER.length; j++) {
+      var k = CAKE_ORDER[j];
+      if (p.cakes[k] > 0) {
+        parts.push('<span class="pchip' + (k === 'zhuangyuan' ? ' zy' : '') + '">' +
+          CAKE[k].name + '×' + p.cakes[k] + '</span>');
+      }
+    }
+    html += '<div class="pcard' + (i === state.current && state.phase !== 'over' ? ' active' : '') + '">' +
+      '<div class="pav">' + p.av + '</div>' +
+      '<div class="pinfo"><div class="pname">' + escapeHtml(p.name) +
+        (p.cakes.zhuangyuan > 0 ? '<span class="badge">状元</span>' : '') + '</div>' +
+        '<div class="pdetail">' + (parts.length ? parts.join('') : '<span class="pempty">还没开张</span>') + '</div></div>' +
+      '<div class="ptotal">' + cnt + '<small>份</small></div></div>';
+  }
+  el.innerHTML = html;
+}
+
+function renderLog() {
+  var el = document.getElementById('log');
+  if (!el) return;
+  if (!state.log.length) { el.innerHTML = '<div class="empty-tip">还没有人下碗</div>'; return; }
+  var html = '';
+  for (var i = 0; i < state.log.length; i++) {
+    var e = state.log[i];
+    if (e.sys) { html += '<div class="lrow"><span class="tag">提示</span> ' + e.html + '</div>'; continue; }
+    html += '<div class="lrow ' + e.cls + '">' + e.av + ' <b>' + escapeHtml(e.name) + '</b>' +
+      ' 博出 <b>' + escapeHtml(e.label) + '</b>' +
+      '<span class="tag">' + escapeHtml(e.action) + '</span>' +
+      '<div class="dice">骰面 ' + e.dice.join(' ') + ' · ' + escapeHtml(e.msg) + '</div></div>';
+  }
+  el.innerHTML = html;
+}
+
+function showResult(grade, entry) {
+  var box = document.getElementById('result');
+  box.className = 'result' + (grade.zy ? ' zy' : (grade.cake && state.pool ? ' hit' : ' miss'));
+  if (entry) {
+    if (entry.action === '空手') box.className = 'result miss';
+    else if (entry.action === '得奖' || entry.action === '得状元') box.className = 'result hit';
+    if (entry.action === '夺状元') box.className = 'result zy';
+    if (entry.action === '无') box.className = 'result miss';
+  }
+  document.getElementById('res-name').textContent = grade.name + (grade.zy ? ' · 状元级' : '');
+  document.getElementById('res-dice').textContent = '骰面 ' + state.dice.join(' ') + ' ｜ ' + grade.label;
+  document.getElementById('res-desc').textContent = entry ? entry.msg : '';
+}
+
+function updateRollButton() {
+  var b = document.getElementById('btn-roll');
+  if (!b) return;
+  if (state.phase === 'over') { b.disabled = true; b.textContent = '本局结束'; return; }
+  b.disabled = !!state.busy;
+  var p = state.players[state.current];
+  b.textContent = state.busy ? '骰子飞着呢…'
+    : (state.mode === 'solo' ? '博 一 次' : '轮到 ' + p.name + ' · 博');
+}
+
+/* ============================================================================
+   ⑧ 特效
+   ============================================================================ */
+var fxTimer = null;
+function playFx(grade, entry) {
+  if (!grade.zy && !(entry && entry.action === '夺状元')) return;
+  var fx = document.getElementById('fx');
+  var title = document.getElementById('fx-title');
+  var tip = document.getElementById('fx-tip');
+  title.textContent = grade.name;
+  if (entry && entry.action === '夺状元') tip.textContent = entry.msg;
+  else if (entry && entry.action === '得状元') tip.textContent = '状元到手！' + grade.label;
+  else tip.textContent = grade.label;
+  var old = fx.querySelectorAll('.conf');
+  for (var i = 0; i < old.length; i++) old[i].remove();
+  var n = grade.tier >= 100 ? 90 : (grade.tier >= 97 ? 70 : 50);
+  for (var k = 0; k < n; k++) {
+    var s = document.createElement('span');
+    s.className = 'conf';
+    var a = Math.random() * Math.PI * 2, dist = 120 + Math.random() * 380;
+    s.style.setProperty('--dx', (Math.cos(a) * dist).toFixed(0) + 'px');
+    s.style.setProperty('--dy', (Math.sin(a) * dist - 80 + Math.random() * 260).toFixed(0) + 'px');
+    s.style.setProperty('--rot', (Math.random() * 900 - 450).toFixed(0) + 'deg');
+    s.style.setProperty('--delay', (Math.random() * 0.35).toFixed(2) + 's');
+    s.style.setProperty('--dur', (1.1 + Math.random() * 0.9).toFixed(2) + 's');
+    s.style.background = Math.random() < 0.45
+      ? 'linear-gradient(160deg,#ffe9b0,#e8b84b)'
+      : 'linear-gradient(160deg,#ffb1b1,var(--red))';
+    fx.appendChild(s);
+  }
+  fx.classList.remove('show'); void fx.offsetWidth; fx.classList.add('show');
+  clearTimeout(fxTimer);
+  fxTimer = setTimeout(function () { fx.classList.remove('show'); }, 2300);
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t.__t);
+  t.__t = setTimeout(function () { t.classList.remove('show'); }, 2200);
+}
+
+/* ============================================================================
+   ⑨ 弹层
+   ============================================================================ */
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+/* 规则页数据（唯一的真源，规则页渲染与自检探针共用，防止文案与引擎脱节） */
+var RULES_ROWS = [
+  { key: 'jinHua',     dice: [4, 4, 4, 4, 1, 1], desc: '四粒红四带两粒红一', mark: '最大' },
+  { key: 'liuPouHong', dice: [4, 4, 4, 4, 4, 4], desc: '六粒骰子全是红四点' },
+  { key: 'bianDiJin',  dice: [1, 1, 1, 1, 1, 1], desc: '六粒骰子全是红一点' },
+  { key: 'heiLiuBo',   dice: [6, 6, 6, 6, 6, 6], desc: '六粒相同黑点数（非一非四）' },
+  { key: 'wuHong',     dice: [4, 4, 4, 4, 4, 2], desc: '五粒红四，比带点大小' },
+  { key: 'wuZi',       dice: [5, 5, 5, 5, 5, 3], desc: '五粒相同（四点除外），比剩余那颗大小' },
+  { key: 'siDianHong', dice: [4, 4, 4, 4, 3, 6], desc: '四粒红四，比另外两颗之和' },
+  { key: 'duiTang',    dice: [1, 2, 3, 4, 5, 6], desc: '一到六点各一粒' },
+  { key: 'sanHong',    dice: [4, 4, 4, 2, 3, 5], desc: '三粒红四' },
+  { key: 'siJin',      dice: [1, 1, 1, 1, 3, 5], desc: '四粒相同点数（四点除外）' },
+  { key: 'erJu',       dice: [4, 4, 2, 5, 6, 3], desc: '两粒红四' },
+  { key: 'yiXiu',      dice: [4, 1, 2, 5, 5, 6], desc: '一粒红四' }
+];
+
+function renderRulesTable() {
+  var rows = RULES_ROWS;
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], g = GRADE[r.key];
+    html += '<div class="rrow' + (g.tier >= 100 ? ' top' : '') + '">' +
+      '<div class="rname">' + g.name + (r.mark ? '<span class="mk">' + r.mark + '</span>' : '') +
+        '<div class="rdesc">' + r.desc + '</div></div>' +
+      '<div class="minidice">' + miniDice(r.dice) + '</div>' +
+      '<div class="rcount">' + quotaOf(g.cake) + ' 份<small>' + CAKE[g.cake].name + '</small></div>' +
+      '<div class="rodd" id="ro-' + r.key + '"></div>' +
+      '</div>';
+  }
+  document.getElementById('rules-table').innerHTML = html;
+  renderRulesOdds();
+}
+
+/* 规则页每行的赔率栏：理论概率（穷举算出的固定值）+ 本局实际频率。
+   只更新这 13 个文本节点 —— 整表重建要造 648 个迷你骰子元素，每次掷骰都重建太浪费。 */
+function renderRulesOdds() {
+  var rolls = (state && state.rollCount) || 0;
+  for (var i = 0; i < GRADE_KEYS.length; i++) {
+    var k = GRADE_KEYS[i];
+    var el = document.getElementById('ro-' + k);
+    if (!el) continue;
+    var c = (state && state.dist) ? state.dist[k] : 0;
+    el.innerHTML = '<b>理论 ' + oddsPct(THEORY[k]) + '</b>' +
+      '<small>本局 ' + c + ' 次 · ' + (rolls ? oddsPct(c, rolls) : '—') + '</small>';
+  }
+}
+function miniDice(dice) {
+  var html = '';
+  for (var i = 0; i < dice.length; i++) {
+    var v = dice[i], idx = PIP[v];
+    html += '<span class="md">';
+    for (var k = 0; k < 9; k++) {
+      if (idx.indexOf(k) >= 0) html += '<i class="' + ((v === 1 || v === 4) ? 'r' : '') + '"></i>';
+      else html += '<i class="e"></i>';
+    }
+    html += '</span>';
+  }
+  return html;
+}
+
+/* ---- 战绩存储 ---- */
+var HKEY = 'bobing.history.v1';
+function loadHistory() {
+  try {
+    var s = localStorage.getItem(HKEY);
+    return s ? JSON.parse(s) : [];
+  } catch (e) { return []; }
+}
+function saveHistory(list) {
+  try { localStorage.setItem(HKEY, JSON.stringify(list.slice(0, 50))); } catch (e) { }
+}
+function saveGameRecord() {
+  var rec = {
+    ts: Date.now(),
+    rounds: state.round,
+    mode: state.mode,
+    rolls: state.rollCount,
+    firstZyRoll: state.solo.firstZyRoll,
+    zy: state.zyHolder === null ? null : state.players[state.zyHolder].name,
+    zyGrade: state.zyGrade ? state.zyGrade.name : null,
+    steal: state.zyStealCount,
+    dur: (state.endedAt || Date.now()) - state.startedAt,
+    quota: Object.assign({}, state.quota || QUOTA),
+    players: state.players.map(function (p) {
+      return {
+        name: p.name, av: p.av, rolls: p.rolls,
+        cakes: JSON.parse(JSON.stringify(p.cakes)),
+        total: awardedCount(p) + p.cakes.zhuangyuan
+      };
+    })
+  };
+  var list = loadHistory();
+  list.unshift(rec);
+  saveHistory(list);
+}
+function fmtTime(ts) {
+  var d = new Date(ts);
+  function z(n) { return n < 10 ? '0' + n : '' + n; }
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
+}
+function cakeBrief(c) {
+  var out = [];
+  for (var i = 0; i < CAKE_ORDER.length; i++) { if (c[CAKE_ORDER[i]] > 0) out.push(CAKE[CAKE_ORDER[i]].name + '×' + c[CAKE_ORDER[i]]); }
+  return out.length ? out.join(' ') : '空手';
+}
+function renderHistModal() {
+  var now = document.getElementById('hist-now');
+  var entries = state ? state.log.filter(function (e) { return !e.sys; }) : [];
+  if (!entries.length) now.innerHTML = '<div class="empty-tip">本局还没有记录</div>';
+  else {
+    var h = '';
+    for (var i = 0; i < Math.min(entries.length, 60); i++) {
+      var e = entries[i];
+      h += '<div class="hrow"><div class="h1">' + e.av + ' ' + escapeHtml(e.name) + ' · ' + escapeHtml(e.label) +
+        '<span class="t">' + escapeHtml(e.action) + '</span></div>' +
+        '<div class="h2">骰面 ' + e.dice.join(' ') + ' · ' + escapeHtml(e.msg) + '</div></div>';
+    }
+    now.innerHTML = h;
+  }
+  var list = loadHistory(), html = '';
+  if (!list.length) html = '<div class="empty-tip">还没有存下过对局</div>';
+  for (var j = 0; j < list.length; j++) {
+    var r = list[j];
+    var rank = r.players.slice().sort(function (a, b) { return b.total - a.total; });
+    html += '<div class="hrow"><div class="h1">🀄 ' +
+      (r.zy ? '状元：' + escapeHtml(r.zy) + (r.zyGrade ? '（' + r.zyGrade + '）' : '') : '状元虚位') +
+      '<span class="t">' + fmtTime(r.ts) + ' · ' +
+      (r.mode === 'solo'
+        ? '单人挑战 · 共 ' + (r.rolls || '?') + ' 把 · 第 ' + (r.firstZyRoll || '—') + ' 把出状元'
+        : r.rounds + ' 轮' + (r.steal ? ' · 夺状元' + r.steal + ' 次' : '')) +
+      (r.dur ? ' · 用时 ' + fmtDur(r.dur) : '') + '</span></div>' +
+      '<div class="h2">' + rank.map(function (p) { return p.av + p.name + ' ' + p.total + '块（' + cakeBrief(p.cakes) + '）'; }).join('　') + '</div></div>';
+  }
+  document.getElementById('hist-all').innerHTML = html;
+}
+
+function showResultModal() {
+  var zy = state.zyHolder === null ? null : state.players[state.zyHolder];
+  var sum = document.getElementById('res-summary');
+  if (state.mode === 'solo') {
+    var n = state.solo.firstZyRoll;
+    var got = awardedCount(state.players[0]) + state.players[0].cakes.zhuangyuan;
+    sum.innerHTML =
+      '你一共博了 <b>' + state.rollCount + '</b> 把，用时 <b>' + soloElapsed() + '</b>，收下 <b>' + got + '</b> 份奖项。<br>' +
+      (n ? '状元是第 <b>' + n + '</b> 把博出来的' + (state.zyGrade ? '（' + state.zyGrade.name + '）' : '')
+        : '整局都没博出状元') +
+      (state.solo.zyRefresh ? '，之后自己又把状元成绩刷新了 <b>' + state.solo.zyRefresh + '</b> 次' : '') +
+      '。<br>『<b>' + soloVerdict(n) + '</b>』';
+  } else {
+    sum.innerHTML = zy
+      ? '本局共' + state.round + '轮、用时 <b>' + gameElapsed() + '</b>，状元归 <b>' + escapeHtml(zy.name) + '</b>' +
+        (state.zyGrade ? '，凭「' + state.zyGrade.name + '」拿下' : '') +
+        (state.zyStealCount ? '；全场状元易主 ' + state.zyStealCount + ' 次。' : '。')
+      : '本局共' + state.round + '轮、用时 <b>' + gameElapsed() + '</b>，状元最终无人博得。';
+  }
+  var rank = state.players.slice().sort(function (a, b) {
+    var ta = awardedCount(a) + a.cakes.zhuangyuan, tb = awardedCount(b) + b.cakes.zhuangyuan;
+    if (ta !== tb) return tb - ta;
+    return (b.best ? b.best.tier : 0) - (a.best ? a.best.tier : 0);
+  });
+  var html = '';
+  for (var i = 0; i < rank.length; i++) {
+    var p = rank[i];
+    html += '<div class="rk' + (i === 0 ? ' first' : '') + '">' +
+      '<span class="no">' + (i + 1) + '</span>' +
+      '<span class="av">' + p.av + '</span>' +
+      '<span class="nm">' + escapeHtml(p.name) +
+        (p.cakes.zhuangyuan > 0 ? ' 🏆' : '') +
+        '<small>' + escapeHtml(cakeBrief(p.cakes)) + ' · 共博 ' + p.rolls + ' 次' +
+        (p.best ? ' · 最好成绩 ' + escapeHtml(p.best.name) : '') + '</small></span>' +
+      '<span class="tt">' + (awardedCount(p) + p.cakes.zhuangyuan) + '</span></div>';
+  }
+  document.getElementById('rank').innerHTML = html;
+  /* 本局掷骰分布：按等级由高到低，含理论概率对照 */
+  var rolls = state.rollCount || 0;
+  var dhtml = '';
+  for (var d = 0; d < RULES_ROWS.length; d++) {
+    var rk = RULES_ROWS[d].key, gc = state.dist[rk] || 0;
+    var actual = rolls ? gc / rolls : 0;
+    dhtml += '<div class="drow">' +
+      '<span class="dn">' + GRADE[rk].name + '</span>' +
+      '<span class="db"><i style="width:' + (actual * 100).toFixed(1) + '%"></i></span>' +
+      '<span class="dc">' + gc + ' 次</span>' +
+      '<span class="dp">' + (rolls ? oddsPct(gc, rolls) : '—') + '</span>' +
+      '<span class="dt">理论 ' + oddsPct(THEORY[rk]) + '</span></div>';
+  }
+  var dn0 = state.dist.none || 0;
+  dhtml += '<div class="drow"><span class="dn">无红四</span>' +
+    '<span class="db"><i style="width:' + (rolls ? (dn0 / rolls * 100).toFixed(1) : 0) + '%"></i></span>' +
+    '<span class="dc">' + dn0 + ' 次</span>' +
+    '<span class="dp">' + (rolls ? oddsPct(dn0, rolls) : '—') + '</span>' +
+    '<span class="dt">理论 ' + oddsPct(THEORY.none) + '</span></div>';
+  document.getElementById('res-dist').innerHTML = dhtml;
+  openModal('modal-result');
+}
+
+/* ============================================================================
+   ⑩ 事件绑定
+   ============================================================================ */
+/* ---- 设置项持久化（只存奖项数量，其他每次开桌重来） ---- */
+var CKEY = 'bobing.cfg.v1';
+function loadCfg() {
+  try { var s = localStorage.getItem(CKEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+function saveCfg() {
+  try { localStorage.setItem(CKEY, JSON.stringify({ quotas: setupCfg.quotas })); } catch (e) { }
+}
+
+var setupCfg = { count: 4, names: ['玩家1', '玩家2', '玩家3', '玩家4'] };
+/* 起手把上次存的数量读进全局 QUOTA —— 规则页在开局前就渲染，必须这时就位 */
+setQuota((loadCfg() || {}).quotas || null);
+setupCfg.quotas = Object.assign({}, QUOTA);
+
+/* 数量面板：5 个非状元等级（状元固定 1 份，不列） */
+function renderQuotaSet() {
+  var box = document.getElementById('quota-set');
+  if (!box) return;
+  var html = '';
+  for (var i = 0; i < NONZY_KEYS.length; i++) {
+    var k = NONZY_KEYS[i];
+    html += '<label class="qrow"><span class="qn">' + CAKE[k].name + '</span>' +
+      '<input type="number" min="0" max="99" step="1" inputmode="numeric" value="' + QUOTA[k] +
+      '" data-quota="' + k + '" aria-label="' + CAKE[k].name + '数量"></label>';
+  }
+  box.innerHTML = html;
+  renderQuotaMeta();
+}
+/* 所有跟数量有关的文案都从这里统一刷新，避免各处写死 */
+function renderQuotaMeta() {
+  var tot = document.getElementById('quota-total');
+  if (tot) tot.textContent = '（共 ' + totalAll() + ' 份）';
+  var note = document.getElementById('setup-quota-note');
+  if (note) note.textContent = '本桌共 ' + totalAll() + ' 份：' + quotaSummary() + '。';
+  var rt = document.getElementById('rules-quota-total');
+  if (rt) rt.textContent = totalAll();
+  var rl = document.getElementById('rules-quota-list');
+  if (rl) rl.textContent = quotaSummary();
+  var rn = document.getElementById('rules-nonzy');
+  if (rn) rn.textContent = totalNonZy();
+}
+
+function renderSetup() {
+  var box = document.getElementById('setup-players');
+  var html = '';
+  for (var i = 0; i < setupCfg.count; i++) {
+    var nm = setupCfg.names[i] || ('玩家' + (i + 1));
+    html += '<div class="prow-setup" data-i="' + i + '">' +
+      '<span class="av" data-av="' + i + '" title="换头像">' + AVATARS[i % AVATARS.length] + '</span>' +
+      '<input type="text" maxlength="8" value="' + escapeHtml(nm) + '" data-name="' + i + '" placeholder="玩家' + (i + 1) + '">' +
+      (setupCfg.count > 1 ? '<button class="del" data-del="' + i + '">×</button>' : '') +
+      '</div>';
+  }
+  box.innerHTML = html;
+  var chips = document.querySelectorAll('#count-set .chip');
+  for (var c = 0; c < chips.length; c++) {
+    chips[c].className = 'chip' + (Number(chips[c].getAttribute('data-n')) === setupCfg.count ? ' on' : '');
+  }
+  renderQuotaSet();
+}
+
+/* 音效按钮文案：已开但还没解锁时明确提示"点一下开"，别让人以为坏了 */
+function refreshSoundBtn() {
+  var b = document.getElementById('btn-sound');
+  if (!b) return;
+  var st = Sfx.status();
+  var on = st !== 'off';
+  b.className = 'tbtn' + (on ? ' on' : '');
+  b.textContent = !on ? '音效 关' : (st === 'running' ? '音效 开' : '音效 点击开启');
+}
+function bindEvents() {
+  /* 奖项数量：输入即时生效 —— 落到全局 QUOTA、存盘、刷新所有相关文案与规则页 */
+  document.getElementById('quota-set').addEventListener('input', function (e) {
+    var inp = e.target.closest('[data-quota]');
+    if (!inp) return;
+    var k = inp.getAttribute('data-quota');
+    var v = inp.value === '' ? 0 : Number(inp.value);
+    if (!isFinite(v) || v < 0) v = 0;
+    if (v > 99) { v = 99; inp.value = '99'; }
+    QUOTA[k] = Math.floor(v);
+    setupCfg.quotas = Object.assign({}, QUOTA);
+    saveCfg();
+    renderQuotaMeta();
+    renderRulesTable();                 /* 规则页的份数跟着变 */
+  });
+  /* 失焦时把空/非法值回填成实际生效的数字，别留个空框让人误会 */
+  document.getElementById('quota-set').addEventListener('change', function (e) {
+    var inp = e.target.closest('[data-quota]');
+    if (!inp) return;
+    inp.value = String(QUOTA[inp.getAttribute('data-quota')]);
+  });
+  document.getElementById('count-set').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-n]'); if (!b) return;
+    setupCfg.count = Number(b.getAttribute('data-n'));
+    while (setupCfg.names.length < setupCfg.count) setupCfg.names.push('玩家' + (setupCfg.names.length + 1));
+    /* 单人挑战默认署名"我"（用户改过就不动） */
+    if (setupCfg.count === 1 && (!setupCfg.names[0] || /^玩家\d+$/.test(setupCfg.names[0]))) setupCfg.names[0] = '我';
+    renderSetup();
+  });
+  document.getElementById('setup-players').addEventListener('click', function (e) {
+    var av = e.target.closest('[data-av]');
+    if (av) {
+      var i = Number(av.getAttribute('data-av'));
+      var cur = AVATARS.indexOf(av.textContent.trim());
+      av.textContent = AVATARS[(cur + 1) % AVATARS.length];
+      setupCfg.avatars = setupCfg.avatars || {};
+      setupCfg.avatars[i] = av.textContent.trim();
+      return;
+    }
+    var del = e.target.closest('[data-del]');
+    if (del) {
+      var j = Number(del.getAttribute('data-del'));
+      setupCfg.names.splice(j, 1);
+      setupCfg.count = Math.max(1, setupCfg.count - 1);
+      renderSetup();
+    }
+  });
+  document.getElementById('setup-players').addEventListener('input', function (e) {
+    var inp = e.target.closest('[data-name]'); if (!inp) return;
+    setupCfg.names[Number(inp.getAttribute('data-name'))] = inp.value;
+  });
+
+  document.getElementById('btn-start').addEventListener('click', function () {
+    Sfx.wake();
+    var ps = [];
+    for (var i = 0; i < setupCfg.count; i++) {
+      ps.push({
+        name: (setupCfg.names[i] || ('玩家' + (i + 1))).trim() || ('玩家' + (i + 1)),
+        av: (setupCfg.avatars && setupCfg.avatars[i]) || AVATARS[i % AVATARS.length]
+      });
+    }
+    document.getElementById('view-setup').style.display = 'none';
+    document.getElementById('view-table').style.display = '';
+    newGame({ players: ps });
+    buildDice();
+    settle(state.dice, true);
+    renderAll();
+  });
+
+  document.getElementById('btn-roll').addEventListener('click', function () {
+    Sfx.wake();
+    if (state && state.busy) { skipAnim(); return; }    /* 动画中再点 = 跳过 */
+    doRoll(null, false);
+  });
+  /* 点碗也能跳过 —— 手机上碗比按钮大，更好点 */
+  var bw = document.getElementById('bowl-wrap');
+  if (bw) bw.addEventListener('click', function () { if (state && state.busy) skipAnim(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Escape' && state && state.busy) skipAnim();
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.code === 'Space' || e.code === 'Enter') && document.getElementById('view-table').style.display !== 'none') {
+      var m = document.querySelector('.modal.show');
+      if (m) return;
+      e.preventDefault(); doRoll(null, false);
+    }
+  });
+  document.getElementById('btn-restart').addEventListener('click', function () {
+    document.getElementById('view-table').style.display = 'none';
+    document.getElementById('view-setup').style.display = '';
+    renderSetup();
+  });
+  document.getElementById('btn-rules').addEventListener('click', function () { renderRulesOdds(); openModal('modal-rules'); });
+  document.getElementById('btn-rules2').addEventListener('click', function () { renderRulesOdds(); openModal('modal-rules'); });
+  document.getElementById('btn-stat').addEventListener('click', function () { renderStatModal(); openModal('modal-stat'); });
+  document.getElementById('btn-hist').addEventListener('click', function () { renderHistModal(); openModal('modal-hist'); });
+  document.getElementById('btn-clear-hist').addEventListener('click', function () { saveHistory([]); renderHistModal(); toast('历史战绩已清空'); });
+  document.getElementById('btn-again').addEventListener('click', function () {
+    closeModal('modal-result');
+    document.getElementById('view-table').style.display = 'none';
+    document.getElementById('view-setup').style.display = '';
+    renderSetup();
+  });
+  var closers = document.querySelectorAll('[data-close]');
+  for (var i = 0; i < closers.length; i++) {
+    closers[i].addEventListener('click', function (e) {
+      var m = e.target.closest('.modal'); if (m) m.classList.remove('show');
+    });
+  }
+  var modals = document.querySelectorAll('.modal');
+  for (var j = 0; j < modals.length; j++) {
+    modals[j].addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+  }
+  document.getElementById('btn-sound').addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!Sfx.isEnabled()) {
+      Sfx.setEnabled(true);            /* 关 → 开（顺带解锁） */
+      Sfx.shake();
+    } else if (!Sfx.isReady()) {
+      Sfx.unlock();                    /* 开着但还没解锁 → 这一下专门用来解锁，不顺手关掉 */
+      Sfx.shake();
+    } else {
+      Sfx.setEnabled(false);           /* 已经能出声了 → 关 */
+    }
+    refreshSoundBtn();
+  }, false);
+  /* 首次触摸/点击后音频就解锁了，按钮文案要跟着变 */
+  var onceRefresh = function () {
+    refreshSoundBtn();
+    document.removeEventListener('pointerdown', onceRefresh);
+    document.removeEventListener('touchstart', onceRefresh);
+  };
+  document.addEventListener('pointerdown', onceRefresh);
+  document.addEventListener('touchstart', onceRefresh);
+  refreshSoundBtn();
+  var rsz;
+  window.addEventListener('resize', function () {
+    clearTimeout(rsz);
+    rsz = setTimeout(function () {
+      if (document.getElementById('view-table').style.display === 'none') return;
+      buildDice();
+      if (state) settle(state.dice, true);
+    }, 180);
+  });
+}
+
+/* ============================================================================
+   ⑪ 启动
+   ============================================================================ */
+renderSetup();
+renderRulesTable();
+renderQuotaMeta();
+bindEvents();
+
+/* ============================================================================
+   ⑫ 对外 API（自检探针用）
+   ============================================================================ */
+window.__game = {
+  GRADE: GRADE, CAKE: CAKE, PIP: PIP, RULES_ROWS: RULES_ROWS,
+  evaluate: evaluate,
+  compareGrade: compareGrade,
+  randomDice: randomDice,
+  state: function () { return state; },
+  newGame: newGame,
+  rollForced: function (dice) { return doRoll(dice, true); },
+  rollRandom: function () { return doRoll(null, true); },
+  setFast: function (v) { FAST = !!v; },
+  QUOTA: function () { return QUOTA; },
+  QUOTA_DEFAULT: QUOTA_DEFAULT,
+  THEORY: THEORY,
+  THEORY_TOTAL: THEORY_TOTAL,
+  setQuota: setQuota,
+  quotaOf: quotaOf,
+  totalAll: totalAll,
+  totalNonZy: totalNonZy,
+  GRADE_KEYS: GRADE_KEYS,
+  NONZY_KEYS: NONZY_KEYS,
+  skipAnim: skipAnim,
+  snapDice: snapDice,
+  fmtDur: fmtDur,
+  oddsPct: oddsPct,
+  renderStatModal: renderStatModal,
+  renderRulesOdds: renderRulesOdds,
+  buildDice: buildDice,
+  settle: settle,
+  spinPlan: spinPlan,
+  norm360: norm360,
+  sfx: Sfx,
+  DIE_MIN: DIE_MIN, DIE_MAX: DIE_MAX,
+  diceEls: function () { return diceEls; },
+  enterView: function () {
+    document.getElementById('view-setup').style.display = 'none';
+    document.getElementById('view-table').style.display = '';
+    if (!diceEls.length) buildDice();
+  },
+  render: function () { renderAll(); }
+};
+
+/* ============================================================================
+   ⑬ 自检探针：?selftest=exhaustive|flow|steal|input|rules
+   ============================================================================ */
+(function () {
+  var m = /[?&]selftest=([a-z]+)/.exec(location.search);
+  if (!m) return;
+  var mode = m[1];
+  var checks = [];
+  function ok(name, pass, detail) { checks.push({ name: name, pass: !!pass, detail: detail == null ? '' : String(detail) }); }
+  function report() {
+    var r = { mode: mode, checks: checks, failed: checks.filter(function (c) { return !c.pass; }).length, errors: window.__errors.slice() };
+    var pre = document.createElement('pre');
+    pre.id = '__state';
+    pre.textContent = JSON.stringify(r);
+    document.body.appendChild(pre);
+    window.__selftest = r;
+  }
+  window.addEventListener('load', function () { setTimeout(run, 80); });
+
+  var EXPECT = {
+    jinHua: 15, liuPouHong: 1, bianDiJin: 1, heiLiuBo: 4, wuHong: 30, wuZi: 150,
+    siDianHong: 360, duiTang: 720, sanHong: 2500, siJin: 1875, erJu: 9300, yiXiu: 17400, none: 14300
+  };
+
+  function run() {
+    try {
+      if (mode === 'exhaustive') testExhaustive();
+      else if (mode === 'flow') testFlow();
+      else if (mode === 'steal') testSteal();
+      else if (mode === 'input') testInput();
+      else if (mode === 'rules') testRules();
+      else if (mode === 'dice') testDice();
+      else if (mode === 'solo') testSolo();
+      else if (mode === 'quota') testQuota();
+      else ok('未知探针', false, mode);
+    } catch (e) {
+      window.__logErr('探针异常: ' + e.stack);
+      ok('探针自身异常', false, e.message);
+    }
+    report();
+  }
+
+  /* ---- 穷举 6^6 = 46656 种组合，比对理论分布 ---- */
+  function testExhaustive() {
+    var cnt = {}, k;
+    for (k in EXPECT) cnt[k] = 0;
+    var d = [1, 1, 1, 1, 1, 1], total = 0, guard = 0;
+    for (d[0] = 1; d[0] <= 6; d[0]++)
+      for (d[1] = 1; d[1] <= 6; d[1]++)
+        for (d[2] = 1; d[2] <= 6; d[2]++)
+          for (d[3] = 1; d[3] <= 6; d[3]++)
+            for (d[4] = 1; d[4] <= 6; d[4]++)
+              for (d[5] = 1; d[5] <= 6; d[5]++) {
+                var g = evaluate(d.slice());
+                if (cnt[g.key] === undefined) { cnt[g.key] = 0; }
+                cnt[g.key]++; total++; guard++;
+              }
+    ok('穷举组合总数 = 46656', total === 46656, total);
+    for (k in EXPECT) ok('等级[' + GRADE[k].name + '] 组合数 = ' + EXPECT[k], cnt[k] === EXPECT[k], '实得 ' + cnt[k]);
+    var sum = 0;
+    for (k in cnt) sum += cnt[k];
+    ok('各等级计数之和 = 46656', sum === 46656, sum);
+    ok('状元级合计 = 561', (cnt.jinHua + cnt.liuPouHong + cnt.bianDiJin + cnt.heiLiuBo + cnt.wuHong + cnt.wuZi + cnt.siDianHong) === 561,
+      cnt.jinHua + cnt.liuPouHong + cnt.bianDiJin + cnt.heiLiuBo + cnt.wuHong + cnt.wuZi + cnt.siDianHong);
+    /* 状元分级优先级抽查 */
+    ok('4个4+2个1 → 插金花（不是四点红）', evaluate([4, 4, 4, 4, 1, 1]).key === 'jinHua', evaluate([4, 4, 4, 4, 1, 1]).key);
+    ok('6个1 → 遍地锦（不是黑六勃）', evaluate([1, 1, 1, 1, 1, 1]).key === 'bianDiJin', evaluate([1, 1, 1, 1, 1, 1]).key);
+    ok('5个2+1个4 → 五子登科', evaluate([2, 2, 2, 2, 2, 4]).key === 'wuZi', evaluate([2, 2, 2, 2, 2, 4]).key);
+    ok('4个1+2个4 → 四进（不是二举）', evaluate([1, 1, 1, 1, 4, 4]).key === 'siJin', evaluate([1, 1, 1, 1, 4, 4]).key);
+    ok('5个4 → 五红', evaluate([4, 4, 4, 4, 4, 3]).key === 'wuHong', evaluate([4, 4, 4, 4, 4, 3]).key);
+    ok('五红 大于 五子登科', compareGrade(evaluate([4, 4, 4, 4, 4, 1]), evaluate([6, 6, 6, 6, 6, 5])) > 0, 'wuHong vs wuZi');
+    ok('五子登科比带点：5个5带6 > 5个5带1', compareGrade(evaluate([5, 5, 5, 5, 5, 6]), evaluate([5, 5, 5, 5, 5, 1])) > 0, 'kicker');
+    ok('插金花 大于 六抔红', evaluate([4, 4, 4, 4, 1, 1]).tier > evaluate([4, 4, 4, 4, 4, 4]).tier, 'jinHua > liuPouHong');
+    ok('四点红比带点：带12 > 带3', compareGrade(evaluate([4, 4, 4, 4, 6, 6]), evaluate([4, 4, 4, 4, 1, 2])) > 0, 'kicker');
+    ok('对堂 大于 三红', evaluate([1, 2, 3, 4, 5, 6]).tier > evaluate([4, 4, 4, 1, 2, 3]).tier, 'duiTang > sanHong');
+  }
+
+  /* ---- 完整对局：奖项守恒 + 配额 + 状元唯一 ---- */
+  function testFlow() {
+    window.__game.newGame({
+      players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }, { name: 'D' }], fast: true
+    });
+    var st = window.__game.state();
+    ok('开局场上剩 ' + totalAll() + ' 份', totalLeft() === totalAll(), totalLeft());
+    var iter = 0, MAX = 60000;
+    while (st.phase !== 'over' && iter < MAX) { window.__game.rollRandom(); iter++; }
+    ok('对局在限定步数内结束', st.phase === 'over', 'iter=' + iter + ' phase=' + st.phase);
+
+    var awarded = 0, i, k, perCake = {};
+    for (k in st.pool) perCake[k] = st.pool[k];
+    for (i = 0; i < st.players.length; i++) {
+      for (k in st.pool) { awarded += st.players[i].cakes[k]; perCake[k] += st.players[i].cakes[k]; }
+    }
+    var left = 0;
+    for (k in st.pool) left += st.pool[k];
+    ok('非状元：发出 + 剩余 = ' + totalNonZy(), awarded + left === totalNonZy(), awarded + ' + ' + left);
+    for (k in st.pool) ok('『' + CAKE[k].name + '』发出 + 剩余 = ' + quotaOf(k), perCake[k] === quotaOf(k), perCake[k]);
+    ok('非状元剩余为 0', left === 0, left);
+
+    var holders = 0, zyCount = 0;
+    for (i = 0; i < st.players.length; i++) { zyCount += st.players[i].cakes.zhuangyuan; }
+    if (st.zyHolder !== null) holders = 1;
+    ok('状元持有者唯一（玩家明细里也只有一份）', zyCount === holders, 'zyHolder=' + st.zyHolder + ' 明细合计=' + zyCount);
+    ok('结束时状元有名花有主', st.zyHolder !== null, st.zyHolder);
+    var totalCakes = awarded + left + (st.zyHolder === null ? 0 : 1);
+    ok('全奖项守恒 = ' + totalAll(), totalCakes === totalAll(), totalCakes);
+    var nl = st.log.filter(function (e) { return !e.sys; }).length;
+    ok('日志条数 = 掷骰次数', nl === st.rollCount, nl + ' vs ' + st.rollCount);
+    var sumRolls = 0;
+    for (i = 0; i < st.players.length; i++) sumRolls += st.players[i].rolls;
+    ok('各人掷骰次数之和 = 总掷骰次数', sumRolls === st.rollCount, sumRolls + ' vs ' + st.rollCount);
+    ok('收官轮确实跑过', st.finalRoundNo >= 1, st.finalRoundNo);
+    ok('对局过程中没有运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  /* ---- 状元可夺 / 不可夺 ---- */
+  function testSteal() {
+    window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }, { name: 'D' }], fast: true });
+    var st = window.__game.state();
+    window.__game.rollForced([4, 4, 4, 4, 3, 6]);            /* A：四点红带 9 */
+    ok('A 博四点红带9 → 拿到状元', st.zyHolder === 0 && st.players[0].cakes.zhuangyuan === 1,
+      'zyHolder=' + st.zyHolder + ' A状元=' + st.players[0].cakes.zhuangyuan);
+    window.__game.rollForced([4, 4, 4, 4, 5, 6]);            /* B：四点红带 11 > 9 */
+    ok('B 博四点红带11 → 夺走 A 的状元', st.zyHolder === 1 && st.players[1].cakes.zhuangyuan === 1,
+      'zyHolder=' + st.zyHolder);
+    ok('被夺的 A 明细里状元被清空', st.players[0].cakes.zhuangyuan === 0, st.players[0].cakes.zhuangyuan);
+    window.__game.rollForced([4, 4, 4, 4, 1, 1]);            /* C：插金花 → 最大 */
+    ok('C 博插金花 → 夺走状元', st.zyHolder === 2 && st.players[2].cakes.zhuangyuan === 1, 'zyHolder=' + st.zyHolder);
+    ok('B 的状元被清空', st.players[1].cakes.zhuangyuan === 0, st.players[1].cakes.zhuangyuan);
+    window.__game.rollForced([4, 4, 4, 4, 1, 2]);            /* D：四点红带3 → 小于插金花 */
+    ok('更小的状元不能夺', st.zyHolder === 2 && st.players[3].cakes.zhuangyuan === 0, 'zyHolder=' + st.zyHolder);
+    window.__game.rollForced([4, 4, 4, 4, 1, 1]);            /* A：同为插金花 → 平手不夺 */
+    ok('同级完全平手不算夺（先到者保留）', st.zyHolder === 2, 'zyHolder=' + st.zyHolder);
+    ok('夺状元计数 = 2', st.zyStealCount === 2, st.zyStealCount);
+    /* 非状元博完 → 空手 */
+    var st2 = window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    st2.pool.yixiu = 0;
+    window.__game.rollForced([4, 1, 2, 5, 5, 6]);            /* 只有一粒红四 → 一秀 */
+    var e = st2.log[0];
+    ok('一秀发完时博到一秀 → 空手', e.action === '空手', e.action + ' / ' + e.msg);
+    ok('空手时没有多发出奖项', st2.players[0].cakes.yixiu === 0, st2.players[0].cakes.yixiu);
+    ok('空手时也没把别的等第的奖项顶替过来',
+      st2.players[0].cakes.duitang + st2.players[0].cakes.sanhong + st2.players[0].cakes.sijin + st2.players[0].cakes.erju === 0,
+      '其他等第应为 0');
+    ok('一秀库存仍是 0', st2.pool.yixiu === 0, st2.pool.yixiu);
+    ok('探针过程无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  /* ---- 真实事件驱动：设置页 / 开始 / 博一次 ---- */
+  function testInput() {
+    window.__game.setFast(true);
+    function rows() { return document.querySelectorAll('#setup-players .prow-setup'); }
+    ok('默认 4 个玩家输入框', rows().length === 4, rows().length);
+    document.querySelector('#count-set .chip[data-n="6"]').click();
+    ok('点「6 人」后变成 6 行', rows().length === 6, rows().length);
+    document.querySelectorAll('#setup-players .del')[5].click();
+    ok('删除一个玩家后变成 5 行', rows().length === 5, rows().length);
+    var inp = document.querySelector('#setup-players input[data-name="0"]');
+    inp.value = '阿明';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('btn-start').click();
+    ok('开始后进入牌桌', document.getElementById('view-table').style.display !== 'none', document.getElementById('view-table').style.display);
+    var st = window.__game.state();
+    ok('玩家数 = 5', st.players.length === 5, st.players.length);
+    ok('第一个玩家名字同步为「阿明」', st.players[0].name === '阿明', st.players[0].name);
+    ok('骰子已渲染 6 颗', document.querySelectorAll('#dice-field .die-wrap').length === 6,
+      document.querySelectorAll('#dice-field .die-wrap').length);
+    ok('每颗骰子 6 个面', document.querySelectorAll('#dice-field .cube:nth-child(1)').length === 6,
+      document.querySelectorAll('#dice-field .die-wrap:first-child .face').length);
+
+    document.getElementById('btn-roll').click();
+    ok('点「博」后掷骰次数 = 1', st.rollCount === 1, st.rollCount);
+    ok('结果条已更新', document.getElementById('res-name').textContent !== '准备开博',
+      document.getElementById('res-name').textContent);
+    ok('记录里出现一条非系统日志', st.log.filter(function (e) { return !e.sys; }).length === 1,
+      st.log.filter(function (e) { return !e.sys; }).length);
+    ok('掷完轮到下一个玩家', st.current === 1, 'current=' + st.current);
+    ok('按钮文案跟着换人', document.getElementById('btn-roll').textContent.indexOf(st.players[1].name) >= 0,
+      document.getElementById('btn-roll').textContent);
+    document.getElementById('btn-roll').click();
+    ok('再博一次，总次数 = 2', st.rollCount === 2, st.rollCount);
+    ok('骰子落到新点数（6 颗都有 transform）',
+      document.querySelectorAll('#dice-field .cube').length === 6, 'ok');
+
+    document.getElementById('btn-rules').click();
+    ok('规则弹层能打开', document.getElementById('modal-rules').classList.contains('show'), 'rules');
+    document.querySelector('#modal-rules [data-close]').click();
+    ok('规则弹层能关闭', !document.getElementById('modal-rules').classList.contains('show'), 'rules closed');
+    document.getElementById('btn-hist').click();
+    ok('战绩弹层能打开且有本局记录', document.getElementById('modal-hist').classList.contains('show') &&
+      document.getElementById('hist-now').querySelectorAll('.hrow').length >= 1, 'hist');
+    document.querySelector('#modal-hist [data-close]').click();
+
+    /* 单人挑战：1 人可开桌 */
+    var c1 = document.querySelector('#count-set .chip[data-n="1"]');
+    ok('设置页有「1 人 · 单人挑战」选项', !!c1, c1 ? c1.textContent : '缺失');
+    document.getElementById('btn-restart').click();
+    c1.click();
+    ok('点「1 人」后只剩 1 行', document.querySelectorAll('#setup-players .prow-setup').length === 1,
+      document.querySelectorAll('#setup-players .prow-setup').length);
+    ok('只剩 1 人时不再显示删除按钮', document.querySelectorAll('#setup-players .del').length === 0,
+      document.querySelectorAll('#setup-players .del').length);
+    document.getElementById('btn-start').click();
+    var st2 = window.__game.state();
+    ok('单人开局：players.length === 1', st2.players.length === 1, st2.players.length);
+    ok('单人开局：mode === solo', st2.mode === 'solo', st2.mode);
+    var before = st2.rollCount;
+    for (var q = 0; q < 3; q++) document.getElementById('btn-roll').click();
+    ok('单人能连博 3 次', st2.rollCount === before + 3, st2.rollCount);
+    ok('单人模式按钮不再写「轮到」', document.getElementById('btn-roll').textContent.indexOf('轮到') < 0,
+      document.getElementById('btn-roll').textContent);
+    ok('状态栏显示"第 N 把"', document.getElementById('bar-who').textContent.indexOf('把') >= 0,
+      document.getElementById('bar-who').textContent);
+
+    /* 玩家奖项明细：手机上【必须可见】。
+       曾经的 bug：@media(max-width:899px) 里写了 .pcard .pdetail{display:none}，
+       手机上奖项明细被整段隐藏；而桌面上又是 nowrap+ellipsis，长了就变省略号。 */
+    window.__game.setFast(true);
+    window.__game.enterView();
+    window.__game.newGame({ players: [{ name: '甲' }, { name: '乙' }], fast: true });
+    window.__game.rollForced([4, 1, 2, 5, 5, 6]);            /* 一粒红四 = 一秀 */
+    var pds = document.querySelectorAll('.pcard .pdetail');
+    var pdRect = pds.length ? pds[0].getBoundingClientRect() : null;
+    ok('玩家卡片渲染出奖项明细节点', pds.length >= 1, pds.length);
+    ok('奖项明细在任何视口都可见（手机上不能 display:none）',
+      !!pdRect && pdRect.height > 0 && pdRect.width > 0,
+      pdRect ? (pdRect.width.toFixed(0) + '×' + pdRect.height.toFixed(0)) : 'missing');
+    var chips = document.querySelectorAll('.pcard .pchit, .pcard .pchip');
+    ok('奖项明细用徽章渲染（不再是一行会被省略号截断的文字）', chips.length >= 1, chips.length);
+    var pdStyle = pds.length ? getComputedStyle(pds[0]) : null;
+    ok('奖项明细允许换行（white-space 不是 nowrap）',
+      !!pdStyle && pdStyle.whiteSpace !== 'nowrap', pdStyle ? pdStyle.whiteSpace : 'missing');
+
+    /* 音效按钮：必须是能循环的三态。
+       旧 bug 是"手机上点了没反应"—— resume() 是异步的，刚点完 ctx.state 还是 suspended，
+       于是每次都走进"解锁"分支，标签永远卡在「音效 点击开启」，看起来就是没反应。 */
+    var sb = document.getElementById('btn-sound');
+    var say = function () {
+      return sb.textContent + ' / enabled=' + Sfx.isEnabled() + ' isReady=' + Sfx.isReady() +
+        ' rawState=' + Sfx.rawState();
+    };
+    ok('音效按钮存在', !!sb, sb ? sb.textContent : 'missing');
+    Sfx.setEnabled(false); refreshSoundBtn();
+    ok('关闭态写着「音效 关」', sb.textContent === '音效 关', say());
+    sb.click();
+    ok('点一下：关 → 开（并解锁）', Sfx.isEnabled() && sb.textContent === '音效 开', say());
+    sb.click();
+    ok('再点一下：开 → 关（旧 bug 会永远关不掉）', !Sfx.isEnabled() && sb.textContent === '音效 关', say());
+    sb.click();
+    ok('第三下：又开回来', Sfx.isEnabled() && sb.textContent === '音效 开', say());
+
+    /* 病根就在这里：resume() 是异步的，刚解锁时 ctx.state 可能还是 suspended。
+       把这个瞬间【人为造出来】，再断言按钮依然认为"能出声"、文案不会卡住。
+       旧逻辑拿 ctx.state 当判据 —— 手机上 resume 慢，于是标签永远停在「点击开启」，
+       表现就是"点了没反应"。（无头 Chrome 里 ctx 瞬间就 running，自然跑不出来，只能造。） */
+    Sfx.setEnabled(true);
+    Sfx.unlock();
+    Sfx.suspendForTest();
+    ok('前置条件：上下文确实处于 suspended（模拟 resume 还没生效）',
+      Sfx.rawState() === 'suspended', Sfx.rawState());
+    ok('即便 ctx 还挂着，也认为「已解锁能出声」（旧判据在这里就会失败）',
+      Sfx.isReady() === true, String(Sfx.isReady()));
+    refreshSoundBtn();
+    ok('因此按钮文案不会卡在「点击开启」',
+      sb.textContent === '音效 开', say());
+    ok('此时再点一下就是正常关闭，不会又去"解锁"',
+      (function () { sb.click(); var r = !Sfx.isEnabled() && sb.textContent === '音效 关'; sb.click(); return r && Sfx.isEnabled(); })(), say());
+    ok('音效开启后文案与开关状态始终一致',
+      Sfx.isEnabled() === (sb.textContent !== '音效 关'), say());
+    Sfx.wake();                                  /* 把上下文恢复，别影响后面的声音断言 */
+
+    /* 从 2 人删到 1 人：下限必须是 1 人，不能删成 0 人 */
+    document.getElementById('btn-restart').click();
+    document.querySelector('#count-set .chip[data-n="2"]').click();
+    ok('点「2 人」后有 2 行、2 个删除按钮',
+      document.querySelectorAll('#setup-players .prow-setup').length === 2 &&
+      document.querySelectorAll('#setup-players .del').length === 2,
+      document.querySelectorAll('#setup-players .del').length);
+    document.querySelectorAll('#setup-players .del')[0].click();
+    ok('删到 1 人就停住（不会被删成 0 人，也不会剩下空行）',
+      document.querySelectorAll('#setup-players .prow-setup').length === 1,
+      document.querySelectorAll('#setup-players .prow-setup').length);
+    ok('1 人时删除按钮消失', document.querySelectorAll('#setup-players .del').length === 0,
+      document.querySelectorAll('#setup-players .del').length);
+    ok('探针过程无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  /* ---- 骰子渲染：点数 / 红白配色 / 落定角度 / 碗内落点 / 不重叠 ---- */
+  function testDice() {
+    var g = window.__game;
+    g.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    g.enterView();
+    g.buildDice();
+    var els = g.diceEls();
+    ok('碗里有 6 颗骰子', els.length === 6, els.length);
+    var faces = els[0].cube.querySelectorAll('.face');
+    ok('每颗骰子 6 个面', faces.length === 6, faces.length);
+
+    var bad = [];
+    for (var i = 0; i < faces.length; i++) {
+      var v = Number(faces[i].getAttribute('data-v'));
+      var pips = faces[i].querySelectorAll('.pip');
+      if (!v || !g.PIP[v]) { bad.push('面缺少 data-v'); continue; }
+      if (pips.length !== g.PIP[v].length) bad.push('面' + v + '应 ' + g.PIP[v].length + ' 点，实 ' + pips.length);
+      var red = 0;
+      for (var k = 0; k < pips.length; k++) if (pips[k].classList.contains('red')) red++;
+      if ((v === 1 || v === 4) && red !== pips.length) bad.push('面' + v + '应是红点（红一/红四）');
+      if (v !== 1 && v !== 4 && red !== 0) bad.push('面' + v + '不该有红点');
+    }
+    ok('六面点数与红白配色正确（1/4 为红，其余为黑）', bad.length === 0, bad.join('; '));
+
+    /* 落定角度与目标点数一一对应 */
+    var target = [3, 4, 1, 6, 2, 5];
+    var exp = { 1: 'rotateX(0deg)', 2: 'rotateX(-90deg)', 3: 'rotateY(-90deg)', 4: 'rotateY(90deg)', 5: 'rotateX(90deg)', 6: 'rotateY(180deg)' };
+    g.settle(target, true);
+    var err = [];
+    for (var j = 0; j < 6; j++) {
+      var tf = els[j].cube.style.transform;
+      if (tf.indexOf(exp[target[j]]) < 0) err.push('第' + (j + 1) + '颗要 ' + target[j] + ' 点，实际 ' + tf);
+    }
+    ok('落定角度与目标点数一致', err.length === 0, err.join('; '));
+
+    /* 尺寸与比例：碗宽 ≈ 14 个骰子宽（下限 30px 保证点数看得清） */
+    var field = document.getElementById('dice-field');
+    var W = field.clientWidth, H = field.clientHeight;
+    var size = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--die'));
+    ok('骰子尺寸在可读区间 [22,44]（正常取碗宽/14）', size >= DIE_MIN - 0.1 && size <= DIE_MAX + 0.1, size);
+    var bowlW = document.getElementById('bowl-wrap').clientWidth;
+    var ratio = bowlW / size;
+    ok('碗宽 ÷ 骰子宽 ∈ [11,16]', ratio >= 11 && ratio <= 16, ratio.toFixed(2) + ' 个骰子宽');
+    ok('宽屏时比例 ≈ 14', bowlW < 460 || (ratio >= 13 && ratio <= 15), ratio.toFixed(2));
+
+    /* 碗必须是"完整的一只碗"：碗口椭圆 + 碗口下方实实在在的碗身 + 碗底在碗口之内 */
+    var rimEl = document.getElementById('bowl-rim-el');
+    var rimCX = Number(rimEl.getAttribute('cx')), rimCY = Number(rimEl.getAttribute('cy'));
+    var rimRX = Number(rimEl.getAttribute('rx')), rimRY = Number(rimEl.getAttribute('ry'));
+    var rimRatio = rimRY / rimRX;
+    ok('碗口椭圆高/宽 ∈ [0.50,0.62]（照图抬高一点，取 0.55）', rimRatio >= 0.50 && rimRatio <= 0.62, rimRatio.toFixed(3));
+    var bodyBB = document.getElementById('bowl-body-path').getBBox();
+    ok('SVG 确实渲染出来了（碗身有实际尺寸）', bodyBB.width > 10 && bodyBB.height > 10,
+      bodyBB.width.toFixed(0) + '×' + bodyBB.height.toFixed(0));
+    var bowlBottom = bodyBB.y + bodyBB.height;
+    var below = bowlBottom - (rimCY + rimRY);
+    ok('碗口下方有实实在在的碗身（≥0.15 倍碗宽；扁盘子几乎为 0）', below / bodyBB.width >= 0.15,
+      (below / bodyBB.width).toFixed(3));
+    var overall = (bowlBottom - (rimCY - rimRY)) / (rimRX * 2);
+    ok('整只碗的高/宽 ∈ [0.62,0.82]（扁碗型：既不是扁盘，也不是深桶）',
+      overall >= 0.62 && overall <= 0.82, overall.toFixed(3));
+    /* 圈足：必须是"只露前缘月牙"——上半圈被碗身盖住。
+       判据三条：绘制顺序（在碗身之前）、椭圆同比（同一视角）、月牙确实露出但没露全。 */
+    var footEl = document.getElementById('bowl-foot-el');
+    ok('圈足元素存在', !!footEl, footEl ? 'ok' : 'missing');
+    if (footEl) {
+      var fRX2 = Number(footEl.getAttribute('rx')), fRY2 = Number(footEl.getAttribute('ry'));
+      var fCY2 = Number(footEl.getAttribute('cy'));
+      ok('圈足椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
+        Math.abs(fRY2 / fRX2 - rimRatio) < 0.02, (fRY2 / fRX2).toFixed(4) + ' vs 碗口 ' + rimRatio.toFixed(4));
+      var svgKids = document.getElementById('bowl-svg').children;
+      var idxFoot = -1, idxBody = -1;
+      for (var sck = 0; sck < svgKids.length; sck++) {
+        if (svgKids[sck].id === 'bowl-foot-el') idxFoot = sck;
+        if (svgKids[sck].id === 'bowl-body-path') idxBody = sck;
+      }
+      ok('圈足画在碗身【之前】（否则整个椭圆都会露出来）',
+        idxFoot >= 0 && idxBody >= 0 && idxFoot < idxBody, 'foot@' + idxFoot + ' body@' + idxBody);
+      var bodyBot2 = document.getElementById('bowl-body-path').getBBox();
+      var bodyLow = bodyBot2.y + bodyBot2.height;
+      ok('圈足上半被碗身盖住（圈足顶 < 碗身底）', fCY2 - fRY2 < bodyLow, (fCY2 - fRY2).toFixed(0) + ' < ' + bodyLow.toFixed(0));
+      ok('圈足前缘确实露出月牙（圈足底 > 碗身底）', fCY2 + fRY2 > bodyLow, (fCY2 + fRY2).toFixed(0) + ' > ' + bodyLow.toFixed(0));
+      var vbH0 = Number((document.getElementById('bowl-svg').getAttribute('viewBox') || '0 0 1000 840').split(/\s+/)[3]) || 840;
+      ok('圈足底没超出 viewBox 下边界', fCY2 + fRY2 <= vbH0, (fCY2 + fRY2).toFixed(0) + ' ≤ ' + vbH0);
+    }
+
+    var floorEl = document.getElementById('bowl-floor-el');
+    var fRX = Number(floorEl.getAttribute('rx')), fRY = Number(floorEl.getAttribute('ry'));
+    var fCY = Number(floorEl.getAttribute('cy'));
+    ok('碗底椭圆在碗口之内（没画到碗外）',
+      fRX < rimRX && fRY < rimRY && fCY + fRY < rimCY + rimRY,
+      fRX + '/' + fRY + ' vs ' + rimRX + '/' + rimRY);
+    /* 透视一致：碗口和碗底都是"水平圆"，同一个相机看过去投影出的椭圆比例必然相同。
+       之前碗口 0.551、碗底 0.500 —— 两个圆用了两套视角，所以碗底看着别扭。 */
+    var floorRatio = fRY / fRX;
+    ok('碗底椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
+      Math.abs(floorRatio - rimRatio) < 0.02, floorRatio.toFixed(3) + ' vs 碗口 ' + rimRatio.toFixed(3));
+    /* 往碗里看：碗底心必须在碗口心"下方"（否则成了从下往上看），且要沉下去一点才有深度感 */
+    var dropF = (fCY - rimCY) / rimRY;
+    ok('碗底心比碗口心低（沉进碗里），下移量 ∈ [0.10,0.45] 倍碗口半高',
+      dropF >= 0.10 && dropF <= 0.45, dropF.toFixed(3));
+    /* 骰子落区必须收在碗底那一圈里，不能摊满整只碗（现实中骰子是落在碗底一小块） */
+    ok('骰子可活动区收在碗底内圈（≤70% 碗底半轴）',
+      AREA_RX_F <= 0.70 && AREA_RY_F <= 0.70, AREA_RX_F + '/' + AREA_RY_F);
+    /* 骰子落区必须和 SVG 里的碗底椭圆对上（两边都用 viewBox 坐标换算，不能各写各的常量） */
+    var svgEl = document.getElementById('bowl-svg');
+    var vb = (svgEl.getAttribute('viewBox') || '0 0 1000 910').split(/\s+/);
+    var vbW = Number(vb[2]), vbH = Number(vb[3]);
+    var innerRect = document.getElementById('bowl-inner').getBoundingClientRect();
+    var wrapRect = document.getElementById('bowl-wrap').getBoundingClientRect();
+    ok('碗容器宽高比 = SVG viewBox 宽高比（否则百分比层会整体错位）',
+      Math.abs(wrapRect.width / wrapRect.height - vbW / vbH) < 0.02,
+      (wrapRect.width / wrapRect.height).toFixed(4) + ' vs ' + (vbW / vbH).toFixed(4));
+    var cxErr = Math.abs((innerRect.left + innerRect.width / 2 - wrapRect.left) / wrapRect.width - rimCX / vbW);
+    var cyErr = Math.abs((innerRect.top + innerRect.height / 2 - wrapRect.top) / wrapRect.height - (Number(floorEl.getAttribute('cy')) / vbH));
+    ok('骰子落区与 SVG 碗底同心（偏差 <2%）', cxErr < 0.02 && cyErr < 0.02,
+      'x偏差 ' + (cxErr * 100).toFixed(2) + '% / y偏差 ' + (cyErr * 100).toFixed(2) + '%');
+
+    /* 翻滚动画：从当前角顺向滚够整圈，落定角 ≡ 目标角 (mod 360) —— 保证精确显示目标点数 */
+    var planBad = [];
+    var cases = [[0, 0, 4], [137, -53, 1], [-900, 721, 6]];
+    for (var ci = 0; ci < cases.length; ci++) {
+      var pl = spinPlan(cases[ci][0], cases[ci][1], cases[ci][2], 2);
+      var tg = FACE_ROT[cases[ci][2]];
+      if (norm360(pl.toX) !== norm360(tg[0])) planBad.push('X 角不同余 ' + pl.toX);
+      if (norm360(pl.toY) !== norm360(tg[1])) planBad.push('Y 角不同余 ' + pl.toY);
+      if (pl.turnsX < 2 || pl.turnsY < 2) planBad.push('圈数不足 ' + pl.turnsX + '/' + pl.turnsY);
+    }
+    ok('spinPlan：落定角 ≡ 目标角(mod 360) 且顺向滚 ≥2 整圈', planBad.length === 0, planBad.join('; '));
+    var p0 = spinPlan(30, 30, 4, 0);
+    ok('spinPlan(minTurns=0) 确实退化成不足 2 圈（说明圈数参数真在起作用）',
+      p0.turnsX < 2 || p0.turnsY < 2, p0.turnsX + '/' + p0.turnsY);
+
+    /* 碗口金边的椭圆换算到落区坐标，用来判断骰子连外缘离金边还有多远。
+       关键：碗口心和碗底心不是同一个点 —— 往碗里看是"碗口在上、碗底在下"，
+       所以必须把这段偏移算进去，否则近侧的骰子会被误判成离碗口还很远。 */
+    var footR = size * FOOT_R;                /* 方块任意角度下的外接半径 = R·√2/2 */
+    var fCX = Number(floorEl.getAttribute('cx')), fCY = Number(floorEl.getAttribute('cy'));
+    var sxu = (W / 2) / fRX, syu = (H / 2) / fRY;         /* viewBox 单位 → 落区像素 */
+    var rimOx = (rimCX - fCX) * sxu, rimOy = (rimCY - fCY) * syu;
+    var rimRxP = rimRX * sxu, rimRyP = rimRY * syu;
+    function rimDist(x, y) {                   /* 外缘到碗口的归一化距离（≤1 表示还在碗里） */
+      var ex = (Math.abs(x - rimOx) + footR) / rimRxP;
+      var ey = (Math.abs(y - rimOy) + footR) / rimRyP;
+      return ex * ex + ey * ey;
+    }
+
+    var out = [], minD = 1e9;
+    for (var m = 0; m < els.length; m++) {
+      var d = els[m];
+      var fe0 = rimDist(d.x, d.y);
+      if (fe0 > RIM_MARGIN * RIM_MARGIN) {
+        out.push('第' + (m + 1) + '颗离碗口太近 (距离指数 ' + fe0.toFixed(2) + ' > ' + (RIM_MARGIN * RIM_MARGIN).toFixed(2) + ')');
+      }
+      for (var b = 0; b < m; b++) {
+        var dd = Math.hypot(d.x - els[b].x, d.y - els[b].y);
+        if (dd < minD) minD = dd;
+      }
+    }
+    ok('静止布局：骰子外缘离碗口金边留有 ≥' + Math.round((1 - RIM_MARGIN) * 100) + '% 余量', out.length === 0, out.join('; '));
+    ok('静止时骰子边缘不重叠（中心距 ≥ 骰子边长×1.414 —— 方块任意角度的紧界）',
+      minD >= size * MIN_SEP_TIGHT, '最小中心距 ' + minD.toFixed(1) + ' vs 需要 ≥ ' + (size * MIN_SEP_TIGHT).toFixed(1));
+
+    /* 抛掷物理：60 次随机抛掷、逐帧检查 —— 任意时刻任意两颗的边缘都不能重叠，这是"不穿模"的直接证明 */
+    var runs = 60, worst = Infinity, outs = 0, below = 0, maxH = 0, frames = 0, worstFoot = 0;
+    var arX = W / 2 * AREA_RX_F, arY = H / 2 * AREA_RY_F, arC = H / 2 * AREA_DY_F;
+    for (var r3 = 0; r3 < runs; r3++) {
+      var st3 = [];
+      for (var k3 = 0; k3 < 6; k3++) {
+        var aa = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random());
+        st3.push({ x: Math.cos(aa) * arX * rr, y: arC + Math.sin(aa) * arY * rr });
+      }
+      var sm = simulateThrow(st3, arX, arY, TIMING.spin, arC);
+      var L = sm.path[0].length, s3, a3, b3;
+      frames += L;
+      for (s3 = 0; s3 < L; s3++) {
+        for (a3 = 0; a3 < 6; a3++) {
+          var q1 = sm.path[a3][s3];
+          if (q1.h < -0.01) below++;
+          if (q1.h > maxH) maxH = q1.h;
+          var ex3 = q1.x / arX, ey3 = (q1.y - arC) / arY;
+          if (ex3 * ex3 + ey3 * ey3 > 1.08) outs++;   /* 8% 容差：收尾的纯分离可能顶出活动区一两个像素 */
+          var fe = rimDist(q1.x, q1.y);
+          if (fe > worstFoot) worstFoot = fe;
+          for (b3 = a3 + 1; b3 < 6; b3++) {
+            var q2 = sm.path[b3][s3];
+            var dq = Math.hypot(q1.x - q2.x, q1.y - q2.y);
+            if (dq < worst) worst = dq;
+          }
+        }
+      }
+    }
+    ok('抛掷全程任意两颗骰子的边缘都不重叠（60 次随机抛掷逐帧检查，中心距 ≥ 边长×1.414）',
+      worst >= dieSize * MIN_SEP_TIGHT,
+      '全局最小中心距 ' + worst.toFixed(1) + ' vs 需要 ≥ ' + (dieSize * MIN_SEP_TIGHT).toFixed(1) + '（共 ' + frames + ' 帧）');
+    ok('骰子不会飞出碗底可活动区（含 8% 容差）', outs === 0, outs + ' 次越界');
+    ok('骰子外缘全程离碗口金边留有 ≥' + Math.round((1 - RIM_MARGIN) * 100) + '% 余量（不会跟碗口重合）',
+      worstFoot <= RIM_MARGIN * RIM_MARGIN,
+      '最贴近时距离指数 ' + worstFoot.toFixed(3) + ' ≤ ' + (RIM_MARGIN * RIM_MARGIN).toFixed(3));
+    ok('骰子不会沉到碗底以下（全程 h ≥ 0）', below === 0, below);
+    ok('骰子确实被抛起来了（有腾空高度）', maxH > dieSize * 0.6, maxH.toFixed(1));
+    ok('六颗骰子同一次抛出（没有逐颗延迟）', TIMING.jitter === 0, TIMING.jitter);
+    var sndCount = 0;
+    for (var r4 = 0; r4 < 20; r4++) {
+      var sm4 = simulateThrow(
+        [{ x: 0, y: 0 }, { x: 30, y: 12 }, { x: -30, y: -12 }, { x: 10, y: -30 }, { x: -12, y: 28 }, { x: 40, y: -8 }],
+        arX, arY, TIMING.spin, arC);
+      sndCount += sm4.hits.length + sm4.crash.length;
+    }
+    ok('每次抛掷都会产生若干次碰撞事件（碰撞声有东西可触发）', sndCount >= 20, sndCount + ' 次 / 20 次抛掷');
+
+    /* 旋转必须在"物理停稳"时结束：否则落地后还会拧一下 / 原地打转。
+       注意期望值必须独立量出来（探针自己从轨迹倒推停稳帧），不能拿被测函数算出的时刻去查自己，
+       否则把函数改成"恒返回整个时长"也照样通过 —— 这个循环论证的坑踩过一次。 */
+    var rotBad = 0, rotN = 0, rotOver = 0, worstOver = 0, hEndBad = 0;
+    for (var r5 = 0; r5 < 20; r5++) {
+      var st5 = [];
+      for (var k5 = 0; k5 < 6; k5++) {
+        var ab = Math.random() * Math.PI * 2, rb = Math.sqrt(Math.random());
+        st5.push({ x: Math.cos(ab) * arX * rb, y: arC + Math.sin(ab) * arY * rb });
+      }
+      var sm5 = simulateThrow(st5, arX, arY, TIMING.spin, arC);
+      var L5 = sm5.path[0].length - 1, a5;
+      for (a5 = 0; a5 < 6; a5++) {
+        var pth5 = sm5.path[a5];
+        if (pth5[L5].h > dieSize * 0.15) hEndBad++;
+        var need = L5, q5;
+        for (q5 = L5; q5 > 0; q5--) {                    /* 独立测：从末尾往前找最后一个明显移动的帧 */
+          var m5 = (Math.hypot(pth5[q5].x - pth5[q5 - 1].x, pth5[q5].y - pth5[q5 - 1].y) +
+            Math.abs(pth5[q5].h - pth5[q5 - 1].h) * 0.6) / sm5.dt;
+          need = q5;
+          if (m5 > dieSize * 0.25) break;
+        }
+        var stopF5 = need / L5;
+        var minMs = stopF5 * TIMING.spin;
+        var rd = rotDuration(stopF5, TIMING.spin);
+        rotN++;
+        if (rd - minMs > minMs * 0.15 + 25) { rotOver++; if (rd - minMs > worstOver) worstOver = rd - minMs; }
+        for (var w5 = 1; w5 <= 3; w5++) {                /* 停稳之后 twistAt 必须恒为 1 */
+          var fr = stopF5 + (1 - stopF5) * w5 / 3;
+          if (Math.abs(twistAt(fr, stopF5) - 1) > 1e-9) rotBad++;
+        }
+      }
+    }
+    ok('本体翻转时长由物理停稳时刻决定（超出 = 落地后又拧一下）',
+      rotOver === 0, rotOver + '/' + rotN + ' 颗超出物理停稳（最多超 ' + worstOver.toFixed(0) + 'ms）');
+    ok('原地拧转在停稳之后恒定不变（停稳后不许原地打转）', rotBad === 0, rotBad + ' 次停稳后仍在变');
+    ok('旋转结束时骰子确实已经停稳', rotBad === 0, rotBad + '/' + rotN + ' 颗仍在移动');
+
+    /* 跳过动画：snapDice 必须把六颗都摆到"规划好的落点 + 目标朝向" */
+    ok('skipAnim 在没动画时是空操作', skipAnim() === false, skipAnim());
+    var el2 = els.slice();
+    for (var si = 0; si < 6; si++) {
+      el2[si].x = (si - 2.5) * size * 1.5;
+      el2[si].y = ((si % 2) ? 1 : -1) * size * 0.8;
+      el2[si].rot = si * 7;
+    }
+    snapDice([1, 2, 3, 4, 5, 6]);
+    var snapBad = [];
+    for (si = 0; si < 6; si++) {
+      var de = el2[si];
+      var tf = de.cube.style.transform, wt = de.wrap.style.transform;
+      var want = FACE_ROT[1 + si];
+      if (tf.indexOf('rotateX(' + norm360(want[0]) + 'deg)') < 0 ||
+          tf.indexOf('rotateY(' + norm360(want[1]) + 'deg)') < 0) snapBad.push('第' + (si + 1) + '颗朝向 ' + tf);
+      /* 位置要比数值，不能比字符串 —— 浏览器会把小数的 .0 省掉（-150.0px 序列化成 -150px） */
+      var mt = wt.match(/translate3d\(([^)]*)\)/);
+      var posOk = false;
+      if (mt) {
+        var nv = mt[1].split(',').map(function (t) { return parseFloat(t); });
+        posOk = Math.abs(nv[0] - de.x) <= 0.05 && Math.abs(nv[1] - de.y) <= 0.05;
+      }
+      if (!posOk) snapBad.push('第' + (si + 1) + '颗位置没写回：' + wt);
+    }
+    ok('跳过动画后六颗骰子都停在目标点数与规划的落点', snapBad.length === 0, snapBad.join('; '));
+
+    /* 动画时长：从点「博」到能再点，控制在 1.4 秒内 */
+    ok('动画总时长（spin+after）≤ 1400ms', TIMING.spin + TIMING.after <= 1400,
+      (TIMING.spin + TIMING.after) + 'ms');
+
+    /* 用时：格式正确、且在增长 */
+    ok('fmtDur 秒级', fmtDur(45000) === '45秒', fmtDur(45000));
+    ok('fmtDur 分级', fmtDur(83000) === '1分23秒', fmtDur(83000));
+    ok('fmtDur 整分不带 0 秒', fmtDur(120000) === '2分', fmtDur(120000));
+    ok('fmtDur 小时级', fmtDur(3720000) === '1小时2分', fmtDur(3720000));
+
+    /* 最硬的一条：把真实播出的关键帧拦下来，直接查"位置不再变之后 rotateZ 是否也不再变" */
+    var rec = [], origAnimate = Element.prototype.animate, wasSound = Sfx.isEnabled();
+    Sfx.setEnabled(false);
+    Element.prototype.animate = function (kf, opt) {
+      rec.push({ el: this, kf: kf });
+      return origAnimate.call(this, kf, opt);
+    };
+    try {
+      window.__game.setFast(false);
+      spinDice([4, 4, 4, 4, 1, 1], function () { });
+    } catch (e) {
+      window.__logErr('真实动画录制异常: ' + e.message);
+    }
+    Element.prototype.animate = origAnimate;
+    window.__game.setFast(true);
+    Sfx.setEnabled(wasSound);
+
+    function poseNums(str) {
+      var m = /translate3d\((-?[\d.]+)px,(-?[\d.]+)px,(-?[\d.]+)px\) rotateZ\((-?[\d.]+)deg\)/.exec(str);
+      return m ? [+m[1], +m[2], +m[3], +m[4]] : null;
+    }
+    var wrapKf = rec.filter(function (r) { return r.el && r.el.className === 'die-wrap'; });
+    ok('真实播出：6 颗骰子各有一条位置关键帧轨', wrapKf.length === 6, wrapKf.length);
+    var postRot = [], checked = 0;
+    for (var r6 = 0; r6 < wrapKf.length; r6++) {
+      var V = wrapKf[r6].kf.map(function (k) { return poseNums(k.transform); });
+      var lastStill = -1, i6;
+      for (i6 = V.length - 2; i6 >= 0; i6--) {
+        if (!V[i6] || !V[i6 + 1]) continue;
+        var moved = Math.abs(V[i6][0] - V[i6 + 1][0]) + Math.abs(V[i6][1] - V[i6 + 1][1]) + Math.abs(V[i6][2] - V[i6 + 1][2]);
+        if (moved > 0.01) { lastStill = i6 + 1; break; }
+      }
+      if (lastStill < 0) continue;
+      checked++;
+      for (i6 = lastStill; i6 < V.length; i6++) {
+        if (!V[i6]) continue;
+        if (Math.abs(V[i6][3] - V[lastStill][3]) > 1e-6) {
+          postRot.push('第' + (r6 + 1) + '颗 ' + V[i6][3] + '° ≠ ' + V[lastStill][3] + '°');
+        }
+      }
+    }
+    ok('真实关键帧：位置停住之后 rotateZ 完全不再变（"停稳后还转"的病灶就在这）',
+      checked > 0 && postRot.length === 0, postRot.slice(0, 3).join(' | ') || ('检查了 ' + checked + ' 颗'));
+
+    /* 音效：清脆陶瓷碰撞 + 落定收尾音的合成路径不抛错 */
+    var ap = Sfx.selftestProbe();
+    ok('清脆陶瓷音效（含落定收尾音）合成可用', ap === 'ok' || ap === 'no-audio-context', ap);
+    ok('合成音效没有抛错', window.__errors.length === 0, window.__errors.join(' | '));
+    ok('探针过程无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  /* ---- 单人挑战：跑完整局 + 统计字段 ---- */
+  function testSolo() {
+    var g = window.__game;
+    g.newGame({ players: [{ name: '我' }], fast: true });
+    var st = g.state();
+    ok('单人局只有 1 个玩家', st.players.length === 1, st.players.length);
+    ok('自动识别为单人模式', st.mode === 'solo', st.mode);
+    ok('开局场上仍是 ' + totalAll() + ' 份', totalLeft() === totalAll(), totalLeft());
+    var iter = 0, MAX = 60000;
+    while (st.phase !== 'over' && iter < MAX) { g.rollRandom(); iter++; }
+    ok('单人局在限定步数内结束（不会卡死）', st.phase === 'over', 'iter=' + iter + ' phase=' + st.phase);
+
+    var awarded = 0, k;
+    for (k in st.pool) { awarded += st.players[0].cakes[k]; }
+    var left = st.pool.duitang + st.pool.sanhong + st.pool.sijin + st.pool.erju + st.pool.yixiu;
+    var total = awarded + left + (st.zyHolder === null ? 0 : 1);
+    ok('单人局全奖项守恒 = ' + totalAll(), total === totalAll(), total);
+    ok('单人局结束时状元有主', st.zyHolder !== null, st.zyHolder);
+    ok('第几把出状元是有效数字', typeof st.solo.firstZyRoll === 'number' &&
+      st.solo.firstZyRoll >= 1 && st.solo.firstZyRoll <= st.rollCount,
+      st.solo.firstZyRoll + ' / 总 ' + st.rollCount);
+    ok('刷新次数是数字且 ≥ 0', typeof st.solo.zyRefresh === 'number' && st.solo.zyRefresh >= 0, st.solo.zyRefresh);
+    ok('结束了就记下结束时间（快进模式下与开始时间同毫秒也合法）',
+      typeof st.solo.endedAt === 'number' && st.solo.endedAt >= st.startedAt,
+      st.solo.endedAt - st.startedAt);
+    ok('用时文案可读', /秒$/.test(soloElapsed()), soloElapsed());
+    ok('评价文案非空', soloVerdict(st.solo.firstZyRoll).length > 0, soloVerdict(st.solo.firstZyRoll));
+    ok('掷骰次数 = 日志条数', st.log.filter(function (e) { return !e.sys; }).length === st.rollCount,
+      st.log.filter(function (e) { return !e.sys; }).length + ' vs ' + st.rollCount);
+    ok('战绩已写入本地存储', (function () {
+      var l = loadHistory();
+      return l.length > 0 && l[0].mode === 'solo' && typeof l[0].firstZyRoll === 'number';
+    })(), (function () { var l = loadHistory(); return l.length ? JSON.stringify(l[0].firstZyRoll) + '/' + l[0].mode : '空'; })());
+    ok('单人局无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  /* ---- 规则页文案与判定引擎一致性 ---- */
+  /* ---- 自定义奖项数量：配额驱动守恒、结束条件、渲染 ---- */
+  function testQuota() {
+    var g = window.__game;
+    var save = Object.assign({}, g.QUOTA());
+    var savedCfg = localStorage.getItem('bobing.cfg.v1');   /* 探针会写 localStorage，跑完必须还原 */
+
+    /* ① 非法值要被夹回合法区间 */
+    g.setQuota({ duitang: -5, sanhong: 1e9, sijin: 3.9, erju: 'x', yixiu: 0 });
+    var q = g.QUOTA();
+    ok('负数配额被夹回 0', q.duitang === 0, q.duitang);
+    ok('超大配额被夹到上限 99', q.sanhong === 99, q.sanhong);
+    ok('小数配额被取整', q.sijin === 3, q.sijin);
+    ok('非数字配额回落默认值', q.erju === g.QUOTA_DEFAULT.erju, q.erju);
+    ok('配额可以是 0（该等级开局即已博完）', q.yixiu === 0, q.yixiu);
+
+    /* ② 总量随之变化，且状元恒为 1 */
+    g.setQuota({ duitang: 1, sanhong: 1, sijin: 2, erju: 3, yixiu: 4 });
+    var want = 1 + (1 + 1 + 2 + 3 + 4);        /* 状元 1 + 五级共 11 = 12 */
+    ok('totalAll 跟随配额（状元1 + 五级11 = 12）', g.totalAll() === want, g.totalAll());
+    ok('totalNonZy 跟随配额（11）', g.totalNonZy() === want - 1, g.totalNonZy());
+    ok('状元恒为 1 份、不参与自定义', g.quotaOf('zhuangyuan') === 1, g.quotaOf('zhuangyuan'));
+
+    /* ③ newGame 的 cfg.quotas 必须【真正生效】—— 即使全局 QUOTA 是别的值。
+       这一条是关键：只断言守恒是不够的，探针先前已 setQuota 过一次，
+       于是lnewGame 忽略 cfg.quotas"]也能蒙过去（A/B 假通过踩过这个坑）。 */
+    g.setQuota({ duitang: 9, sanhong: 9, sijin: 9, erju: 9, yixiu: 9 });
+    var stQ = g.newGame({
+      players: [{ name: 'A' }, { name: 'B' }],
+      quotas: { duitang: 1, sanhong: 1, sijin: 2, erju: 3, yixiu: 4 }, fast: true
+    });
+    ok('newGame 采用传入的配额（而不是沿用全局那份）',
+      stQ.pool.duitang === 1 && stQ.pool.sijin === 2 && stQ.pool.yixiu === 4 && totalLeft() === 12,
+      JSON.stringify(stQ.pool) + ' 场上剩 ' + totalLeft());
+    ok('本局配额被快照下来（之后设置页改动不影响在局）',
+      stQ.quota && stQ.quota.yixiu === 4 && poolQuota('yixiu') === 4,
+      stQ.quota ? (stQ.quota.yixiu + ' / ' + poolQuota('yixiu')) : 'missing');
+    g.setQuota({ duitang: 5, sanhong: 5, sijin: 5, erju: 5, yixiu: 5 });
+    ok('改全局配额不会动到在局进度条的分母', poolQuota('yixiu') === 4, poolQuota('yixiu'));
+    g.setQuota({ duitang: 1, sanhong: 1, sijin: 2, erju: 3, yixiu: 4 });
+
+    /* ④ 小配额下跑完整局，断言守恒 */
+    window.__game.newGame({
+      players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
+      quotas: { duitang: 1, sanhong: 1, sijin: 2, erju: 3, yixiu: 4 },
+      fast: true
+    });
+    var st = g.state();
+    ok('开局场上剩 = totalAll()', totalLeft() === want, totalLeft() + ' vs ' + want);
+    var perCake = {}, k, iter = 0;
+    while (st.phase !== 'over' && iter < 20000) { g.rollRandom(); iter++; }
+    ok('小配额对局也能在限定步数内结束', st.phase === 'over', 'iter=' + iter);
+    /* 守恒式子必须是「结束时剩余 + 已发出 = 配额」。
+       不能拿游戏开始时的 pool 当基数再加发出 —— 那是把初值重复计了一遍。 */
+    var awarded = 0, left = 0, perOk = true, perDetail = '';
+    for (k in st.pool) { left += st.pool[k]; perCake[k] = st.pool[k]; }
+    for (var i = 0; i < st.players.length; i++) {
+      for (k in st.pool) { awarded += st.players[i].cakes[k]; perCake[k] += st.players[i].cakes[k]; }
+    }
+    ok('小配额：非状元发出 + 剩余 = totalNonZy()', awarded + left === want - 1, awarded + ' + ' + left);
+    for (k in st.pool) {
+      if (perCake[k] !== g.quotaOf(k)) { perOk = false; perDetail += k + ':' + perCake[k] + '≠' + g.quotaOf(k) + ' '; }
+    }
+    ok('小配额：每个等级 剩余+发出 = 该等级配额', perOk, perDetail);
+    ok('小配额：全奖项守恒 = totalAll()', awarded + left + (st.zyHolder === null ? 0 : 1) === want,
+      awarded + ' + ' + left);
+
+    /* ⑤ 某一级配 0 → 该等级永远空手，也不会多发 */
+    window.__game.setQuota({ duitang: 0, sanhong: 4, sijin: 8, erju: 16, yixiu: 32 });
+    var g2 = window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    window.__game.rollForced([1, 2, 3, 4, 5, 6]);       /* 对堂 */
+    var e2 = g.state().log[0];
+    ok('配额为 0 的等级：博到即空手', e2.action === '空手', e2.action + ' / ' + e2.msg);
+    ok('配额为 0 的等级：一份都没发出去', g.state().players[0].cakes.duitang === 0,
+      g.state().players[0].cakes.duitang);
+
+    /* ⑥ 规则页与设置页文案跟着配额走 */
+    renderSetup();                       /* 重渲设置页，让数量输入框反映当前配额 */
+    renderRulesTable(); renderQuotaMeta();
+    var totEl = document.getElementById('rules-quota-total');
+    ok('规则页「共 N 份」跟随当前配额', totEl && Number(totEl.textContent) === g.totalAll(),
+      totEl ? totEl.textContent + ' vs ' + g.totalAll() : 'missing');
+    var qs = document.querySelectorAll('#quota-set [data-quota]');
+    ok('设置页渲染出 5 个数量输入框（状元不参与）', qs.length === 5, qs.length);
+    ok('数量输入框的值 = 当前配额', qs.length === 5 && Number(qs[0].value) === g.QUOTA()[g.NONZY_KEYS[0]],
+      qs.length ? qs[0].value : 'missing');
+
+    /* ⑦ 改输入框 → 配额与规则页同步 */
+    if (qs.length) {
+      var target = qs[qs.length - 1];
+      target.value = '7';
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      ok('改输入框会写回 QUOTA', g.QUOTA().yixiu === 7, g.QUOTA().yixiu);
+      var tot2 = document.getElementById('rules-quota-total');
+      ok('改输入框后规则页总数同步', tot2 && Number(tot2.textContent) === g.totalAll(),
+        tot2 ? tot2.textContent : 'missing');
+    }
+
+    /* 还原配额与 localStorage —— 否则本次写进去的小配额会污染后面跑的其他探针 */
+    g.setQuota(save);
+    if (savedCfg === null) localStorage.removeItem('bobing.cfg.v1');
+    else localStorage.setItem('bobing.cfg.v1', savedCfg);
+    setupCfg.quotas = Object.assign({}, save);
+    renderRulesTable(); renderQuotaMeta();
+    ok('探针过程无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  function testRules() {
+    var rows = RULES_ROWS;
+    for (var i = 0; i < rows.length; i++) {
+      var g = evaluate(rows[i].dice);
+      ok('规则页图示[' + GRADE[rows[i].key].name + ']与判定一致', g.key === rows[i].key,
+        '图示 ' + rows[i].dice.join(',') + ' 判出 ' + g.key);
+    }
+    var dom = document.querySelectorAll('#rules-table .rrow').length;
+    ok('规则表渲染行数 = 数据行数', dom === rows.length, dom + ' vs ' + rows.length);
+    var md = document.querySelectorAll('#rules-table .rrow')[0].querySelectorAll('.md').length;
+    ok('第一行图示有 6 颗小骰子', md === 6, md);
+    /* 概率栏：12 行规则每行都要有"理论 + 本局"两行字 */
+    var oddsCells = document.querySelectorAll('#rules-table .rodd');
+    ok('规则页每行都渲染出概率栏', oddsCells.length === RULES_ROWS.length,
+      oddsCells.length + ' vs ' + RULES_ROWS.length);
+    var oddsBad = [];
+    for (var oi = 0; oi < RULES_ROWS.length; oi++) {
+      var cell = document.getElementById('ro-' + RULES_ROWS[oi].key);
+      if (!cell || cell.textContent.indexOf('理论') < 0) oddsBad.push(RULES_ROWS[oi].key);
+    }
+    ok('每行概率栏都写着理论概率', oddsBad.length === 0, oddsBad.join(','));
+    var rrowKids = document.querySelectorAll('#rules-table .rrow')[0].children.length;
+    ok('规则行有 4 列（名称/图示/份数/概率）', rrowKids === 4, rrowKids);
+    ok('插金花的理论概率 = 15/46656 = 0.032%', oddsPct(THEORY.jinHua) === '0.032%', oddsPct(THEORY.jinHua));
+    ok('一秀的理论概率 = 17400/46656 = 37.29%', oddsPct(THEORY.yiXiu) === '37.29%', oddsPct(THEORY.yiXiu));
+
+    /* 概率弹层：12 个奖项 + 无红四 + 表头 = 14 行，并且要跟着本局掷骰实时走 */
+    window.__game.setFast(true);
+    window.__game.enterView();
+    window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    renderStatModal();
+    var srows = document.querySelectorAll('#stat-table .srow');
+    ok('概率弹层渲染 12 奖项 + 无红四 + 表头 = 14 行', srows.length === 14, srows.length);
+    var statKeyOk = true, statKeyBad = '';
+    for (var sk = 0; sk < RULES_ROWS.length; sk++) {
+      if (!document.getElementById('sr-' + RULES_ROWS[sk].key)) { statKeyOk = false; statKeyBad += RULES_ROWS[sk].key + ' '; }
+    }
+    ok('12 个奖项在概率弹层里都有对应行', statKeyOk && !!document.getElementById('sr-none'), statKeyBad);
+    var cellTh = document.querySelector('#sr-yiXiu .st');
+    ok('概率弹层的"理论概率"列与 THEORY 一致',
+      !!cellTh && cellTh.textContent === oddsPct(THEORY.yiXiu), cellTh ? cellTh.textContent : 'missing');
+    var emptyCell = document.querySelector('#sr-yiXiu .sp');
+    ok('本局还没博时，本局频率显示「—」而不是 0%', !!emptyCell && emptyCell.textContent === '—',
+      emptyCell ? emptyCell.textContent : 'missing');
+
+    /* 掷两把（一秀 + 对堂）→ 弹层与规则页的"本局次数"都要实时更新 */
+    window.__game.rollForced([4, 1, 2, 5, 5, 6]);
+    window.__game.rollForced([1, 2, 3, 4, 5, 6]);
+    renderStatModal();
+    var cellY = document.querySelector('#sr-yiXiu .sc');
+    var cellD = document.querySelector('#sr-duiTang .sc');
+    ok('概率弹层实时更新本局次数（一秀 1 次）', !!cellY && cellY.textContent === '1 次',
+      cellY ? cellY.textContent : 'missing');
+    ok('概率弹层实时更新本局次数（对堂 1 次）', !!cellD && cellD.textContent === '1 次',
+      cellD ? cellD.textContent : 'missing');
+    var cellDp = document.querySelector('#sr-duiTang .sp');
+    ok('本局频率 = 1/2 = 50.00%', !!cellDp && cellDp.textContent === '50.00%',
+      cellDp ? cellDp.textContent : 'missing');
+    var statSum = document.getElementById('stat-summary').textContent;
+    ok('概率弹层摘要写出本局掷骰次数与用时',
+      /已博/.test(statSum) && /2/.test(statSum) && /用时/.test(statSum), statSum);
+
+    /* 关键：规则页赔率栏必须【靠 renderAll 自动】跟着掷骰刷新。
+       测法：先手动建一次表（写入当前次数），然后只掷骰、不再碰规则表，
+       看数字有没有自己变。旧 bug：renderAll() 里没刷新赔率栏，
+       规则页永远停在打开页面那一刻的"本局 0 次"。 */
+    renderRulesTable();
+    var beforeOdds = document.getElementById('ro-yiXiu').textContent;
+    window.__game.rollForced([4, 1, 2, 5, 5, 6]);        /* 再博一个一秀，全程不重建规则表 */
+    var afterOdds = document.getElementById('ro-yiXiu').textContent;
+    ok('规则页赔率栏由 renderAll 自动实时刷新（本局 1 次 → 2 次）',
+      beforeOdds !== afterOdds && afterOdds.indexOf('本局 2 次') >= 0,
+      beforeOdds.replace(/\s+/g, ' ') + '  →  ' + afterOdds.replace(/\s+/g, ' '));
+    ok('规则页赔率栏同时给出本局频率', afterOdds.indexOf('%') >= 0, afterOdds.replace(/\s+/g, ' '));
+    ok('概率弹层/规则页更新过程中无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+
+    var q = 0;
+    for (var k in CAKE) q += quotaOf(k);
+    ok('奖项总数 = ' + totalAll(), q === totalAll(), q);
+    var th = 0;
+    for (k in THEORY) th += THEORY[k];
+    ok('理论概率表合计 = 46656', th === THEORY_TOTAL, th);
+    ok('探针过程无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+})();
+
+/* ============================================================================
+   ⑭ 便捷参数：?demo=N —— 直接开一桌 4 人并先博 N 次（预览/截图用）
+   ============================================================================ */
+(function () {
+  var d = /[?&]demo=([0-9]*)/.exec(location.search);
+  if (!d) return;
+  var n = Number(d[1] || 0);
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (/[?&]solo=1/.test(location.search)) {   /* ?demo=0&solo=1 直接进单人挑战 */
+        var chip = document.querySelector('#count-set .chip[data-n="1"]');
+        if (chip) chip.click();
+      }
+      document.getElementById('btn-start').click();
+      window.__game.setFast(true);
+      for (var i = 0; i < n; i++) window.__game.rollRandom();
+      settle(state.dice, true);
+      if (state.log.length) showResult(evaluate(state.dice), state.log[0]);
+      var o = /[?&]open=([a-z]+)/.exec(location.search);
+      if (o === null) return;
+      if (o[1] === 'rules') document.getElementById('btn-rules').click();
+      else if (o[1] === 'hist') document.getElementById('btn-hist').click();
+      else if (o[1] === 'stat') document.getElementById('btn-stat').click();
+      else if (o[1] === 'result') { state.phase = 'over'; showResultModal(); }
+    }, 60);
+  });
+})();
+</script>
+</body>
+</html>
