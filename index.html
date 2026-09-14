@@ -259,6 +259,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .qrow input:focus{outline:none;border-color:var(--gold)}
 /* 本局掷骰分布 */
 .stat-note{font-size:11px;color:var(--muted);line-height:1.7;margin-top:10px}
+.rules-note{font-size:11.5px;color:var(--muted);line-height:1.75;margin:10px 0 2px}
 .stable{display:flex;flex-direction:column;gap:4px}
 .srow{display:grid;grid-template-columns:1fr 58px 68px 68px 64px;gap:8px;align-items:center;
   font-size:11.5px;padding:6px 9px;border-radius:9px;background:rgba(0,0,0,.22);
@@ -272,6 +273,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .srow .sc,.srow .sp,.srow .st,.srow .sd{text-align:right}
 .srow .sp{font-weight:700}
 .srow .st,.srow .sd{color:var(--muted)}
+.srow .st em{display:block;font-style:normal;font-size:9px;color:rgba(255,248,238,.42);line-height:1.3}
 .srow .sd.more{color:var(--warn)}
 .srow .sd.less{color:var(--ok)}
 .pdist{display:flex;flex-direction:column;gap:4px}
@@ -583,6 +585,10 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
     <p data-page-node-id="AY518gOQ83EQGlPn4MUD5o">六颗骰子丢进大碗，看红四点（4 点）的多少定科名。本级奖项发完了就<b data-page-node-id="BhHGevB4BfT3CalqSqYi7i">空手</b>，不作他用；<b data-page-node-id="wy7EYeoacozH1CZHeECtGv">状元只有一块，随时可能被更大的状元夺走</b>。</p>
     <h4 data-page-node-id="ZReUxAoeVia88m9nAblvZZ">奖项一览（由大到小）</h4>
     <div class="rtable" id="rules-table" data-page-node-id="ZjZlt8hiRm2oXT7VIRqXf9"></div>
+    <p class="rules-note" id="rules-odds-note">表里的概率是<b>这个等级</b>的合计概率，单个骰面组合都是
+      1/46656 ≈ 0.002%。「黑六勃」之所以是 0.009%，是因为它把
+      <b>222222 / 333333 / 555555 / 666666</b> 四种骰面合在一起算；换成单个点数看，
+      <b>六个一、六个四、六个六完全同概率</b>。</p>
     <h4>奖项数量（共 <span id="rules-quota-total">63</span> 份）</h4>
     <p data-page-node-id="Ur8HcXRB10e9KkL3omfT56"><span id="rules-quota-list">状元 1 · 对堂 2 · 三红 4 · 四进 8 · 二举 16 · 一秀 32</span>。取七九六十三之数，是延平郡王的吉数。</p>
     <h4 data-page-node-id="4AIpVRp8xA9uWriYyInPfM">状元内部的比较</h4>
@@ -618,7 +624,9 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
     <h2>概率统计 <button class="x" data-close>×</button></h2>
     <p id="stat-summary" style="margin-top:8px"></p>
     <div class="stable" id="stat-table"></div>
-    <p class="stat-note">理论概率 = 6⁶ = 46656 种骰面组合里该等级占的比例（穷举算出，固定不变）。
+    <p class="stat-note">理论概率 = 6⁶ = 46656 种骰面组合里<b>该等级</b>占的比例（穷举算出，固定不变）；
+      下面那行小字是这个等级<b>由多少种骰面构成</b>。所以「黑六勃」4 种、是「遍地锦」1 种的 4 倍，
+      这是正常的 —— 单看某一个点数，六粒相同的六种概率完全一样，都是 1/46656。<br>
       本局频率 = 本局该等级出现次数 ÷ 本局总掷骰数。掷得越多，两者越接近 —— 这也是检验骰子有没有被做手脚的办法。</p>
   </div>
 </div>
@@ -1846,7 +1854,8 @@ function renderStatModal() {
       '</span>' +
       '<span class="sc">' + cnt + ' 次</span>' +
       '<span class="sp">' + (rolls ? oddsPct(cnt, rolls) : '—') + '</span>' +
-      '<span class="st">' + oddsPct(THEORY[k]) + '</span>' +
+      '<span class="st">' + oddsPct(THEORY[k]) +
+        '<em>' + THEORY[k] + ' 种骰面</em></span>' +
       '<span class="' + dCls + '">' + (!rolls ? '—' : (dpp >= 0 ? '+' : '') + dpp.toFixed(1)) + '</span>' +
       '</div>';
   }
@@ -1992,7 +2001,7 @@ var RULES_ROWS = [
   { key: 'jinHua',     dice: [4, 4, 4, 4, 1, 1], desc: '四粒红四带两粒红一', mark: '最大' },
   { key: 'liuPouHong', dice: [4, 4, 4, 4, 4, 4], desc: '六粒骰子全是红四点' },
   { key: 'bianDiJin',  dice: [1, 1, 1, 1, 1, 1], desc: '六粒骰子全是红一点' },
-  { key: 'heiLiuBo',   dice: [6, 6, 6, 6, 6, 6], desc: '六粒相同黑点数（非一非四）' },
+  { key: 'heiLiuBo',   dice: [6, 6, 6, 6, 6, 6], desc: '六粒相同黑点数（二/三/五/六各一种，共 4 种）' },
   { key: 'wuHong',     dice: [4, 4, 4, 4, 4, 2], desc: '五粒红四，比带点大小' },
   { key: 'wuZi',       dice: [5, 5, 5, 5, 5, 3], desc: '五粒相同（四点除外），比剩余那颗大小' },
   { key: 'siDianHong', dice: [4, 4, 4, 4, 3, 6], desc: '四粒红四，比另外两颗之和' },
@@ -2501,6 +2510,9 @@ window.__game = {
     var cnt = {}, k;
     for (k in EXPECT) cnt[k] = 0;
     var d = [1, 1, 1, 1, 1, 1], total = 0, guard = 0;
+    /* 六粒完全相同，按点数分开数 —— 用户报过"六个六和六个一概率不一样"，
+       这里把它钉死：六种点数必须各自只由 1 种组合达成。 */
+    var sixCnt = [0, 0, 0, 0, 0, 0, 0];
     for (d[0] = 1; d[0] <= 6; d[0]++)
       for (d[1] = 1; d[1] <= 6; d[1]++)
         for (d[2] = 1; d[2] <= 6; d[2]++)
@@ -2510,6 +2522,9 @@ window.__game = {
                 var g = evaluate(d.slice());
                 if (cnt[g.key] === undefined) { cnt[g.key] = 0; }
                 cnt[g.key]++; total++; guard++;
+                if (d[0] === d[1] && d[1] === d[2] && d[2] === d[3] && d[3] === d[4] && d[4] === d[5]) {
+                  sixCnt[d[0]]++;
+                }
               }
     ok('穷举组合总数 = 46656', total === 46656, total);
     for (k in EXPECT) ok('等级[' + GRADE[k].name + '] 组合数 = ' + EXPECT[k], cnt[k] === EXPECT[k], '实得 ' + cnt[k]);
@@ -2518,6 +2533,60 @@ window.__game = {
     ok('各等级计数之和 = 46656', sum === 46656, sum);
     ok('状元级合计 = 561', (cnt.jinHua + cnt.liuPouHong + cnt.bianDiJin + cnt.heiLiuBo + cnt.wuHong + cnt.wuZi + cnt.siDianHong) === 561,
       cnt.jinHua + cnt.liuPouHong + cnt.bianDiJin + cnt.heiLiuBo + cnt.wuHong + cnt.wuZi + cnt.siDianHong);
+
+    /* ---- 六粒相同：用户报过"六个六和六个一概率居然不一样"，这里逐条钉死 ----
+       真相：六个一 / 六个四 / 六个六 各自都只有 1 种骰面组合，概率完全相等（各 1/46656）。
+       看着"不一样"是因为「黑六勃」是个【等级】，把 222222/333333/555555/666666 四种骰面合成一行算合计。 */
+    var sixOk = true, sixDetail = [];
+    for (var sf = 1; sf <= 6; sf++) {
+      if (sixCnt[sf] !== 1) { sixOk = false; }
+      sixDetail.push('六个' + cn(sf) + '=' + sixCnt[sf]);
+    }
+    ok('六粒相同：六种点数各自只由 1 种组合达成（六个一 = 六个六 = 0.002%）',
+      sixOk, sixDetail.join(' '));
+    ok('六粒相同合计 = 6 种（每点各 1 种）',
+      sixCnt.slice(1).reduce(function (a, b) { return a + b; }, 0) === 6,
+      sixCnt.slice(1).join('+'));
+
+    var own = evaluate([1, 1, 1, 1, 1, 1]).key === 'bianDiJin' &&
+              evaluate([4, 4, 4, 4, 4, 4]).key === 'liuPouHong' &&
+              evaluate([2, 2, 2, 2, 2, 2]).key === 'heiLiuBo' &&
+              evaluate([3, 3, 3, 3, 3, 3]).key === 'heiLiuBo' &&
+              evaluate([5, 5, 5, 5, 5, 5]).key === 'heiLiuBo' &&
+              evaluate([6, 6, 6, 6, 6, 6]).key === 'heiLiuBo';
+    ok('六粒相同的等级归属：一→遍地锦、四→六抔红、二三五/六→黑六勃', own,
+      [1, 2, 3, 4, 5, 6].map(function (v) {
+        var dd = [v, v, v, v, v, v];
+        return cn(v) + '→' + GRADE[evaluate(dd).key].name;
+      }).join(' '));
+
+    ok('黑六勃 = 4 种骰面，所以概率恰好是遍地锦（1 种）的 4 倍 —— 不是 bug',
+      THEORY.heiLiuBo === 4 * THEORY.bianDiJin && THEORY.liuPouHong === THEORY.bianDiJin,
+      'heiLiuBo=' + THEORY.heiLiuBo + ' bianDiJin=' + THEORY.bianDiJin + ' liuPouHong=' + THEORY.liuPouHong);
+    ok('THEORY 表里「六粒相同」的六种骰面合计 = 6（六抔红1 + 遍地锦1 + 黑六勃4）',
+      THEORY.liuPouHong + THEORY.bianDiJin + THEORY.heiLiuBo === 6,
+      THEORY.liuPouHong + '+' + THEORY.bianDiJin + '+' + THEORY.heiLiuBo);
+
+    /* 黑六勃内部要能比大小（夺状元时用：六个六 > 六个五 > 六个二） */
+    var s6 = evaluate([6, 6, 6, 6, 6, 6]), s5 = evaluate([5, 5, 5, 5, 5, 5]), s2 = evaluate([2, 2, 2, 2, 2, 2]);
+    ok('黑六勃内部按点数比大小：六个六 > 六个五 > 六个二（同级才能夺状元）',
+      s6.tier === s5.tier && s5.tier === s2.tier &&
+      compareGrade(s6, s5) > 0 && compareGrade(s5, s2) > 0 && compareGrade(s6, s2) > 0,
+      'tier=' + s6.tier + ' 六(带' + s6.kicker + ') > 五(带' + s5.kicker + ') > 二(带' + s2.kicker + ')');
+
+    /* 规则页那条说明必须真的渲染出来（防止文案又跟数据脱节） */
+    /* 说明段必须存在、有内容、而且【真的显示出来】。
+       只查 textContent 不够 —— display:none 的元素照样有文本（A/B 假通过踩过）。
+       getComputedStyle(el).display 反映的是元素自身的 display，不受弹层祖先隐藏影响。 */
+    var noteEl = document.getElementById('rules-odds-note');
+    var noteShown = !!noteEl && getComputedStyle(noteEl).display !== 'none';
+    ok('规则页渲染出「概率是等级合计」的说明段，且是显示状态', noteShown &&
+      noteEl.textContent.indexOf('222222') >= 0 && noteEl.textContent.indexOf('46656') >= 0,
+      noteEl ? (getComputedStyle(noteEl).display + ' | ' + noteEl.textContent.replace(/\s+/g, ' ').slice(0, 50) + '…') : 'missing');
+    var roHei = document.getElementById('ro-heiLiuBo');
+    ok('概率栏里黑六勃那行显示的组合数 = 4 种（与 THEORY 一致）',
+      !!roHei && roHei.textContent.indexOf(oddsPct(THEORY.heiLiuBo)) >= 0,
+      roHei ? roHei.textContent.replace(/\s+/g, ' ') : 'missing');
     /* 状元分级优先级抽查 */
     ok('4个4+2个1 → 插金花（不是四点红）', evaluate([4, 4, 4, 4, 1, 1]).key === 'jinHua', evaluate([4, 4, 4, 4, 1, 1]).key);
     ok('6个1 → 遍地锦（不是黑六勃）', evaluate([1, 1, 1, 1, 1, 1]).key === 'bianDiJin', evaluate([1, 1, 1, 1, 1, 1]).key);
@@ -3260,8 +3329,19 @@ window.__game = {
     }
     ok('12 个奖项在概率弹层里都有对应行', statKeyOk && !!document.getElementById('sr-none'), statKeyBad);
     var cellTh = document.querySelector('#sr-yiXiu .st');
+    /* 注意：这一格现在除了百分比，还有一个「N 种骰面」的小字，
+       所以不能再拿 textContent 做全等比较（改成包含 + 单独断言小字）。 */
     ok('概率弹层的"理论概率"列与 THEORY 一致',
-      !!cellTh && cellTh.textContent === oddsPct(THEORY.yiXiu), cellTh ? cellTh.textContent : 'missing');
+      !!cellTh && cellTh.textContent.indexOf(oddsPct(THEORY.yiXiu)) >= 0,
+      cellTh ? cellTh.textContent : 'missing');
+    var cellThN = document.querySelector('#sr-yiXiu .st em');
+    ok('理论概率下面标出这个等级由多少种骰面构成（一秀 17400 种）',
+      !!cellThN && cellThN.textContent.indexOf(String(THEORY.yiXiu)) >= 0,
+      cellThN ? cellThN.textContent : 'missing');
+    var cellHeiN = document.querySelector('#sr-heiLiuBo .st em');
+    ok('黑六勃那格标出「4 种骰面」（用户就是被这个数误导的）',
+      !!cellHeiN && cellHeiN.textContent.indexOf('4') >= 0 && THEORY.heiLiuBo === 4,
+      cellHeiN ? (cellHeiN.textContent + ' / THEORY=' + THEORY.heiLiuBo) : 'missing');
     var emptyCell = document.querySelector('#sr-yiXiu .sp');
     ok('本局还没博时，本局频率显示「—」而不是 0%', !!emptyCell && emptyCell.textContent === '—',
       emptyCell ? emptyCell.textContent : 'missing');
