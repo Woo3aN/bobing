@@ -107,26 +107,23 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 /* 完整碗型（照 R.jpg 建的模）：碗口椭圆 + 外壁 + 圈足，整只碗用一只内联 SVG 画。
    SVG viewBox = 1000×840，下面所有 HTML 层的百分比都直接由 viewBox 坐标换算，保证严格对齐。
    比例取自照片：碗口高/宽 ≈ 0.49（抬高视角后取 0.55）、碗口下方碗身 ≈ 0.22 碗宽、整碗高 ≈ 0.76 碗宽。 */
-.bowl-wrap{position:relative;width:100%;aspect-ratio:1000/880;max-width:560px;margin:0 auto;
+.bowl-wrap{position:relative;width:100%;aspect-ratio:1000/990;max-width:560px;margin:0 auto;
   perspective:1200px;perspective-origin:50% 36%}
 /* 碗在桌上的落影（紧贴碗底，别让碗看着悬空） */
-.bowl-wrap::after{content:"";position:absolute;left:16%;right:16%;bottom:0;height:6%;z-index:0;
+.bowl-wrap::after{content:"";position:absolute;left:14%;right:14%;bottom:-1%;height:6%;z-index:0;
   border-radius:50%;
   background:radial-gradient(closest-side,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
 .bowl-svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;z-index:1}
-/* 骰子落区 = SVG 里碗底椭圆的外接矩形（cx500 cy471.59 rx340.86 ry228.08，viewBox 1000×880）
-   → 左/右 15.91%，上 27.67%，下 20.49%
+/* 骰子落区 = SVG 里碗底椭圆的外接矩形（cx500 cy573.86 rx315.48 ry300.04，viewBox 1000×990）
    ⚠️ 改了碗底椭圆的任何一个数，这三个百分比都要跟着重算（有断言查"落区与碗底同心"）。 */
-.bowl-inner{position:absolute;left:15.91%;right:15.91%;top:27.67%;bottom:20.49%;z-index:3}
-/* 骰子落区平面：倾角必须与碗【同一个相机】—— 见下面"单一相机"的换算。
-   ⚠️ 骰子平面的倾角 ≠ 碗的仰角：碗口椭圆比例 = sin(仰角)，
-   而平面的纵向压缩系数 = cos(倾角)，相等要求 倾角 = 90° - 仰角。
-   本档：碗仰角 42° → 骰子倾角 48°（= 90-42）。
-   这样一侧是点数值面（被压扁 cosθ=0.669，仍看得清），
-   一侧是完整的侧脸（sinθ=0.743）——
-   而不是被压成几像素的"横条纹"（曾用 18°，用户报"骰子面不清晰"）。 */
+.bowl-inner{position:absolute;left:18.45%;right:18.45%;top:27.66%;bottom:11.73%;z-index:3}
+/* 骰子落区平面：倾角 18°（用户要的"原版角度"——数值面几乎正对镜头，最好认）。
+   ⚠️ 碗口椭圆比例必须 = cos(这个倾角) = 0.9511，这才是"碗和骰子同一个视角"。
+   换算：碗口比例 = sin(相机仰角)，平面压缩系数 = cos(倾角)，相等要求 倾角 = 90° - 仰角。
+   所以 18° 的骰子配的是仰角 72° 的碗 —— 碗口接近正圆、外壁看不见，
+   这是"同角度"的必然结果，不是取舍失误。 */
 .dice-field{position:absolute;inset:0;perspective:1500px;transform-style:preserve-3d;
-  transform:rotateX(48deg);
+  transform:rotateX(18deg);
   transform-origin:50% 50%}
 .die-wrap{position:absolute;left:50%;top:50%;width:var(--die);height:var(--die);margin:0;
   transform-style:preserve-3d;will-change:transform}   /* 位置与旋转都交给 WAAPI，不再用 CSS transition */
@@ -409,7 +406,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 @media (max-width:899px){
   #app{padding:10px 10px 22px}
   .layout{grid-template-columns:1fr}
-  .bowl-wrap{aspect-ratio:1000/880;max-width:none}
+  .bowl-wrap{aspect-ratio:1000/990;max-width:none}
   .log{max-height:170px}
   .players{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .pcard{padding:7px 8px}
@@ -517,7 +514,7 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
       <div class="stage" data-page-node-id="rk6bBL2C3C1l2fYzewU8dF">
         <div class="bowl-wrap" id="bowl-wrap" data-page-node-id="mhDMYkXGAHh0QLIbkuCWf9">
           <!-- 完整碗型：碗口椭圆(494×272 ≈ 1:0.55) + 外壁 + 圈足 + 碗底，整只碗用内联 SVG 画 -->
-          <svg class="bowl-svg" id="bowl-svg" viewBox="0 0 1000 880" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg class="bowl-svg" id="bowl-svg" viewBox="0 0 1000 990" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
             <defs>
               <radialGradient id="gOuter" cx="40%" cy="16%" r="92%">
                 <stop offset="0%" stop-color="#ee5a38"/>
@@ -565,34 +562,32 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
                 <stop offset="100%" stop-color="#fffdf6" stop-opacity="0"/>
               </radialGradient>
             </defs>
-            <!-- 圈足：必须画在碗身【之前】—— 这样它的上半圈被碗身盖住，只露出前缘一道月牙。
-                 椭圆比例 0.67，与碗口、碗底严格同一个视角（见下面的"单一相机"）。 -->
-            <ellipse id="bowl-foot-el" cx="500" cy="746.11" rx="149.98" ry="100.36" fill="url(#gFoot)"/>
-            <path d="M350,746.11 A149.98,100.36 0 0 0 650,746.11" fill="none" stroke="#ef6a52" stroke-width="3" opacity=".40"/>
-            <!-- 碗身外壁：底曲线中心 y=776.02，圈足底在 846.47 —— 于是只露出前缘月牙 -->
-            <path id="bowl-body-path"
-              d="M6,379 C28,552.58 195,702.13 372,750.2 Q500,801.84 628,750.2 C805,702.13 972,552.58 994,379 Z"
-              fill="url(#gOuter)"/>
-            <!-- 碗口内腔（内壁） -->
-            <ellipse cx="500" cy="379" rx="494" ry="330.55" fill="url(#gInner)"/>
+            <!-- 相机：仰角 72°（= 90° - 骰子平面倾角 18°），碗口看起来几乎是正圆。
+                 ⚠️ 这个角度下【外壁和圈足都被碗口自己挡住了】—— 一只真实的碗从这么高的角度看，
+                 你只会看到碗口那一圈唇 + 碗内腔。所以这里不画外壁和圈足：画了也在后面看不见。
+                 这不是省事，是投影算出来的：外壁上某点能露头，要满足
+                     depth·cosθ + 该处半径·sinθ  >  碗口半径·sinθ
+                 仰角 72° 时这要求碗深到 3 倍碗口半径 —— 那是花瓶，不是碗。
+                 所以"底座看得见"和"碗与骰子同角度"是互斥的，只能二选一（用户选了后者）。 -->
+            <!-- 碗唇顶面：整块金边，随后被内腔盖住中间，只留下一圈唇 -->
+            <ellipse id="bowl-rim-el" cx="500" cy="500" rx="494" ry="469.82" fill="url(#gGold)"/>
+            <!-- 内腔（内壁） -->
+            <ellipse id="bowl-inner-el" cx="500" cy="500" rx="478" ry="454.61" fill="url(#gInner)"/>
             <!-- 远端内壁的亮釉带 -->
-            <path d="M14,379 A486,324.55 0 0 1 986,379 A429.98,243.05 0 0 0 14,379 Z"
+            <path d="M14,500 A472,448.61 0 0 1 986,500 A416.05,334.27 0 0 0 14,500 Z"
               fill="url(#gGloss)" opacity=".5"/>
             <!-- 釉面高光（和骰子同一个白）：只画在【远端】内壁。
                  光从上方偏前打来 —— 远端内壁的法线朝上、偏向观察者，才是真正反光的地方；
                  近侧（前面）内壁的法线朝上、偏离观察者，反光背对镜头，本该是暗的。
-                 这里曾经在近侧左下方也糊了一块（cx262 cy486, "外壁一处"），
-                 就是用户报的"前面的碗边左侧有一些奇怪的灯光，不符合现实透视"。
-                 另外 fill 必须用 gSheen（径向）而不是 gGloss（线性），否则椭圆边缘是硬的。 -->
-            <ellipse cx="336" cy="346.06" rx="148" ry="80.23" fill="url(#gSheen)" opacity=".42" transform="rotate(-19 336 346.06)"/>
-            <ellipse cx="632" cy="319.36" rx="78" ry="43.76" fill="url(#gSheen)" opacity=".28" transform="rotate(-15 632 319.36)"/>
+                 fill 必须用 gSheen（径向）而不是 gGloss（线性），否则椭圆边缘是硬的。 -->
+            <ellipse cx="336" cy="438.17" rx="148" ry="110.47"  
+              fill="url(#gSheen)" opacity=".42" transform="rotate(-19 336 438.17)"/>
+            <ellipse cx="632" cy="388.17" rx="78" ry="60.01"  
+              fill="url(#gSheen)" opacity=".28" transform="rotate(-15 632 388.17)"/>
             <!-- 碗底（骰子落区）：软边过渡到近侧内壁，一眼看出碗内比碗外深 -->
-            <ellipse id="bowl-floor-el" cx="500" cy="471.59" rx="340.86" ry="228.08" fill="url(#gFloor)"/>
-            <ellipse cx="500" cy="473.59" rx="340.86" ry="228.08" fill="none" stroke="#3a0406" stroke-width="26" opacity=".16"/>
-            <path d="M159.14,471.59 A340.86,228.08 0 0 1 840.86,471.59" fill="none" stroke="#2e0305" stroke-width="22" opacity=".26"/>
-            <!-- 碗口金边 -->
-            <ellipse id="bowl-rim-el" cx="500" cy="379" rx="494" ry="330.55" fill="none"
-              stroke="url(#gGold)" stroke-width="14"/>
+            <ellipse id="bowl-floor-el" cx="500" cy="573.86" rx="315.48" ry="300.04" fill="url(#gFloor)"/>
+            <ellipse cx="500" cy="575.86" rx="315.48" ry="300.04" fill="none" stroke="#3a0406" stroke-width="26" opacity=".16"/>
+            <path d="M184.52,573.86 A315.48,300.04 0 0 1 815.48,573.86" fill="none" stroke="#2e0305" stroke-width="22" opacity=".26"/>
           </svg>
           <div class="bowl-inner" id="bowl-inner" data-page-node-id="Ps9GtvwU84fv88Q0QbCieA">
             <div class="dice-field" id="dice-field" data-page-node-id="WuojffUJBFESOdUle87xNX"></div>
@@ -3120,64 +3115,39 @@ window.__game = {
     var rimCX = Number(rimEl.getAttribute('cx')), rimCY = Number(rimEl.getAttribute('cy'));
     var rimRX = Number(rimEl.getAttribute('rx')), rimRY = Number(rimEl.getAttribute('ry'));
     var rimRatio = rimRY / rimRX;
-    ok('碗口椭圆高/宽 ∈ [0.61,0.73]' +
-      '（相机仰角约 42°，与骰子平面同一个视角）',
-      rimRatio >= 0.61 && rimRatio <= 0.73, rimRatio.toFixed(3));
-    /* 骰子平面必须和碗【同一个相机】—— 用户报过"骰子看着挺清晰，但碗的倾角跟它不一样"。
-       判据：骰子平面的纵向压缩系数（视觉高 ÷ 布局高）应当等于碗口椭圆比例 ry/rx。
-       两者都是"水平面在这个相机下的投影比例"，本该严格相等；
-       之前骰子平面 18°(0.95) 与碗 33.4°(0.55) 差了近一倍，视觉上就是两套透视。 */
+    ok('碗口椭圆高/宽 ≈ cos(骰子倾角) = 0.95（碗与骰子同一个视角）',
+      Math.abs(rimRatio - 0.9511) < 0.02, rimRatio.toFixed(3));
+    /* 骰子平面必须和碗【同一个相机】—— 用户要的就是这个。
+       判据：骰子平面的纵向压缩系数（视觉高 ÷ 布局高）应当等于碗口椭圆比例 ry/rx。 */
     var fieldEl = document.getElementById('dice-field');
     var fieldK = fieldEl.getBoundingClientRect().height / fieldEl.offsetHeight;
     ok('骰子平面与碗口是同一个视角（平面压缩系数 == 碗口椭圆比例，偏差 <0.02）',
       fieldEl.offsetHeight > 0 && Math.abs(fieldK - rimRatio) < 0.02,
       '骰子平面 ' + fieldK.toFixed(3) + ' vs 碗口 ' + rimRatio.toFixed(3));
-    var bodyBB = document.getElementById('bowl-body-path').getBBox();
-    ok('SVG 确实渲染出来了（碗身有实际尺寸）', bodyBB.width > 10 && bodyBB.height > 10,
-      bodyBB.width.toFixed(0) + '×' + bodyBB.height.toFixed(0));
-    var bowlBottom = bodyBB.y + bodyBB.height;
-    /* 碗必须有实实在在的深度，不能是"扁盘子"。
-       判据用【碗最低点到碗口远缘的距离 ÷ 碗口椭圆高】：扁盘子恒为 1.0，真碗明显 >1。
-       以前这里用"碗身在碗口近缘以下的绝对高度 ≥0.15 倍碗宽"—— 那个阈值绑死在 33.4° 的
-       相机仰角上：仰角一高，碗口近缘就往下走，这个差值自然变小，于是会误报"碗成了扁盘"。
-       换成与仰角无关的比值判据才稳。 */
-    var footEl2 = document.getElementById('bowl-foot-el');
-    var footRY2 = Number(footEl2.getAttribute('ry'));
-    var bowlLowest = Math.max(bowlBottom, Number(footEl2.getAttribute('cy')) + footRY2);
-    var silhRatio = (bowlLowest - (rimCY - rimRY)) / (2 * rimRY);
-    ok('碗有实实在在的深度（剪影高 ≥1.10 倍碗口椭圆高；扁盘子恰好 = 1.0）',
-      silhRatio >= 1.10, silhRatio.toFixed(3));
-    ok('圈足在碗口近缘以下露得出来（碗不是一只平底碟）',
-      bowlLowest > rimCY + rimRY + 0.4 * footRY2,
-      '碗最低 y' + bowlLowest.toFixed(1) + ' vs 碗口近缘 y' + (rimCY + rimRY).toFixed(1));
-    var overall = (bowlBottom - (rimCY - rimRY)) / (rimRX * 2);
-    ok('整只碗的高/宽 ∈ [0.62,0.82]（扁碗型：既不是扁盘，也不是深桶）',
-      overall >= 0.62 && overall <= 0.82, overall.toFixed(3));
-    /* 圈足：必须是"只露前缘月牙"——上半圈被碗身盖住。
-       判据三条：绘制顺序（在碗身之前）、椭圆同比（同一视角）、月牙确实露出但没露全。 */
-    var footEl = document.getElementById('bowl-foot-el');
-    ok('圈足元素存在', !!footEl, footEl ? 'ok' : 'missing');
-    if (footEl) {
-      var fRX2 = Number(footEl.getAttribute('rx')), fRY2 = Number(footEl.getAttribute('ry'));
-      var fCY2 = Number(footEl.getAttribute('cy'));
-      ok('圈足椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
-        Math.abs(fRY2 / fRX2 - rimRatio) < 0.02, (fRY2 / fRX2).toFixed(4) + ' vs 碗口 ' + rimRatio.toFixed(4));
-      var svgKids = document.getElementById('bowl-svg').children;
-      var idxFoot = -1, idxBody = -1;
-      for (var sck = 0; sck < svgKids.length; sck++) {
-        if (svgKids[sck].id === 'bowl-foot-el') idxFoot = sck;
-        if (svgKids[sck].id === 'bowl-body-path') idxBody = sck;
-      }
-      ok('圈足画在碗身【之前】（否则整个椭圆都会露出来）',
-        idxFoot >= 0 && idxBody >= 0 && idxFoot < idxBody, 'foot@' + idxFoot + ' body@' + idxBody);
-      var bodyBot2 = document.getElementById('bowl-body-path').getBBox();
-      var bodyLow = bodyBot2.y + bodyBot2.height;
-      ok('圈足上半被碗身盖住（圈足顶 < 碗身底）', fCY2 - fRY2 < bodyLow, (fCY2 - fRY2).toFixed(0) + ' < ' + bodyLow.toFixed(0));
-      ok('圈足前缘确实露出月牙（圈足底 > 碗身底）', fCY2 + fRY2 > bodyLow, (fCY2 + fRY2).toFixed(0) + ' > ' + bodyLow.toFixed(0));
-      var vbH0 = Number((document.getElementById('bowl-svg').getAttribute('viewBox') || '0 0 1000 840').split(/\s+/)[3]) || 840;
-      ok('圈足底没超出 viewBox 下边界', fCY2 + fRY2 <= vbH0, (fCY2 + fRY2).toFixed(0) + ' ≤ ' + vbH0);
+    /* ---- 俯视角（仰角 72°）下的正确性 ----
+       ① 剪影必须就是碗口椭圆本身：外壁/圈足应当被碗口完全挡住。
+          这是投影算出来的结论，不是省事 —— 外壁能露头的条件是
+             depth·cosθ + 该处半径·sinθ > 碗口半径·sinθ，
+          仰角 72° 要满足它得深到 3 倍半径。
+          所以这条一旦变红，说明有人往碗口下面加了会露出来的东西（外壁/圈足）。 */
+    var svgBox = document.getElementById('bowl-svg').getBBox();
+    ok('碗的剪影就是碗口椭圆本身（俯视角下外壁/圈足被碗口挡住，不外露）',
+      Math.abs((svgBox.y + svgBox.height) - (rimCY + rimRY)) < 3,
+      'SVG 最低 y' + (svgBox.y + svgBox.height).toFixed(1) + ' vs 碗口近缘 y' + (rimCY + rimRY).toFixed(1));
+    /* ② 碗唇得是完整的一圈：内腔比碗口小，才留得下金边那一圈唇 */
+    var innerEl = document.getElementById('bowl-inner-el');
+    ok('碗唇是完整一圈（有内腔元素，且内腔半径 < 碗口半径）',
+      !!innerEl && Number(innerEl.getAttribute('rx')) < rimRX,
+      innerEl ? (innerEl.getAttribute('rx') + ' < ' + rimRX) : '缺 bowl-inner-el');
+    ok('内腔椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
+      !!innerEl && Math.abs(Number(innerEl.getAttribute('ry')) / Number(innerEl.getAttribute('rx')) - rimRatio) < 0.02,
+      innerEl ? (Number(innerEl.getAttribute('ry')) / Number(innerEl.getAttribute('rx'))).toFixed(4) + ' vs 碗口 ' + rimRatio.toFixed(4) : '-');
+    if (innerEl) {
+      var lipW = rimRX - Number(innerEl.getAttribute('rx'));
+      ok('碗唇宽度合理（碗口半径的 1.5%~6%）',
+        lipW / rimRX >= 0.015 && lipW / rimRX <= 0.06,
+        lipW + ' / ' + rimRX + ' = ' + (lipW / rimRX * 100).toFixed(2) + '%');
     }
-
     var floorEl = document.getElementById('bowl-floor-el');
     var fRX = Number(floorEl.getAttribute('rx')), fRY = Number(floorEl.getAttribute('ry'));
     var fCY = Number(floorEl.getAttribute('cy'));
@@ -3189,10 +3159,19 @@ window.__game = {
     var floorRatio = fRY / fRX;
     ok('碗底椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
       Math.abs(floorRatio - rimRatio) < 0.02, floorRatio.toFixed(3) + ' vs 碗口 ' + rimRatio.toFixed(3));
+    /* 碗要「看着深」：远端内壁那一圈的可见宽度 ≥ 0.5 倍碗口半高。
+       俯视角下靠这个看出碗的深度（外壁是看不见的，不能用外壁高度判）。 */
+    var bandPx = (fCY - fRY) - (rimCY - rimRY);
+    ok('远端内壁那一圈够宽（≥0.5 倍碗口半高）—— 俯视角下靠它看出碗深',
+      bandPx >= 0.5 * rimRY, bandPx.toFixed(0) + ' vs 门槛 ' + (0.5 * rimRY).toFixed(0));
     /* 往碗里看：碗底心必须在碗口心"下方"（否则成了从下往上看），且要沉下去一点才有深度感 */
     var dropF = (fCY - rimCY) / rimRY;
-    ok('碗底心比碗口心低（沉进碗里），下移量 ∈ [0.10,0.45] 倍碗口半高',
-      dropF >= 0.10 && dropF <= 0.45, dropF.toFixed(3));
+    /* 下沉量【上限】= 用户的直接要求：「底面圆不要太往下了，不然很奇怪」。
+       俯视角下碗底心的屏幕下沉量 = d·cosθ（θ=相机仰角）；它和「远端内壁可见宽度」
+       是同一个量（band = drop + rimRY − floorRY），压不住它就必然是个漏斗。
+       天花板 0.22 倍碗口半高：曾放到 0.45，实测碗底掉到 0.35 时像锥形滤斗。 */
+    ok('碗底心比碗口心低（沉进碗里），下移量 ∈ [0.08,0.22] 倍碗口半高',
+      dropF >= 0.08 && dropF <= 0.22, dropF.toFixed(3) + '（上限 0.22）');
 
     /* ---- 釉面高光的物理正确性 ----
        用户报过"前面的碗边左侧有一些奇怪的灯光，不符合现实透视"。真因有两个：
