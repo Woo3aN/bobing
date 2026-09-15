@@ -129,34 +129,38 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   border-radius:50%;
   background:radial-gradient(closest-side,rgba(0,0,0,.42),rgba(0,0,0,0));pointer-events:none}
 .cube{position:absolute;inset:0;transform-style:preserve-3d}
-/* 骰面：倒角 + 象牙白微渐变，不是一块死白方块 */
+/* 骰面：一条发丝边收边 + 极轻的上下过渡，不做厚重内框。
+   ⚠️ 这里曾经有一条 `inset 0 0 0 3px rgba(255,252,240,.5)` 的白色内框。
+   立方体里总有 1~2 个面几乎侧对镜头（被压成几像素高），
+   那条 3px 内框的上下两条边在那种面上会叠在一起，渲染成一道道的横条纹 ——
+   看起来就是"边缘有锯齿、不精细"。收成 1px 后条纹消失，边缘干净了。 */
 .face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);
-  grid-template-rows:repeat(3,1fr);padding:13%;border-radius:22%;
+  grid-template-rows:repeat(3,1fr);padding:13%;border-radius:17%;
   background:
-    radial-gradient(58% 40% at 30% 15%, rgba(255,255,255,.7) 0%, rgba(255,255,255,0) 70%),
-    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.18) 0%, rgba(150,110,50,0) 72%),
-    linear-gradient(150deg,var(--die-white) 0%, #f8f1e0 44%, #eadfc6 78%, var(--die-white-d) 100%);
+    radial-gradient(58% 40% at 30% 15%, rgba(255,255,255,.62) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.16) 0%, rgba(150,110,50,0) 72%),
+    /* 这条从亮到暗必须【单调】。曾经末段用的是 --die-white-d(#efe2ca)，
+       比它前一档的 #ece2cb 还亮 → 渐变在 80% 处最暗、到角上又亮回来，
+       面上就没有"越靠下越暗"的体积感，看着发平。 */
+    linear-gradient(150deg,#fffdf6 0%,#f8f1e0 44%,#e9dcc0 78%,#dccaa6 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(105,66,20,.28),
-    inset 0 0 0 3px rgba(255,252,240,.5),
-    inset -3px -4px 6px rgba(130,92,36,.28),
-    inset 2px 2px 4px rgba(255,255,255,.9);
+    inset 0 0 0 1px rgba(105,66,20,.30),
+    inset 0 -3px 5px rgba(120,80,34,.24),
+    inset 0 2px 2px rgba(255,255,255,.70);
   backface-visibility:visible}
 .cell{display:grid;place-items:center;width:100%;height:100%}
-/* 点数：真内凹 —— 坑口一圈暗边、坑内有阴影、坑底一点反光 */
-.pip{display:block;width:76%;height:76%;border-radius:50%;
-  background:radial-gradient(circle at 38% 32%,#553d31 0%,#2a170d 58%,#150a04 100%);
+/* 点数：真内凹 —— 坑口一圈细暗边、坑内有阴影、坑底一点反光 */
+.pip{display:block;width:73%;height:73%;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#5a4234 0%,#2c1810 56%,#160b05 100%);
   box-shadow:
-    0 0 0 1px rgba(120,80,30,.25),
-    inset 0 2px 2.5px rgba(0,0,0,.65),
-    inset 0 -1.5px 1.5px rgba(255,255,255,.2),
-    0 .75px .5px rgba(255,255,255,.6)}
+    0 0 0 1px rgba(120,80,30,.28),
+    inset 0 1.5px 2px rgba(0,0,0,.60),
+    inset 0 -1px 1px rgba(255,255,255,.22)}
 .pip.red{background:radial-gradient(circle at 38% 32%,#ffa8a8 0%,#e03028 46%,#9c1114 100%);
   box-shadow:
     0 0 0 1px rgba(140,20,20,.35),
-    inset 0 2px 2.5px rgba(70,0,0,.6),
-    inset 0 -1.5px 1.5px rgba(255,255,255,.28),
-    0 .75px .5px rgba(255,255,255,.55)}
+    inset 0 1.5px 2px rgba(70,0,0,.55),
+    inset 0 -1px 1px rgba(255,255,255,.26)}
 
 /* 结果条 */
 .result{margin:0 auto;width:100%;max-width:560px;min-height:66px;
@@ -543,6 +547,16 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
                 <stop offset="0%" stop-color="#fffdf6" stop-opacity=".62"/>
                 <stop offset="100%" stop-color="#fffdf6" stop-opacity="0"/>
               </linearGradient>
+              <!-- 釉面高光专用的【径向】白：四周收到 0。
+                   为什么不能拿上面那个线性渐变去填椭圆 —— 线性渐变只在上→下方向衰减，
+                   椭圆左右两端会停在渐变中段（≈0.3 不透明度）而不是 0，
+                   于是椭圆轮廓被切出一圈硬边，看起来就是"糊了一块奇怪的灯光"。
+                   径向渐变四周都能收到 0，边缘自然消失，才是釉面反光该有的样子。 -->
+              <radialGradient id="gSheen">
+                <stop offset="0%" stop-color="#fffdf6" stop-opacity="1"/>
+                <stop offset="48%" stop-color="#fffdf6" stop-opacity=".52"/>
+                <stop offset="100%" stop-color="#fffdf6" stop-opacity="0"/>
+              </radialGradient>
             </defs>
             <!-- 圈足：必须画在碗身【之前】—— 这样它的上半圈被碗身盖住，只露出前缘一道月牙。
                  而且椭圆比例 82.59/150 = 0.5506，与碗口(272/494)、碗底(194/352) 是同一个视角。 -->
@@ -557,10 +571,14 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
             <!-- 远端内壁的亮釉带 -->
             <path d="M10,305 A490,268 0 0 1 990,305 A430,200 0 0 0 10,305 Z"
               fill="url(#gGloss)" opacity=".5"/>
-            <!-- 釉面高光（和骰子同一个白）：碗内两处 + 外壁一处 -->
-            <ellipse cx="336" cy="268" rx="148" ry="66" fill="url(#gGloss)" opacity=".42" transform="rotate(-19 336 268)"/>
-            <ellipse cx="632" cy="238" rx="78" ry="36" fill="url(#gGloss)" opacity=".28" transform="rotate(-15 632 238)"/>
-            <ellipse cx="262" cy="486" rx="126" ry="56" fill="url(#gGloss)" opacity=".20" transform="rotate(-27 262 486)"/>
+            <!-- 釉面高光（和骰子同一个白）：只画在【远端】内壁。
+                 光从上方偏前打来 —— 远端内壁的法线朝上、偏向观察者，才是真正反光的地方；
+                 近侧（前面）内壁的法线朝上、偏离观察者，反光背对镜头，本该是暗的。
+                 这里曾经在近侧左下方也糊了一块（cx262 cy486, "外壁一处"），
+                 就是用户报的"前面的碗边左侧有一些奇怪的灯光，不符合现实透视"。
+                 另外 fill 必须用 gSheen（径向）而不是 gGloss（线性），否则椭圆边缘是硬的。 -->
+            <ellipse cx="336" cy="268" rx="148" ry="66" fill="url(#gSheen)" opacity=".42" transform="rotate(-19 336 268)"/>
+            <ellipse cx="632" cy="238" rx="78" ry="36" fill="url(#gSheen)" opacity=".28" transform="rotate(-15 632 238)"/>
             <!-- 碗底（骰子落区）：软边过渡到近侧内壁，一眼看出碗内比碗外深 -->
             <ellipse id="bowl-floor-el" cx="500" cy="378" rx="352" ry="194" fill="url(#gFloor)"/>
             <ellipse cx="500" cy="380" rx="352" ry="194" fill="none" stroke="#3a0406" stroke-width="26" opacity=".16"/>
@@ -1329,10 +1347,28 @@ var FACE_ROT = {
 var diceEls = [];
 var dieSize = 40;
 var DIE_MIN = 22, DIE_MAX = 44;      /* 下限只是兜底：正常都取"碗宽/14"，这样各视口的松紧一致 */
+/* 上一次 buildDice 时的碗宽。手机上滚动页面会让地址栏收起/展开 → 视口高度变 → resize 连发；
+   宽度没变就说明"碗没变"，这时绝不能重排骰子（否则会抽到新的随机位置，看着就是骰子乱动）。 */
+var lastBowlW = 0;
+
+/* resize 时到底要不要重排骰子 —— 只有"碗宽真的变了"才需要。
+   抽成独立函数是为了能被同步断言直接测：真正的处理器挂了 180ms 防抖，探针测不到。
+   ⚠️ 手机上滚动页面时地址栏收起/展开 → 只改视口高度、**不改宽度** →
+   这里必须返回 false。否则每次滚动都会把骰子重排到新的随机位置（用户报的"骰子乱动"）。 */
+function needsRelayout(bowlW) {
+  var w = bowlW || 0;
+  return !!w && w !== lastBowlW;
+}
 
 function norm360(v) { return ((v % 360) + 360) % 360; }
 
-function buildDice() {
+function buildDice(opts) {
+  /* keep=true：只按新尺寸等比还原落位，**不重新随机**。
+     窗口尺寸变化（含手机滚动引起的视口变化）走这条；开局走默认的重新随机。 */
+  var keep = !!(opts && opts.keep);
+  var prev = keep && diceEls.length === 6
+    ? diceEls.map(function (d) { return { nx: d.nx, ny: d.ny, rot: d.rot }; })
+    : null;
   var field = document.getElementById('dice-field');
   if (!field) return;
   var wrapBox = document.getElementById('bowl-wrap') || field;
@@ -1340,6 +1376,7 @@ function buildDice() {
   /* 比例：碗宽 ≈ 14 个骰子宽（用户：比一开始的 7.5 小，但比照图的 20 大，得保证点数看得清） */
   var size = Math.round(Math.min(DIE_MAX, Math.max(DIE_MIN, bowlW / 14)));
   dieSize = size;
+  lastBowlW = bowlW;
   document.documentElement.style.setProperty('--die', size + 'px');
   field.innerHTML = '';
   diceEls = [];
@@ -1377,9 +1414,21 @@ function buildDice() {
     }
     wrap.appendChild(cube);
     field.appendChild(wrap);
-    diceEls.push({ wrap: wrap, cube: cube, x: 0, y: 0, rot: 0, rotX: 0, rotY: 0, x0: 0, y0: 0, rot0: 0 });
+    diceEls.push({ wrap: wrap, cube: cube, x: 0, y: 0, rot: 0, rotX: 0, rotY: 0, x0: 0, y0: 0, rot0: 0, nx: 0, ny: 0 });
   }
-  layoutDice(true);
+  /* 归一化落位还记得住 → 按新椭圆等比还原；否则（开局/首次）重新随机撒一次 */
+  var restored = false;
+  if (prev && isFinite(prev[0].nx) && isFinite(prev[0].ny) &&
+      (prev[0].nx !== 0 || prev[0].ny !== 0)) {
+    for (i = 0; i < diceEls.length; i++) {
+      diceEls[i].nx = prev[i].nx;
+      diceEls[i].ny = prev[i].ny;
+      diceEls[i].rot = prev[i].rot;
+    }
+    applyNormSpots();
+    restored = true;
+  }
+  if (!restored) layoutDice(true);
 }
 
 /* 一颗骰子的 transform。z 默认抬半个边长（让它"坐"在碗底平面上）；
@@ -1494,6 +1543,25 @@ function randomSpots(n) {
   return relaxSpots(pts);
 }
 
+/* 把像素落位换成"相对活动椭圆的归一化坐标"存起来 —— 尺寸变了也能等比还原。
+   归一化是必要的：碗宽一变，同一组像素坐标指向的位置完全不同。 */
+function storeNorm(d) {
+  var ar = diceArea();
+  d.nx = ar.rx ? d.x / ar.rx : 0;
+  d.ny = ar.ry ? (d.y - ar.cy) / ar.ry : 0;
+}
+/* 用当前（可能是新尺寸的）椭圆把归一化坐标还原成像素落位并写出 transform */
+function applyNormSpots() {
+  var ar = diceArea();
+  for (var i = 0; i < diceEls.length; i++) {
+    var d = diceEls[i];
+    d.x = d.nx * ar.rx;
+    d.y = ar.cy + d.ny * ar.ry;
+    d.x0 = d.x; d.y0 = d.y; d.rot0 = d.rot;
+    d.wrap.style.transform = poseStr(d.x, d.y, d.rot);
+  }
+}
+
 /* 摆一次落位（开局、窗口尺寸变化时用），同时把"上一落位"对齐 */
 function layoutDice(instant) {
   var pts = randomSpots(diceEls.length);
@@ -1502,6 +1570,7 @@ function layoutDice(instant) {
     d.x = p.x; d.y = p.y;
     d.rot = Math.round(Math.random() * 36 - 18);
     d.x0 = d.x; d.y0 = d.y; d.rot0 = d.rot;
+    storeNorm(d);
     d.wrap.style.transform = poseStr(d.x, d.y, d.rot);
   }
 }
@@ -1514,6 +1583,7 @@ function planLanding() {
     d.x0 = d.x; d.y0 = d.y; d.rot0 = d.rot;
     d.x = p.x; d.y = p.y;
     d.rot = d.rot0 + (Math.random() < 0.5 ? -1 : 1) * (TWIST_LO + Math.random() * (TWIST_HI - TWIST_LO));
+    storeNorm(d);
   }
 }
 
@@ -2431,7 +2501,14 @@ function bindEvents() {
     clearTimeout(rsz);
     rsz = setTimeout(function () {
       if (document.getElementById('view-table').style.display === 'none') return;
-      buildDice();
+      /* ⚠️ 手机上滚动页面 → 地址栏收起/展开 → 视口高度变化 → resize 连发。
+         这时候碗的宽度根本没变，重排只会让骰子抽到新的随机位置 ——
+         用户报的"滑动界面时碗里的骰子会动、位置变了"就是这个。
+         所以：宽度没变就直接返回，一次 DOM 都不碰。 */
+      var wrapBox = document.getElementById('bowl-wrap');
+      if (!needsRelayout(wrapBox && wrapBox.clientWidth)) return;
+      /* 宽度真的变了（比如横竖屏切换）：重建 DOM，但落位按新尺寸**等比还原**，不重新随机 */
+      buildDice({ keep: true });
       if (state) settle(state.dice, true);
     }, 180);
   });
@@ -2479,6 +2556,7 @@ window.__game = {
   renderStatModal: renderStatModal,
   renderRulesOdds: renderRulesOdds,
   buildDice: buildDice,
+  needsRelayout: needsRelayout,
   settle: settle,
   spinPlan: spinPlan,
   norm360: norm360,
@@ -3086,6 +3164,36 @@ window.__game = {
     var dropF = (fCY - rimCY) / rimRY;
     ok('碗底心比碗口心低（沉进碗里），下移量 ∈ [0.10,0.45] 倍碗口半高',
       dropF >= 0.10 && dropF <= 0.45, dropF.toFixed(3));
+
+    /* ---- 釉面高光的物理正确性 ----
+       用户报过"前面的碗边左侧有一些奇怪的灯光，不符合现实透视"。真因有两个：
+       ① 高光椭圆填的是【线性】渐变 gGloss（只在上→下方向衰减）→ 椭圆左右两端停在
+          渐变中段而不是 0，轮廓被切出硬边，看着就是"糊了一块光"；
+       ② 那块高光画在了【近侧】内壁上 —— 光从上方来，近侧内壁的法线偏离观察者，
+          反光背对镜头，本该是暗的。
+       下面三条把这两点一起钉住。 */
+    var sheenDef = document.getElementById('gSheen');
+    ok('高光专用渐变 gSheen 是【径向】的（线性渐变会把椭圆边缘切成硬边）',
+      !!sheenDef && sheenDef.tagName.toLowerCase() === 'radialgradient',
+      sheenDef ? sheenDef.tagName : '缺失');
+    var glossy = document.querySelectorAll('svg [fill="url(#gGloss)"]');
+    var badGloss = [];
+    for (i = 0; i < glossy.length; i++) {
+      if (glossy[i].tagName.toLowerCase() === 'ellipse') badGloss.push(glossy[i].getAttribute('cx') + ',' + glossy[i].getAttribute('cy'));
+    }
+    ok('没有椭圆再用线性渐变 gGloss 填（椭圆只能用 gSheen，否则边缘是硬的）',
+      badGloss.length === 0, badGloss.join('; '));
+    /* 高光只许出现在【远端】半碗：cy 必须小于碗口中心的 cy */
+    var sheens = document.querySelectorAll('svg [fill="url(#gSheen)"]');
+    var nearSide = [];
+    for (i = 0; i < sheens.length; i++) {
+      var scY = Number(sheens[i].getAttribute('cy'));
+      if (!(scY < rimCY)) nearSide.push(sheens[i].getAttribute('cx') + ',' + scY);
+    }
+    ok('釉面高光只画在远端内壁（近侧内壁反光背离镜头，不该有亮块）',
+      sheens.length > 0 && nearSide.length === 0,
+      '高光 ' + sheens.length + ' 处；跑到近侧的：' + (nearSide.join('; ') || '无'));
+
     /* 骰子落区必须收在碗底那一圈里，不能摊满整只碗（现实中骰子是落在碗底一小块） */
     ok('骰子可活动区收在碗底内圈（≤70% 碗底半轴）',
       AREA_RX_F <= 0.70 && AREA_RY_F <= 0.70, AREA_RX_F + '/' + AREA_RY_F);
@@ -3319,7 +3427,63 @@ window.__game = {
     var ap = Sfx.selftestProbe();
     ok('清脆陶瓷音效（含落定收尾音）合成可用', ap === 'ok' || ap === 'no-audio-context', ap);
     ok('合成音效没有抛错', window.__errors.length === 0, window.__errors.join(' | '));
+
+    testResizeStable();
     ok('探针过程无运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+  }
+
+  /* ---- 窗口尺寸变化时骰子不该乱动 ----
+     真机 bug：手机上滚动页面 → 地址栏收起/展开 → 视口高度变化 → resize 连发 →
+     旧代码无条件 buildDice() 重排 → 骰子被重新随机到新位置。
+     实测（iframe 真手机视口 + dispatch resize，仅改高度）：
+       修复前 骰子最大位移 99.46px；修复后 0px。
+     这条不变量靠三件事守住，逐条断言：
+       ① needsRelayout 只在"碗宽真的变了"时才为 true（滚动只改高度 → false）
+       ② keep 重建走等比还原，不重新随机
+       ③ 普通重建确实会重新随机（用例有效性自检，否则 ② 可能是恒真） */
+  function testResizeStable() {
+    var g = window.__game;
+    g.enterView();
+    g.buildDice();
+    var box = document.getElementById('bowl-wrap');
+    var wNow = box.clientWidth;
+
+    ok('手机滚动那类 resize（碗宽不变）不触发重排',
+      g.needsRelayout(wNow) === false, '同宽 ' + wNow + ' → needsRelayout=' + g.needsRelayout(wNow));
+    ok('碗宽真变了（横竖屏切换）才重排',
+      g.needsRelayout(wNow + 60) === true, '宽 ' + (wNow + 60) + ' → needsRelayout=' + g.needsRelayout(wNow + 60));
+    ok('宽度拿不到时也不重排（不拿 0 去撞随机）',
+      g.needsRelayout(0) === false, 'needsRelayout(0)=' + g.needsRelayout(0));
+
+    /* ② keep 重建：归一化落位必须原样保留（等比还原 != 重新随机） */
+    function normSnap() {
+      return g.diceEls().map(function (d) { return [d.nx, d.ny, d.rot]; });
+    }
+    var b1 = normSnap();
+    g.buildDice({ keep: true });
+    var b2 = normSnap();
+    var kept = b1.length === b2.length && b1.every(function (p, i) {
+      return Math.abs(p[0] - b2[i][0]) < 1e-9 &&
+             Math.abs(p[1] - b2[i][1]) < 1e-9 &&
+             Math.abs(p[2] - b2[i][2]) < 1e-9;
+    });
+    ok('keep 重建后落位不变（骰子不会跳到新位置）',
+      kept, kept ? '6 颗全部原样保留' : '落位被改动了');
+
+    /* ③ 用例有效性：开局路径的普通重建必须真的重新随机。
+       没有这条，② 可能是因为 randomSpots 恰好返回同一组值而恒真。 */
+    var b3 = normSnap();
+    g.buildDice();
+    var b4 = normSnap();
+    var changed = b3.some(function (p, i) {
+      return Math.abs(p[0] - b4[i][0]) > 1e-9 || Math.abs(p[1] - b4[i][1]) > 1e-9;
+    });
+    ok('普通重建（开局路径）确实会重新随机落位 —— 说明上一条的"不变"是有意义的',
+      changed, changed ? '至少一颗换了位置' : '竟然完全没变，用例可能失效');
+
+    /* 收尾：摆到一个合法落位，别把后面的断言带偏 */
+    g.buildDice();
+    if (window.__game.state()) g.settle(window.__game.state().dice, true);
   }
 
   /* ---- 单人挑战：跑完整局 + 统计字段 ---- */
