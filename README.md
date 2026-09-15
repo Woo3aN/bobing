@@ -71,7 +71,7 @@ python -m http.server 8000
 - `?demo=N` —— 直接开一桌 4 人并先博 N 次
 - `?demo=N&solo=1` —— 直接进单人挑战
 - `&open=rules|hist|stat|result` —— 直接打开对应弹层
-- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota` —— 自检探针（8 组共 249 项断言）
+- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota` —— 自检探针（8 组共 251 项断言）
 
 ---
 
