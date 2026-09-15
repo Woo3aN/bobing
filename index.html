@@ -107,20 +107,20 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 /* 完整碗型（照 R.jpg 建的模）：碗口椭圆 + 外壁 + 圈足，整只碗用一只内联 SVG 画。
    SVG viewBox = 1000×840，下面所有 HTML 层的百分比都直接由 viewBox 坐标换算，保证严格对齐。
    比例取自照片：碗口高/宽 ≈ 0.49（抬高视角后取 0.55）、碗口下方碗身 ≈ 0.22 碗宽、整碗高 ≈ 0.76 碗宽。 */
-.bowl-wrap{position:relative;width:100%;aspect-ratio:1000/990;max-width:560px;margin:0 auto;
+.bowl-wrap{position:relative;width:100%;aspect-ratio:1000/1040;max-width:560px;margin:0 auto;
   perspective:1200px;perspective-origin:50% 36%}
 /* 碗在桌上的落影（紧贴碗底，别让碗看着悬空） */
-.bowl-wrap::after{content:"";position:absolute;left:14%;right:14%;bottom:-1%;height:6%;z-index:0;
+.bowl-wrap::after{content:none;position:absolute;left:16%;right:16%;bottom:0;height:6%;z-index:0;
   border-radius:50%;
   background:radial-gradient(closest-side,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
 .bowl-svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;z-index:1}
-/* 骰子落区 = SVG 里碗底椭圆的外接矩形（cx500 cy573.86 rx315.48 ry300.04，viewBox 1000×990）
+/* 骰子落区 = SVG 里碗底椭圆的外接矩形（cx500 cy572.93 rx311.52 ry296.27，viewBox 1000×1040）
    ⚠️ 改了碗底椭圆的任何一个数，这三个百分比都要跟着重算（有断言查"落区与碗底同心"）。 */
-.bowl-inner{position:absolute;left:18.45%;right:18.45%;top:27.66%;bottom:11.73%;z-index:3}
+.bowl-inner{position:absolute;left:18.85%;right:18.85%;top:26.6%;bottom:16.42%;z-index:3}
 /* 骰子落区平面：倾角 18°（用户要的"原版角度"——数值面几乎正对镜头，最好认）。
    ⚠️ 碗口椭圆比例必须 = cos(这个倾角) = 0.9511，这才是"碗和骰子同一个视角"。
-   换算：碗口比例 = sin(相机仰角)，平面压缩系数 = cos(倾角)，相等要求 倾角 = 90° - 仰角。
-   所以 18° 的骰子配的是仰角 72° 的碗 —— 碗口接近正圆、外壁看不见，
+   换算：碗口比例 = sin(相机仰角)，平面压缩系数 = cos(倾角)，相等要求 倾角 = 90° − 仰角。
+   所以 18° 的骰子配的是仰角 72° 的碗 —— 碗口接近正圆、外壁只剩一条月牙，
    这是"同角度"的必然结果，不是取舍失误。 */
 .dice-field{position:absolute;inset:0;perspective:1500px;transform-style:preserve-3d;
   transform:rotateX(18deg);
@@ -406,7 +406,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 @media (max-width:899px){
   #app{padding:10px 10px 22px}
   .layout{grid-template-columns:1fr}
-  .bowl-wrap{aspect-ratio:1000/990;max-width:none}
+  .bowl-wrap{aspect-ratio:1000/1040;max-width:none}
   .log{max-height:170px}
   .players{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .pcard{padding:7px 8px}
@@ -514,80 +514,178 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
       <div class="stage" data-page-node-id="rk6bBL2C3C1l2fYzewU8dF">
         <div class="bowl-wrap" id="bowl-wrap" data-page-node-id="mhDMYkXGAHh0QLIbkuCWf9">
           <!-- 完整碗型：碗口椭圆(494×272 ≈ 1:0.55) + 外壁 + 圈足 + 碗底，整只碗用内联 SVG 画 -->
-          <svg class="bowl-svg" id="bowl-svg" viewBox="0 0 1000 990" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg class="bowl-svg" id="bowl-svg" viewBox="0 0 1000 1040" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
             <defs>
-              <radialGradient id="gOuter" cx="40%" cy="16%" r="92%">
-                <stop offset="0%" stop-color="#ee5a38"/>
-                <stop offset="24%" stop-color="#d92b20"/>
-                <stop offset="60%" stop-color="#b31a16"/>
-                <stop offset="100%" stop-color="#630a0e"/>
+              <!-- 碗唇（滚金边）：径向渐变，亮心在左上 —— 与内腔同一个光源方向。
+                   故意在 58% 处压暗、86% 再回亮：金属滚边只在正对光源的一侧形成亮环，
+                   不是整圈一样亮。但最暗那档也仍是"金"，不能压成褐色，否则唇就没了。 -->
+              <radialGradient id="gLip" cx="38%" cy="16%" r="96%">
+                <stop offset="0%" stop-color="#fffdf6"/>
+                <stop offset="20%" stop-color="#fffbdd"/>
+                <stop offset="42%" stop-color="#fff0b0"/>
+                <stop offset="62%" stop-color="#f8de82"/>
+                <stop offset="80%" stop-color="#eacb62"/>
+                <stop offset="92%" stop-color="#f7e6a4"/>
+                <stop offset="100%" stop-color="#dfb951"/>
               </radialGradient>
-              <radialGradient id="gInner" cx="46%" cy="18%" r="92%">
-                <stop offset="0%" stop-color="#ea5b3d"/>
-                <stop offset="26%" stop-color="#d32c1d"/>
-                <stop offset="60%" stop-color="#a81614"/>
-                <stop offset="88%" stop-color="#6d0a0d"/>
+              <!-- 外壁（碗的外侧）：同一个釉色，但吃不到直射光，整体压暗 -->
+              <linearGradient id="gWall" x1="0" y1="0" x2="0.1" y2="1">
+                <stop offset="0%" stop-color="#b02420"/>
+                <stop offset="30%" stop-color="#931a19"/>
+                <stop offset="62%" stop-color="#711012"/>
+                <stop offset="86%" stop-color="#4e0709"/>
+                <stop offset="100%" stop-color="#340305"/>
+              </linearGradient>
+              <!-- 内壁（远端亮、近端暗）：整片一块竖直渐变，而不是画两块月牙拼起来 ——
+                   拼月牙的话，月牙在 x=±碗底半径 处的竖直切边会留下两道明显的缝。
+                   这里用 clipPath 挖掉碗底那一块，剩下的环带就是"能看见的内壁"。
+                   渐变的关键百分比由几何算出：25.12% 是远端内壁的下边界，
+                   91.12% 是近端内壁的上边界，中间那段反正被碗底盖住。 -->
+              <clipPath id="clipWallBand">
+                <path d="M28,500 A472,448.9 0 0 1 972,500 A472,448.9 0 0 1 28,500 Z"/>
+                <!-- 反向绕行 = 挖洞（nonzero 规则），于是环带正好是 内腔 − 碗底 -->
+                <path d="M188.48,572.93 A311.52,296.27 0 0 0 811.52,572.93 A311.52,296.27 0 0 0 188.48,572.93 Z"/>
+              </clipPath>
+              <linearGradient id="gWallBand" x1="0" y1="0" x2="0.16" y2="1">
+                <stop offset="0%" stop-color="#c23e2a"/>
+                <stop offset="10%" stop-color="#bc3222"/>
+                <stop offset="25.12%" stop-color="#ac261a"/>
+                <stop offset="58%" stop-color="#941a14"/>
+                <stop offset="82%" stop-color="#7a1010"/>
+                <stop offset="91.12%" stop-color="#5a0a0b"/>
+                <stop offset="96%" stop-color="#420608"/>
+                <stop offset="100%" stop-color="#300405"/>
+              </linearGradient>
+              <!-- 内壁上的暖光团：让远端的亮区偏左上，而不是整条横带一样亮 -->
+              <radialGradient id="gFarGlow" cx="29%" cy="10%" r="64%">
+                <stop offset="0%" stop-color="#ffd6bc" stop-opacity=".14"/>
+                <stop offset="55%" stop-color="#ffb08c" stop-opacity=".04"/>
+                <stop offset="100%" stop-color="#ff9c78" stop-opacity="0"/>
+              </radialGradient>
+              <!-- 内腔底色：只在环带没盖到的地方（几乎没有）兜底 -->
+              <radialGradient id="gCav" cx="42%" cy="24%" r="92%">
+                <stop offset="0%" stop-color="#a81f18"/>
+                <stop offset="45%" stop-color="#84100f"/>
+                <stop offset="78%" stop-color="#640a0c"/>
                 <stop offset="100%" stop-color="#4a0507"/>
               </radialGradient>
-              <radialGradient id="gFloor" cx="42%" cy="30%" r="86%">
-                <stop offset="0%" stop-color="#b8241b"/>
-                <stop offset="40%" stop-color="#911412"/>
-                <stop offset="72%" stop-color="#6b0b0d"/>
-                <stop offset="100%" stop-color="#520709"/>
+              <radialGradient id="gFloor" cx="38%" cy="22%" r="92%">
+                <stop offset="0%" stop-color="#b32a1c"/>
+                <stop offset="30%" stop-color="#8e1713"/>
+                <stop offset="56%" stop-color="#6e0d0d"/>
+                <stop offset="78%" stop-color="#560708"/>
+                <stop offset="93%" stop-color="#440406"/>
+                <stop offset="100%" stop-color="#2f0304"/>
               </radialGradient>
-              <radialGradient id="gFoot" cx="50%" cy="22%" r="78%">
-                <stop offset="0%" stop-color="#b01a1f"/>
-                <stop offset="55%" stop-color="#7d0e13"/>
-                <stop offset="100%" stop-color="#4a0507"/>
+              <!-- 碗底那片大而软的反光。刻意【不叫 gSheen】——
+                   gSheen 被"高光只许在远端内壁"那条断言整类盯着，碗底反光不属于那一类。 -->
+              <radialGradient id="gFloorSheen">
+                <stop offset="0%" stop-color="#ffd7c0" stop-opacity=".10"/>
+                <stop offset="55%" stop-color="#ffb492" stop-opacity=".03"/>
+                <stop offset="100%" stop-color="#ff9c78" stop-opacity="0"/>
               </radialGradient>
-              <linearGradient id="gGold" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#ffe6a3"/>
-                <stop offset="28%" stop-color="#e8b84b"/>
-                <stop offset="52%" stop-color="#a97b1c"/>
-                <stop offset="76%" stop-color="#ffe6a3"/>
-                <stop offset="100%" stop-color="#c79a2c"/>
-              </linearGradient>
-              <linearGradient id="gGloss" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fffdf6" stop-opacity=".62"/>
-                <stop offset="100%" stop-color="#fffdf6" stop-opacity="0"/>
-              </linearGradient>
+              <!-- 壁与底交界的接触阴影：中间透明、边缘暗 —— 填一个略大于碗底的椭圆，
+                   就得到一圈没有硬边的软阴影（用描边做会露出一条明显的圆环）。 -->
+              <radialGradient id="gFloorAO">
+                <stop offset="0%" stop-color="#2a0203" stop-opacity="0"/>
+                <stop offset="58%" stop-color="#2a0203" stop-opacity="0"/>
+                <stop offset="80%" stop-color="#2a0203" stop-opacity=".32"/>
+                <stop offset="93%" stop-color="#2a0203" stop-opacity=".38"/>
+                <stop offset="100%" stop-color="#2a0203" stop-opacity=".12"/>
+              </radialGradient>
               <!-- 釉面高光专用的【径向】白：四周收到 0。
-                   为什么不能拿上面那个线性渐变去填椭圆 —— 线性渐变只在上→下方向衰减，
+                   为什么不能拿线性渐变去填椭圆 —— 线性渐变只在上→下方向衰减，
                    椭圆左右两端会停在渐变中段（≈0.3 不透明度）而不是 0，
                    于是椭圆轮廓被切出一圈硬边，看起来就是"糊了一块奇怪的灯光"。
                    径向渐变四周都能收到 0，边缘自然消失，才是釉面反光该有的样子。 -->
               <radialGradient id="gSheen">
                 <stop offset="0%" stop-color="#fffdf6" stop-opacity="1"/>
-                <stop offset="48%" stop-color="#fffdf6" stop-opacity=".52"/>
+                <stop offset="46%" stop-color="#fffdf6" stop-opacity=".52"/>
                 <stop offset="100%" stop-color="#fffdf6" stop-opacity="0"/>
               </radialGradient>
+              <!-- 釉料的细微不匀（窑变斑）：一大块极淡的暖斑。
+                   纯渐变看着像塑料，加一点"不是纯色块"的信息量就够了 ——
+                   浓了就成了污渍，所以只有 .06。 -->
+              <radialGradient id="gMottle">
+                <stop offset="0%" stop-color="#ffc0a4" stop-opacity=".06"/>
+                <stop offset="100%" stop-color="#ffc0a4" stop-opacity="0"/>
+              </radialGradient>
+              <!-- 碗底反弹到近侧内壁上的暖光 -->
+              <radialGradient id="gBounce">
+                <stop offset="0%" stop-color="#ffb08a" stop-opacity=".12"/>
+                <stop offset="60%" stop-color="#e0704a" stop-opacity=".04"/>
+                <stop offset="100%" stop-color="#c85a38" stop-opacity="0"/>
+              </radialGradient>
+              <!-- 口沿内缘那一圈极窄的软阴影：碗唇有厚度，内壁是从唇下面折进去的。
+                   这一圈是"这是个容器"最省事的读法，比任何高光都管用。 -->
+              <!-- 碗唇外缘的收暗：同尺寸椭圆 + 径向渐变。
+                   描边是以几何线为中心向两侧各铺一半，唇一共才 20 多 px 宽，
+                   六七道叠起来就在边缘切出平行条带 —— 用户报的"边缘看着奇怪、不如之前平滑"。
+                   渐变到边缘自然收暗：既读得出圆唇，外轮廓又还是一条干净的边界。 -->
+              <radialGradient id="gLipEdge">
+                <stop offset="0%" stop-color="#6b3f08" stop-opacity="0"/>
+                <stop offset="84%" stop-color="#6b3f08" stop-opacity="0"/>
+                <stop offset="100%" stop-color="#8a5a12" stop-opacity=".12"/>
+              </radialGradient>
+              <!-- 金边落在口沿内壁上的暖倒影，同样只用渐变 -->
+              <radialGradient id="gLipReflect">
+                <stop offset="0%" stop-color="#ffcf8a" stop-opacity="0"/>
+                <stop offset="70%" stop-color="#ffcf8a" stop-opacity="0"/>
+                <stop offset="100%" stop-color="#ffcf8a" stop-opacity=".16"/>
+              </radialGradient>
+              <radialGradient id="gMouthAO">
+                <stop offset="0%" stop-color="#2a0203" stop-opacity="0"/>
+                <stop offset="86%" stop-color="#2a0203" stop-opacity="0"/>
+                <stop offset="100%" stop-color="#2a0203" stop-opacity=".34"/>
+              </radialGradient>
+              <radialGradient id="gShadow">
+                <stop offset="0%" stop-color="#160003" stop-opacity=".55"/>
+                <stop offset="52%" stop-color="#160003" stop-opacity=".26"/>
+                <stop offset="100%" stop-color="#160003" stop-opacity="0"/>
+              </radialGradient>
             </defs>
-            <!-- 相机：仰角 72°（= 90° - 骰子平面倾角 18°），碗口看起来几乎是正圆。
-                 ⚠️ 这个角度下【外壁和圈足都被碗口自己挡住了】—— 一只真实的碗从这么高的角度看，
-                 你只会看到碗口那一圈唇 + 碗内腔。所以这里不画外壁和圈足：画了也在后面看不见。
-                 这不是省事，是投影算出来的：外壁上某点能露头，要满足
-                     depth·cosθ + 该处半径·sinθ  >  碗口半径·sinθ
-                 仰角 72° 时这要求碗深到 3 倍碗口半径 —— 那是花瓶，不是碗。
-                 所以"底座看得见"和"碗与骰子同角度"是互斥的，只能二选一（用户选了后者）。 -->
-            <!-- 碗唇顶面：整块金边，随后被内腔盖住中间，只留下一圈唇 -->
-            <ellipse id="bowl-rim-el" cx="500" cy="500" rx="494" ry="469.82" fill="url(#gGold)"/>
-            <!-- 内腔（内壁） -->
-            <ellipse id="bowl-inner-el" cx="500" cy="500" rx="478" ry="454.61" fill="url(#gInner)"/>
-            <!-- 远端内壁的亮釉带 -->
-            <path d="M14,500 A472,448.61 0 0 1 986,500 A416.05,334.27 0 0 0 14,500 Z"
-              fill="url(#gGloss)" opacity=".5"/>
-            <!-- 釉面高光（和骰子同一个白）：只画在【远端】内壁。
-                 光从上方偏前打来 —— 远端内壁的法线朝上、偏向观察者，才是真正反光的地方；
-                 近侧（前面）内壁的法线朝上、偏离观察者，反光背对镜头，本该是暗的。
-                 fill 必须用 gSheen（径向）而不是 gGloss（线性），否则椭圆边缘是硬的。 -->
-            <ellipse cx="336" cy="438.17" rx="148" ry="110.47"  
-              fill="url(#gSheen)" opacity=".42" transform="rotate(-19 336 438.17)"/>
-            <ellipse cx="632" cy="388.17" rx="78" ry="60.01"  
-              fill="url(#gSheen)" opacity=".28" transform="rotate(-15 632 388.17)"/>
-            <!-- 碗底（骰子落区）：软边过渡到近侧内壁，一眼看出碗内比碗外深 -->
-            <ellipse id="bowl-floor-el" cx="500" cy="573.86" rx="315.48" ry="300.04" fill="url(#gFloor)"/>
-            <ellipse cx="500" cy="575.86" rx="315.48" ry="300.04" fill="none" stroke="#3a0406" stroke-width="26" opacity=".16"/>
-            <path d="M184.52,573.86 A315.48,300.04 0 0 1 815.48,573.86" fill="none" stroke="#2e0305" stroke-width="22" opacity=".26"/>
+            <!-- 相机：仰角 72°（= 90° − 骰子平面倾角 18°），碗口几乎是正圆。
+                 这个角度下【外壁只露出碗口近缘以下一条窄月牙】—— 它比"碗深 3 倍半径"才看得见圈足
+                 现实得多，所以碗身只画这一条；圈足仍被完全挡住，不画。
+                 所有坐标都由投影算出，不是手摆的：推导见 tools/gen_bowl.js 顶部。 -->
+            <!-- 接触阴影：把碗"落"在桌面上。俯视角下它大半被碗自己盖住，只在下方露出一圈。 -->
+            <ellipse id="bowl-contact-shadow" cx="500" cy="980.49" rx="494" ry="62" fill="url(#gShadow)"/>
+            <!-- 外壁月牙：上边界是碗口的【下】半弧，下边界是竖直剖面投影出来的下包络。
+                 它给碗一个"有厚度的筒身"，是俯视角下唯一能看见的碗身。 -->
+            <path id="bowl-wall-path" d="M6,500 A494,469.82 0 0 0 994,500 L994,500 L990.71,561.79 L987.41,585.41 L984.12,603.31 L980.83,618.26 L977.53,631.32 L974.24,643.04 L970.95,653.74 L967.65,663.64 L964.36,672.88 L961.07,681.55 L957.77,689.76 L954.48,697.55 L951.19,704.97 L947.89,712.07 L944.6,718.88 L941.31,725.42 L938.01,731.72 L934.72,737.81 L931.43,743.69 L928.13,749.38 L924.84,754.89 L921.55,760.25 L918.25,765.44 L914.96,770.5 L911.67,775.42 L908.37,780.21 L905.08,784.88 L901.79,789.43 L898.49,793.87 L895.2,798.21 L891.91,802.45 L888.61,806.59 L885.32,810.64 L882.03,814.61 L878.73,818.48 L875.44,822.28 L872.15,826 L868.85,829.64 L865.56,833.21 L862.27,836.71 L858.97,840.13 L855.68,843.5 L852.39,846.79 L849.09,850.03 L845.8,853.2 L842.51,856.32 L839.21,859.38 L835.92,862.38 L832.63,865.33 L829.33,868.22 L826.04,871.06 L822.75,873.86 L819.45,876.6 L816.16,879.29 L812.87,881.94 L809.57,884.54 L806.28,887.09 L802.99,889.6 L799.69,892.07 L796.4,894.49 L793.11,896.88 L789.81,899.22 L786.52,901.52 L783.23,903.78 L779.93,906 L776.64,908.18 L773.35,910.33 L770.05,912.44 L766.76,914.51 L763.47,916.55 L760.17,918.55 L756.88,920.52 L753.59,922.45 L750.29,924.35 L747,926.21 L743.71,928.04 L740.41,929.84 L737.12,931.61 L733.83,933.34 L730.53,935.05 L727.24,936.72 L723.95,938.36 L720.65,939.98 L717.36,941.56 L714.07,943.11 L710.77,944.64 L707.48,946.13 L704.19,947.6 L700.89,949.04 L697.6,950.45 L694.31,951.83 L691.01,953.18 L687.72,954.51 L684.43,955.81 L681.13,957.08 L677.84,958.33 L674.55,959.55 L671.25,960.75 L667.96,961.92 L664.67,963.06 L661.37,964.18 L658.08,965.27 L654.79,966.34 L651.49,967.38 L648.2,968.4 L644.91,969.39 L641.61,970.36 L638.32,971.31 L635.03,972.23 L631.73,973.12 L628.44,974 L625.15,974.85 L621.85,975.67 L618.56,976.47 L615.27,977.25 L611.97,978.01 L608.68,978.74 L605.39,979.45 L602.09,980.14 L598.8,980.8 L595.51,981.44 L592.21,982.06 L588.92,982.66 L585.63,983.23 L582.33,983.78 L579.04,984.31 L575.75,984.82 L572.45,985.3 L569.16,985.76 L565.87,986.21 L562.57,986.62 L559.28,987.02 L555.99,987.4 L552.69,987.75 L549.4,988.08 L546.11,988.39 L542.81,988.68 L539.52,988.95 L536.23,989.2 L532.93,989.42 L529.64,989.62 L526.35,989.8 L523.05,989.96 L519.76,990.1 L516.47,990.22 L513.17,990.32 L509.88,990.39 L506.59,990.44 L503.29,990.48 L500,990.49 L496.71,990.48 L493.41,990.44 L490.12,990.39 L486.83,990.32 L483.53,990.22 L480.24,990.1 L476.95,989.96 L473.65,989.8 L470.36,989.62 L467.07,989.42 L463.77,989.2 L460.48,988.95 L457.19,988.68 L453.89,988.39 L450.6,988.08 L447.31,987.75 L444.01,987.4 L440.72,987.02 L437.43,986.62 L434.13,986.21 L430.84,985.76 L427.55,985.3 L424.25,984.82 L420.96,984.31 L417.67,983.78 L414.37,983.23 L411.08,982.66 L407.79,982.06 L404.49,981.44 L401.2,980.8 L397.91,980.14 L394.61,979.45 L391.32,978.74 L388.03,978.01 L384.73,977.25 L381.44,976.47 L378.15,975.67 L374.85,974.85 L371.56,974 L368.27,973.12 L364.97,972.23 L361.68,971.31 L358.39,970.36 L355.09,969.39 L351.8,968.4 L348.51,967.38 L345.21,966.34 L341.92,965.27 L338.63,964.18 L335.33,963.06 L332.04,961.92 L328.75,960.75 L325.45,959.55 L322.16,958.33 L318.87,957.08 L315.57,955.81 L312.28,954.51 L308.99,953.18 L305.69,951.83 L302.4,950.45 L299.11,949.04 L295.81,947.6 L292.52,946.13 L289.23,944.64 L285.93,943.11 L282.64,941.56 L279.35,939.98 L276.05,938.36 L272.76,936.72 L269.47,935.05 L266.17,933.34 L262.88,931.61 L259.59,929.84 L256.29,928.04 L253,926.21 L249.71,924.35 L246.41,922.45 L243.12,920.52 L239.83,918.55 L236.53,916.55 L233.24,914.51 L229.95,912.44 L226.65,910.33 L223.36,908.18 L220.07,906 L216.77,903.78 L213.48,901.52 L210.19,899.22 L206.89,896.88 L203.6,894.49 L200.31,892.07 L197.01,889.6 L193.72,887.09 L190.43,884.54 L187.13,881.94 L183.84,879.29 L180.55,876.6 L177.25,873.86 L173.96,871.06 L170.67,868.22 L167.37,865.33 L164.08,862.38 L160.79,859.38 L157.49,856.32 L154.2,853.2 L150.91,850.03 L147.61,846.79 L144.32,843.5 L141.03,840.13 L137.73,836.71 L134.44,833.21 L131.15,829.64 L127.85,826 L124.56,822.28 L121.27,818.48 L117.97,814.61 L114.68,810.64 L111.39,806.59 L108.09,802.45 L104.8,798.21 L101.51,793.87 L98.21,789.43 L94.92,784.88 L91.63,780.21 L88.33,775.42 L85.04,770.5 L81.75,765.44 L78.45,760.25 L75.16,754.89 L71.87,749.38 L68.57,743.69 L65.28,737.81 L61.99,731.72 L58.69,725.42 L55.4,718.88 L52.11,712.07 L48.81,704.97 L45.52,697.55 L42.23,689.76 L38.93,681.55 L35.64,672.88 L32.35,663.64 L29.05,653.74 L25.76,643.04 L22.47,631.32 L19.17,618.26 L15.88,603.31 L12.59,585.41 L9.29,561.79 L6,500 Z" fill="url(#gWall)"/>
+            <ellipse id="bowl-rim-el" cx="500" cy="500" rx="494" ry="469.82" fill="url(#gLip)"/>
+            <!-- 碗唇上的金属高光：金是镜面反射，亮点小而锐 -->
+            <ellipse cx="243.12" cy="255.69" rx="98.8" ry="33.83" data-role="lip-specular" fill="url(#gSheen)" opacity=".42"
+              transform="rotate(-26 243.12 255.69)"/>
+            <!-- 碗唇外缘的收暗：同尺寸椭圆 + 径向渐变，不用描边（理由见 defs 里的 gLipEdge） -->
+            <ellipse data-role="lip-edge-shade" cx="500" cy="500" rx="494" ry="469.82" fill="url(#gLipEdge)"/>
+            <ellipse id="bowl-inner-el" cx="500" cy="500" rx="472" ry="448.9" fill="url(#gCav)"/>
+            <!-- 窑变斑：一块极淡的暖斑，破掉纯渐变的塑料感 -->
+            <ellipse cx="377.28" cy="365.33" rx="330.4" ry="206.49" fill="url(#gMottle)"/>
+            <!-- 能看见的内壁 = 内腔 − 碗底（clipWallBand 挖掉碗底）。
+                 一块竖直渐变铺满，所以远端的亮和近端的暗是同一条渐变的两头，中间不会有接缝。 -->
+            <g clip-path="url(#clipWallBand)">
+              <rect x="28" y="51.1" width="944" height="897.8" fill="url(#gWallBand)"/>
+              <!-- 亮区偏左上（光源方向），否则整条横带一样亮，看着像滤镜 -->
+              <ellipse cx="500" cy="500" rx="472" ry="448.9" fill="url(#gFarGlow)"/>
+              <ellipse cx="537.38" cy="845.5" rx="236.76" ry="88.88" fill="url(#gBounce)"/>
+              <ellipse cx="500" cy="500" rx="472" ry="448.9" fill="url(#gMouthAO)"/>
+            </g>
+            <!-- 金边在内壁上的倒影：釉面是亮的，口沿的金色会映在下方的内壁上。
+                 同样只用渐变（径向、贴到口沿才亮），不用描边。 -->
+            <g clip-path="url(#clipWallBand)">
+              <ellipse cx="500" cy="500" rx="472" ry="448.9" fill="url(#gLipReflect)"/>
+            </g>
+            <!-- 碗底（骰子落区）。壁与底交界的接触阴影：中间透明、边缘暗的软环 -->
+            <ellipse cx="500" cy="572.93" rx="337.52" ry="322.27" fill="url(#gFloorAO)"/>
+            <ellipse id="bowl-floor-el" cx="500" cy="572.93" rx="311.52" ry="296.27" fill="url(#gFloor)"/>
+            <!-- 碗底那片大而软的反光 -->
+            <ellipse cx="456.39" cy="531.45" rx="274.14" ry="248.87" fill="url(#gFloorSheen)"/>
+            <!-- 釉面高光：只画在【远端】内壁的左上半（光源方向）。
+                 近侧内壁的法线偏离观察者，反光背对镜头，本该是暗的 —— 那里出现亮块就是假的。
+                 fill 必须是 gSheen（径向）而不是线性，否则椭圆边缘是硬的。 -->
+            <ellipse cx="330.08" cy="221.68" rx="188.8" ry="76.31" data-role="glaze-specular" fill="url(#gSheen)" opacity=".12" transform="rotate(-18 330.08 221.68)"/>
+            <ellipse cx="311.2" cy="257.59" rx="94.4" ry="33.67" data-role="glaze-specular" fill="url(#gSheen)" opacity=".20" transform="rotate(-18 311.2 257.59)"/>
           </svg>
           <div class="bowl-inner" id="bowl-inner" data-page-node-id="Ps9GtvwU84fv88Q0QbCieA">
             <div class="dice-field" id="dice-field" data-page-node-id="WuojffUJBFESOdUle87xNX"></div>
@@ -3124,24 +3222,97 @@ window.__game = {
     ok('骰子平面与碗口是同一个视角（平面压缩系数 == 碗口椭圆比例，偏差 <0.02）',
       fieldEl.offsetHeight > 0 && Math.abs(fieldK - rimRatio) < 0.02,
       '骰子平面 ' + fieldK.toFixed(3) + ' vs 碗口 ' + rimRatio.toFixed(3));
-    /* ---- 俯视角（仰角 72°）下的正确性 ----
-       ① 剪影必须就是碗口椭圆本身：外壁/圈足应当被碗口完全挡住。
-          这是投影算出来的结论，不是省事 —— 外壁能露头的条件是
-             depth·cosθ + 该处半径·sinθ > 碗口半径·sinθ，
-          仰角 72° 要满足它得深到 3 倍半径。
-          所以这条一旦变红，说明有人往碗口下面加了会露出来的东西（外壁/圈足）。 */
+    /* ---- 俯视角（仰角 72°）下碗型的正确性 ----
+       ① 剪影 = 碗口椭圆 + 下缘一条外壁月牙。
+          外壁能露出的高度上限 = 碗深·cosθ；圈足要露头则需碗深 > 3 倍半径。
+          所以俯视角下只该有这一条窄月牙 —— 多出来的东西都是算错的。 */
     var svgBox = document.getElementById('bowl-svg').getBBox();
-    ok('碗的剪影就是碗口椭圆本身（俯视角下外壁/圈足被碗口挡住，不外露）',
-      Math.abs((svgBox.y + svgBox.height) - (rimCY + rimRY)) < 3,
-      'SVG 最低 y' + (svgBox.y + svgBox.height).toFixed(1) + ' vs 碗口近缘 y' + (rimCY + rimRY).toFixed(1));
-    /* ② 碗唇得是完整的一圈：内腔比碗口小，才留得下金边那一圈唇 */
     var innerEl = document.getElementById('bowl-inner-el');
+    var wallEl = document.getElementById('bowl-wall-path');
+    var wallBB = wallEl ? wallEl.getBBox() : null;
+    ok('外壁月牙存在（俯视角下它是唯一能看见的碗身）', !!wallBB);
+    if (wallBB) {
+      var wallBot = wallBB.y + wallBB.height;
+      var sliverPx = wallBot - (rimCY + rimRY);
+      ok('外壁露出的高度 ∈ [0.015,0.075] 倍碗口半高（再高就不是这个视角了）',
+        sliverPx / rimRY >= 0.015 && sliverPx / rimRY <= 0.075,
+        sliverPx.toFixed(1) + ' / ' + rimRY.toFixed(1) + ' = ' + (sliverPx / rimRY).toFixed(3));
+      ok('外壁月牙不比碗口宽（俯视角下碗的横向轮廓就是碗口本身）',
+        Math.abs(wallBB.width - 2 * rimRX) < 3,
+        wallBB.width.toFixed(1) + ' vs ' + (2 * rimRX));
+      /* 碗体不许伸到外壁月牙以下 —— 俯视角看不见那么深，伸出来就是算错了。
+         只放行接触阴影：它本来就该铺在碗底下。
+         （注意不能拿整个 SVG 的 getBBox 比：它把接触阴影也算进去。） */
+      var over = [];
+      Array.prototype.forEach.call(document.querySelectorAll('#bowl-svg ellipse, #bowl-svg path, #bowl-svg rect'), function (e) {
+        if (e.id === 'bowl-contact-shadow') return;
+        var bb = e.getBBox();
+        if (bb.y + bb.height > wallBot + 2) over.push((e.id || e.tagName) + "@" + (bb.y + bb.height).toFixed(0));
+      });
+      ok('碗体没有延伸到外壁月牙以下（俯视角看不见那么深，伸出来就是算错的）',
+        over.length === 0, over.join('; ') || 'ok');
+    }
+    /* ② 碗唇得是完整的一圈：内腔比碗口小，才留得下那一圈唇 */
     ok('碗唇是完整一圈（有内腔元素，且内腔半径 < 碗口半径）',
       !!innerEl && Number(innerEl.getAttribute('rx')) < rimRX,
       innerEl ? (innerEl.getAttribute('rx') + ' < ' + rimRX) : '缺 bowl-inner-el');
     ok('内腔椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
       !!innerEl && Math.abs(Number(innerEl.getAttribute('ry')) / Number(innerEl.getAttribute('rx')) - rimRatio) < 0.02,
       innerEl ? (Number(innerEl.getAttribute('ry')) / Number(innerEl.getAttribute('rx'))).toFixed(4) + ' vs 碗口 ' + rimRatio.toFixed(4) : '-');
+    /* ③ 碗唇必须画出滚边的明暗：外缘亮/暗 + 内缘亮/暗。
+          平贴的色环没有厚度，看着就是一张贴纸。 */
+    var shadeEl = document.querySelector('#bowl-svg [data-role="lip-edge-shade"]');
+    ok('碗唇的外缘有一圈柔和收暗（滚边不是平贴的色环）', !!shadeEl);
+    /* 轮廓必须干净：碗只用【填充】画，一条描边都不许有。
+       描边以几何线为中心向两侧各铺一半，而碗唇一共才 20 多 px 宽 ——
+       六七道描边叠上去就在边缘切出好几条平行条带，
+       这就是用户报的"边缘看着有点奇怪、不如之前平滑"。 */
+    var stroked = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#bowl-svg ellipse, #bowl-svg path, #bowl-svg rect'), function (e) {
+      var st = e.getAttribute('stroke');
+      if (st && st !== 'none') stroked.push(e.id || e.getAttribute('data-role') || e.tagName);
+    });
+    ok('碗只用填充画出来，一条描边都没有（描边会把干净的外轮廓切成多层平行条带）',
+      stroked.length === 0, stroked.join('; ') || 'ok');
+    /* 外轮廓就是碗口椭圆本身：没有任何元素画到它外面去。
+       （接触阴影允许在下面，它由"碗体没有延伸到月牙以下"那条单独管。） */
+    var outside = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#bowl-svg ellipse, #bowl-svg path, #bowl-svg rect'), function (e) {
+      if (e.id === 'bowl-contact-shadow') return;
+      var bb = e.getBBox();
+      if (bb.x < rimCX - rimRX - 1.5 || bb.x + bb.width > rimCX + rimRX + 1.5 || bb.y < rimCY - rimRY - 1.5) {
+        outside.push((e.id || e.tagName) + ' [' + bb.x.toFixed(0) + '..' + (bb.x + bb.width).toFixed(0) + ']');
+      }
+    });
+    ok('没有任何元素画到碗口椭圆之外（外轮廓保持一条干净的边界）',
+      outside.length === 0, outside.join('; ') || 'ok');
+    /* ④ 碗不能悬空：下方要有接触阴影 */
+    var shEl = document.getElementById('bowl-contact-shadow');
+    ok('碗下方有接触阴影（碗不悬空）',
+      !!shEl && Number(shEl.getAttribute('cy')) > rimCY,
+      shEl ? ('cy=' + shEl.getAttribute('cy')) : '缺 bowl-contact-shadow');
+    /* ⑤ 光源方向自洽：釉面高光只允许在远端内壁的【左】上半。
+          光源在左上 —— 右下出现高光就是反了。 */
+    var specs = document.querySelectorAll('#bowl-svg [data-role="glaze-specular"]');
+    var wrongSide = [];
+    for (i = 0; i < specs.length; i++) {
+      var sx = Number(specs[i].getAttribute('cx')), sy = Number(specs[i].getAttribute('cy'));
+      if (!(sx < rimCX) || !(sy < rimCY)) wrongSide.push(sx + ',' + sy);
+    }
+    ok('釉面高光都在远端内壁的左上半（光源在左上）', specs.length >= 2 && wrongSide.length === 0,
+      '高光 ' + specs.length + ' 处；跑到右下的：' + (wrongSide.join('; ') || '无'));
+    /* ⑥ 填充椭圆的渐变必须都是【径向】的。
+          线性渐变只在一个方向衰减，椭圆的另外两端会停在渐变中段而不是 0，
+          轮廓被切出硬边 —— 用户报过"前面碗边有奇怪的灯光"。 */
+    (function () {
+      var linIds = {}, offside = [];
+      Array.prototype.forEach.call(document.querySelectorAll('#bowl-svg linearGradient'), function (g) { linIds[g.id] = 1; });
+      Array.prototype.forEach.call(document.querySelectorAll('#bowl-svg ellipse'), function (e) {
+        var mm = /url\(#([^)]+)\)/.exec(e.getAttribute('fill') || '');
+        if (mm && linIds[mm[1]]) offside.push(e.id || e.getAttribute('fill'));
+      });
+      ok('没有椭圆用线性渐变填充（椭圆一律用径向，否则边缘是硬的）', offside.length === 0, offside.join(' ') || 'ok');
+    })();
     if (innerEl) {
       var lipW = rimRX - Number(innerEl.getAttribute('rx'));
       ok('碗唇宽度合理（碗口半径的 1.5%~6%）',
@@ -3160,7 +3331,7 @@ window.__game = {
     ok('碗底椭圆与碗口椭圆同比（同一视角，偏差 <0.02）',
       Math.abs(floorRatio - rimRatio) < 0.02, floorRatio.toFixed(3) + ' vs 碗口 ' + rimRatio.toFixed(3));
     /* 碗要「看着深」：远端内壁那一圈的可见宽度 ≥ 0.5 倍碗口半高。
-       俯视角下靠这个看出碗的深度（外壁是看不见的，不能用外壁高度判）。 */
+       俯视角下靠这个看出碗的深度（外壁只露一条月牙，不能用外壁高度判）。 */
     var bandPx = (fCY - fRY) - (rimCY - rimRY);
     ok('远端内壁那一圈够宽（≥0.5 倍碗口半高）—— 俯视角下靠它看出碗深',
       bandPx >= 0.5 * rimRY, bandPx.toFixed(0) + ' vs 门槛 ' + (0.5 * rimRY).toFixed(0));
