@@ -69,7 +69,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .tbtn.on{background:rgba(232,184,75,.22);border-color:var(--gold);color:var(--gold-l)}
 
 /* 阶段横幅 */
-.phasebar{display:grid;grid-template-columns:1fr auto;grid-template-areas:"who act" "meta ." "auto auto";gap:6px 10px;align-items:start;
+.phasebar{display:grid;grid-template-columns:1fr auto;grid-template-areas:"who act" "meta ." "au au";gap:6px 10px;align-items:start;
   background:var(--panel);border:1px solid var(--panel-b);border-radius:14px;
   padding:9px 13px;margin-bottom:12px;backdrop-filter:blur(6px)}
 .phasebar .who{font-size:14.5px;font-weight:700}
@@ -87,9 +87,10 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .phasebar .phase-act .tbtn{white-space:nowrap}
 /* 自动模式：状态栏第三行整行。左＝启停，右＝三档速度。
    为什么单独占一行：三段速度是个分段控件，跟胶囊挤在第二行在 320px 上会溢出。 */
-.phasebar .auto-act{grid-area:auto;display:flex;align-items:center;justify-content:space-between;
+.phasebar .auto-act{grid-area:au;display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;row-gap:5px;
   gap:8px;min-width:0;padding-right:6px;padding-top:6px;border-top:1px dashed var(--panel-b)}
-.phasebar .auto-act .auto-btns{display:flex;align-items:center;gap:6px;min-width:0}
+.phasebar .auto-act .auto-btns{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 .phasebar .auto-act .tbtn{white-space:nowrap}
 .phasebar .auto-act .tbtn.running{border-color:var(--gold);background:rgba(232,184,75,.22);color:var(--gold-l)}
 .phasebar .auto-speed{display:flex;flex:0 0 auto;border:1px solid var(--panel-b);border-radius:999px;overflow:hidden}
@@ -449,7 +450,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   /* 右列定宽 76px（按钮正好放得下）→ 左侧文字区宽度恒定，状态栏高度只由"行数"决定。
      who 在手机上允许折成 2 行（不再 ellipsis 截断），高度变化只发生在"换名字"这一刻，
      而不会因为"秒表数字多了一位"这种小事去挤动版面。 */
-  .phasebar{padding:8px 10px;gap:5px 8px;grid-template-columns:minmax(0,1fr) 76px;grid-template-areas:"who act" "meta ." "auto auto";align-items:start}
+  .phasebar{padding:8px 10px;gap:5px 8px;grid-template-columns:minmax(0,1fr) 76px;grid-template-areas:"who act" "meta ." "au au";align-items:start}
   .phasebar .who{font-size:13.5px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}
   .phasebar .who em{font-size:14.5px}
   .phasebar .pill{font-size:11px;padding:2px 7px}
@@ -461,7 +462,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   .brand b{font-size:17px}
   /* 窄屏（iPhone SE 375 / 360 安卓）再收一档：胶囊字号降一级，右列不变。
      右列不变是关键 —— 变的是左列文字，行数变化不牵动按钮位置。 */
-  .phasebar{grid-template-columns:minmax(0,1fr) 76px;padding:7px 9px;grid-template-areas:"who act" "meta ." "auto auto";align-items:start}
+  .phasebar{grid-template-columns:minmax(0,1fr) 76px;padding:7px 9px;grid-template-areas:"who act" "meta ." "au au";align-items:start}
   .phasebar .who{font-size:12.5px}
   .phasebar .who em{font-size:13.5px}
   .phasebar .pill{font-size:10px;padding:2px 6px}
@@ -531,9 +532,9 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
           <button class="tbtn" id="btn-auto-stop" style="display:none" title="退出自动模式（局面保留）">■ 停止</button>
         </span>
         <span class="auto-speed" id="auto-speed" role="group" aria-label="自动模式速度">
-          <button class="sp" data-sp="0" title="慢：约 2.4 秒一次">慢</button>
-          <button class="sp" data-sp="1" title="中：约 1.5 秒一次">中</button>
-          <button class="sp" data-sp="2" title="快：约 0.4 秒一次（跳过骰子动画）">快</button>
+          <button class="sp" data-sp="0" title="慢：约 2.2 秒一次">慢</button>
+          <button class="sp" data-sp="1" title="中：约 1.3 秒一次">中</button>
+          <button class="sp" data-sp="2" title="快：约 0.5 秒一次（跳过骰子动画）">快</button>
         </span>
       </div>
     </div>
@@ -764,7 +765,7 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
 <div class="modal" id="modal-rules" data-page-node-id="ByhvSqYzEz9UkPzPNvPeXG">
   <div class="sheet" data-page-node-id="UB9rkZJDUUAakTJ0Af4o0e">
     <h2 data-page-node-id="N2OzmTxVOJ4Qkby53GwbtX">博饼规则 <button class="x" data-close data-page-node-id="aLiPGnp0kDI9QCBKjB7NyF">×</button></h2>
-    <p data-page-node-id="AY518gOQ83EQGlPn4MUD5o">六颗骰子丢进大碗，看红四点（4 点）的多少定科名。本级奖项发完了就<b data-page-node-id="BhHGevB4BfT3CalqSqYi7i">空手</b>，不作他用；<b data-page-node-id="wy7EYeoacozH1CZHeECtGv">状元只有一块，随时可能被更大的状元夺走</b>。</p>
+    <p data-page-node-id="AY518gOQ83EQGlPn4MUD5o">六颗骰子丢进大碗，看红四点（4 点）的多少定科名。本级奖项发完了就<b data-page-node-id="BhHGevB4BfT3CalqSqYi7i">空手</b>，不作他用；<b data-page-node-id="wy7EYeoacozH1CZHeECtGv">状元只有一块，以各人最后博出的状元为准</b>——自己再博出更小的也会降级，此时别人早前博出的更大就能拿走。</p>
     <h4 data-page-node-id="ZReUxAoeVia88m9nAblvZZ">奖项一览（由大到小）</h4>
     <div class="rtable" id="rules-table" data-page-node-id="ZjZlt8hiRm2oXT7VIRqXf9"></div>
     <p class="rules-note" id="rules-odds-note">表里的概率是<b>这个等级</b>的合计概率，单个骰面组合都是
@@ -1220,7 +1221,7 @@ var GAME_TIMER = null;     /* 全局秒表（每秒刷新一次状态栏里的�
 var SKIP = null;           /* 动画进行中：点一下就能跳过（下一把不用干等） */
 /* spin: 抛掷动画总时长；after: 落定后再等多久才解锁。
    从 1600+220 收到 1150+140 —— 一轮少等约 0.5 秒，一局几十轮就是十几秒。 */
-var TIMING = { spin: 1150, after: 140, jitter: 0 };   /* 六颗同时抛出（轨迹由物理模拟给出，没有逐颗延迟） */
+var TIMING = { spin: 1000, after: 140, jitter: 0 };   /* 六颗同时抛出（轨迹由物理模拟给出，没有逐颗延迟） */
 
 /* ============================================================================
    自动模式：不用一直手点「博一次」
@@ -1232,8 +1233,8 @@ var TIMING = { spin: 1150, after: 140, jitter: 0 };   /* 六颗同时抛出（�
    - 打开规则 / 战绩 / 概率弹层时照常继续（用户明确要的）
    ============================================================================ */
 var AUTO_SPEEDS = [
-  { label: '慢', gap: 1100, cut: 0 },   /* 等动画播完，再等 1.1s  */
-  { label: '中', gap: 250,  cut: 0 },   /* 等动画播完，再等 0.25s */
+  { label: '慢', gap: 1100, cut: 0 },   /* 等动画播完，再等 1.1s（spin 1000 后整把 ≈2.2s） */
+  { label: '中', gap: 150,  cut: 0 },   /* 等动画播完，再等 0.15s（用户：中速加快一点点） */
   { label: '快', gap: 340,  cut: 90 }   /* 起动画后 90ms 切到落定，再等 0.34s */
 ];
 var autoSpeedIdx = 1;        /* 速度是使用偏好，跨局保留（不算局面状态） */
@@ -1340,6 +1341,7 @@ function newGame(cfg) {
     return {
       id: i, name: p.name || ('玩家' + (i + 1)), av: p.av || AVATARS[i % AVATARS.length],
       cakes: { zhuangyuan: 0, duitang: 0, sanhong: 0, sijin: 0, erju: 0, yixiu: 0 },
+      zyLast: null,             /* 该玩家最后博出的状元（规则：以此为准，可被自己降级） */
       rolls: 0, best: null
     };
   });
@@ -1463,44 +1465,52 @@ function applyRoll(pIdx, dice, grade) {
   };
 
   if (grade.zy) {
-    if (state.zyHolder === null) {
-      state.zyHolder = p.id; state.zyGrade = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label };
-      state.zyDice = dice.slice();
-      p.cakes.zhuangyuan = 1;
-      entry.action = '得状元'; entry.cls = 'g-zy';
+    /* 规则（2026-09-16 用户定）：以每个人【最后博出】的状元为准 ——
+       自己再博出更小的也算，状元降级；此时别人早前博的更大，状元就归别人。
+       多人之间比较的就是各自最后博出的那个。每次有人博出状元，
+       就从所有人的「最后状元」里重算归属（严格大于才换人，平局保留原主）。 */
+    var prevHolder = state.zyHolder === null ? null : state.players[state.zyHolder];
+    var prevLabel = state.zyGrade ? state.zyGrade.label : null;
+    var wasHolder = prevHolder !== null && prevHolder.id === p.id;   /* ⚠️ prevHolder 是对象，别拿它直接比 p.id */
+    var selfUp = wasHolder && state.zyGrade ? compareGrade(grade, state.zyGrade) : 0;
+    p.zyLast = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label, dice: dice.slice(),
+      seq: state.rollCount + 1 };   /* 平手裁决用：同级平手时先博者保留 */
+    var bestP = null, bestG = null;
+    for (var zi = 0; zi < state.players.length; zi++) {
+      var pl = state.players[zi];
+      if (!pl.zyLast) continue;
+      var cg = compareGrade(pl.zyLast, bestG);
+      if (!bestG || cg > 0 ||
+          (cg === 0 && pl.zyLast.seq < bestG.seq)) { bestG = pl.zyLast; bestP = pl; }
+    }
+    var isHolder = !!bestP && bestP.id === p.id;
+    state.zyHolder = bestP ? bestP.id : null;
+    state.zyGrade = bestG ? { tier: bestG.tier, kicker: bestG.kicker, name: bestG.name, label: bestG.label } : null;
+    state.zyDice = bestP ? bestP.zyLast.dice : null;
+    for (zi = 0; zi < state.players.length; zi++)
+      state.players[zi].cakes.zhuangyuan = (bestP && state.players[zi].id === bestP.id) ? 1 : 0;
+    entry.cls = 'g-zy'; entry.sound = 'fanfare';
+    if (prevHolder === null) {
+      entry.action = '得状元';
       entry.msg = '博得状元！' + grade.label;
       if (state.mode === 'solo') state.solo.firstZyRoll = state.rollCount + 1;   /* 第几把博出状元 */
-      entry.sound = 'fanfare';
-    } else if (state.zyHolder === p.id) {
-      var selfCmp = compareGrade(grade, state.zyGrade);
-      if (selfCmp > 0) {
-        state.zyGrade = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label };
-        state.zyDice = dice.slice();
-      }
-      entry.action = '稳状元'; entry.cls = 'g-zy';
-      entry.msg = '又博出' + grade.name + '，状元仍是自己的' + (selfCmp > 0 ? '（把自己的状元成绩又刷新高了）' : '');
-      if (selfCmp > 0 && state.mode === 'solo') state.solo.zyRefresh++;         /* 自己刷新状元成绩的次数 */
-      entry.sound = 'fanfare';
+    } else if (isHolder && wasHolder) {
+      entry.action = '稳状元';
+      entry.msg = selfUp > 0
+        ? '又博出' + grade.name + '，把自己的状元成绩刷新为「' + grade.label + '」'
+        : '又博出' + grade.name + '（' + grade.label + '），比上次的小，状元降级 —— 仍是全场最大，保住了';
+      if (selfUp > 0 && state.mode === 'solo') state.solo.zyRefresh++;         /* 自己刷新状元成绩的次数 */
+    } else if (isHolder) {
+      state.zyStealCount++;
+      entry.action = '夺状元';
+      entry.msg = '以「' + grade.label + '」夺走了 ' + prevHolder.name + ' 的状元！';
+    } else if (wasHolder) {
+      entry.action = '失状元';
+      entry.msg = '又博出' + grade.name + '（' + grade.label + '），自己的状元降级 —— ' +
+        bestP.name + ' 早前博出的「' + bestG.label + '」更大，状元归 ' + bestP.name;
     } else {
-      var old = state.players[state.zyHolder];
-      var cmp = compareGrade(grade, state.zyGrade);
-      if (cmp > 0) {
-        old.cakes.zhuangyuan = 0;
-        state.zyHolder = p.id;
-        state.zyGrade = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label };
-        state.zyDice = dice.slice();
-        p.cakes.zhuangyuan = 1;
-        state.zyStealCount++;
-        entry.action = '夺状元'; entry.cls = 'g-zy';
-        entry.msg = '以「' + grade.label + '」夺走了 ' + old.name + ' 的状元！';
-        entry.sound = 'fanfare';
-      } else if (cmp === 0) {
-        entry.action = '夺状元失败'; entry.cls = 'g-zy';
-        entry.msg = '同为「' + grade.name + '」且点数相同，未能夺走 ' + old.name + ' 的状元';
-      } else {
-        entry.action = '夺状元失败'; entry.cls = 'g-zy';
-        entry.msg = '「' + grade.label + '」小于 ' + old.name + ' 的「' + state.zyGrade.label + '」，状元保住了';
-      }
+      entry.action = '夺状元失败';
+      entry.msg = '「' + grade.label + '」小于 ' + bestP.name + ' 的「' + bestG.label + '」，状元保住了';
     }
   } else if (grade.cake) {
     if (state.pool[grade.cake] > 0) {
@@ -1707,7 +1717,7 @@ var TWIST_LO = 20, TWIST_HI = 40;        /* 落定时在初始朝向上再拧这
    碗底的投影椭圆）。2026-09-16 前这里是三个手调常数（0.62 / 0.58 / -0.08）：
    活动区缩到碗底的六成、圆心还往远侧偏 4% —— 用户报"骰子不怎么落在椭圆
    下面五分之一"，就是被这个缩小 + 偏移挡住的。 */
-var AREA_F = 0.8;                                      /* 活动圆半径 / 碗底半径 */
+var AREA_F = 0.72;                                     /* 活动圆半径 / 碗底半径（用户：缩小 10%，稍微集中） */
 
 function diceArea() {
   var f = document.getElementById('dice-field');
@@ -3041,6 +3051,31 @@ window.__game = {
     window.__game.rollForced([4, 4, 4, 4, 1, 1]);            /* A：同为插金花 → 平手不夺 */
     ok('同级完全平手不算夺（先到者保留）', st.zyHolder === 2, 'zyHolder=' + st.zyHolder);
     ok('夺状元计数 = 2', st.zyStealCount === 2, st.zyStealCount);
+    /* ---- 规则：以每个人【最后博出】的状元为准（2026-09-16 用户定）----
+       自己再博出更小的也算，状元降级；此时别人早前博的更大，状元就归别人。 */
+    var st3 = window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    window.__game.rollForced([4, 4, 4, 4, 4, 6]);            /* A：五红带6 */
+    window.__game.rollForced([1, 2, 3, 5, 6, 6]);            /* B：无红四，空手 */
+    ok('〔最后为准〕A 持五红带6', st3.zyHolder === 0 && st3.zyGrade.kicker === 6,
+      'zyHolder=' + st3.zyHolder + ' kicker=' + (st3.zyGrade && st3.zyGrade.kicker));
+    window.__game.rollForced([4, 4, 4, 4, 4, 3]);            /* A：再博五红带3 → 自己降级 */
+    ok('〔最后为准〕持有者自己博出更小的状元 → 降级（zyGrade 跟着变）',
+      st3.zyHolder === 0 && st3.zyGrade.kicker === 3,
+      'zyHolder=' + st3.zyHolder + ' kicker=' + (st3.zyGrade && st3.zyGrade.kicker));
+    window.__game.rollForced([4, 4, 4, 4, 4, 5]);            /* B：五红带5 > A 的带3 → 夺走 */
+    ok('〔最后为准〕A 降级后，B 更大的状元拿走状元',
+      st3.zyHolder === 1 && st3.players[1].cakes.zhuangyuan === 1, 'zyHolder=' + st3.zyHolder);
+    window.__game.rollForced([4, 4, 4, 4, 4, 6]);            /* A：带6 抢回 */
+    ok('〔最后为准〕A 带6 抢回', st3.zyHolder === 0, 'zyHolder=' + st3.zyHolder);
+    window.__game.rollForced([1, 2, 3, 5, 6, 6]);            /* B：空手 */
+    window.__game.rollForced([4, 4, 4, 4, 4, 2]);            /* A：带2 再降级 → B 早前的带5 顶上 */
+    ok('〔最后为准〕A 再降级 → B 早前博出的带5 成为状元（用户点名的场景）',
+      st3.zyHolder === 1 && st3.zyGrade.kicker === 5,
+      'zyHolder=' + st3.zyHolder + ' kicker=' + (st3.zyGrade && st3.zyGrade.kicker));
+    var e3 = st3.log[0];
+    ok('〔最后为准〕降级丢状元的日志写明来龙去脉',
+      e3.action === '失状元' && e3.msg.indexOf('降级') >= 0 && e3.msg.indexOf('B') >= 0,
+      e3.action + ' / ' + e3.msg);
     /* 非状元博完 → 空手 */
     var st2 = window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
     st2.pool.yixiu = 0;
@@ -3219,7 +3254,10 @@ window.__game = {
     var autoAct = document.querySelector('.phasebar .auto-act');
     ok('自动模式控件在状态栏里', !!autoAct && !!(autoAct.closest && autoAct.closest('.phasebar')));
     var areas = getComputedStyle(document.querySelector('.phasebar')).gridTemplateAreas;
-    ok('状态栏是 3 行栅格，第三行留给自动模式（auto）', areas.indexOf('auto') >= 0, areas);
+    /* 区名不能用 auto —— 那是 grid-area 的关键字，grid-area:au 才引用得到它
+       （踩过：区名叫 auto 时 .auto-act 被自动放置塞进右列 76px，手机上按钮全溢出） */
+    ok('状态栏是 3 行栅格，第三行留给自动模式（au）',
+      areas.indexOf('au au') >= 0, areas);
     ok('速度三档都在', document.querySelectorAll('#auto-speed .sp').length === 3,
       String(document.querySelectorAll('#auto-speed .sp').length));
     /* 比的是【实际周期】= 落定时长（settleFor）+ gap。
@@ -3229,8 +3267,8 @@ window.__game = {
        这里把量级也钉死，和按钮 tooltip 上的数字对齐；只比排序的话，
        把两个 gap 对调回来照样能过 —— 反证专门注过这个。 */
     var autoCycle = AUTO_SPEEDS.map(function (s) { return settleFor(s) + s.gap; });
-    ok('三档节奏 = 落定 + 等待，量级钉死（慢 ≈2.4s / 中 ≈1.5s / 快 <0.7s）',
-      Math.abs(autoCycle[0] - 2390) < 150 && Math.abs(autoCycle[1] - 1540) < 150 && autoCycle[2] < 700,
+    ok('三档节奏 = 落定 + 等待，量级钉死（慢 ≈2.2s / 中 ≈1.3s / 快 <0.7s）',
+      Math.abs(autoCycle[0] - 2240) < 150 && Math.abs(autoCycle[1] - 1290) < 150 && autoCycle[2] < 700,
       AUTO_SPEEDS.map(function (s, i) { return s.label + ' ≈ ' + (autoCycle[i] / 1000).toFixed(2) + 's'; }).join(' / '));
     ok('三档的实际间隔有序（慢 > 中 > 快），且只有快档会切动画',
       autoCycle[0] > autoCycle[1] && autoCycle[1] > autoCycle[2] &&
@@ -3614,10 +3652,10 @@ window.__game = {
       Math.abs(da.rx - da.ry) < 0.5, da.rx.toFixed(1) + ' vs ' + da.ry.toFixed(1));
     ok('活动区与碗底同心（骰子坐标以场地中心为原点，圆心必须是 0，不许有远侧偏移）',
       Math.abs(da.cy) < 0.5, 'cy = ' + da.cy.toFixed(1));
-    ok('活动区充分打开：半径 = 80% 碗底半径',
-      Math.abs(da.rx / dW2 - 0.8) < 0.01, (da.rx / dW2).toFixed(3));
-    ok('底部可达：骰子外缘最远能到碗底半径的 90% 以上（身体算上，能进底部五分之一）',
-      (da.cy + da.ry + dieSize * FOOT_R) / dH2 >= 0.9,
+    ok('活动区半径 = 72% 碗底半径（用户：比 0.8 缩 10%，稍微集中）',
+      Math.abs(da.rx / dW2 - 0.72) < 0.01, (da.rx / dW2).toFixed(3));
+    ok('底部可达：骰子外缘最远能到碗底半径的 85% 以上（身体算上，仍能碰到近侧第五分）',
+      (da.cy + da.ry + dieSize * FOOT_R) / dH2 >= 0.85,
       ((da.cy + da.ry + dieSize * FOOT_R) / dH2).toFixed(3));
     /* 骰子落区必须和 SVG 里的碗底椭圆对上（两边都用 viewBox 坐标换算，不能各写各的常量） */
     var svgEl = document.getElementById('bowl-svg');
