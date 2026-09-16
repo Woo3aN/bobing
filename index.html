@@ -69,7 +69,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .tbtn.on{background:rgba(232,184,75,.22);border-color:var(--gold);color:var(--gold-l)}
 
 /* 阶段横幅 */
-.phasebar{display:grid;grid-template-columns:1fr auto;grid-template-areas:"who act" "meta .";gap:6px 10px;align-items:start;
+.phasebar{display:grid;grid-template-columns:1fr auto;grid-template-areas:"who act" "meta ." "auto auto";gap:6px 10px;align-items:start;
   background:var(--panel);border:1px solid var(--panel-b);border-radius:14px;
   padding:9px 13px;margin-bottom:12px;backdrop-filter:blur(6px)}
 .phasebar .who{font-size:14.5px;font-weight:700}
@@ -85,6 +85,18 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .phasebar .pill{white-space:nowrap}
 .phasebar .phase-act{grid-area:act;align-self:start;padding-right:6px}
 .phasebar .phase-act .tbtn{white-space:nowrap}
+/* 自动模式：状态栏第三行整行。左＝启停，右＝三档速度。
+   为什么单独占一行：三段速度是个分段控件，跟胶囊挤在第二行在 320px 上会溢出。 */
+.phasebar .auto-act{grid-area:auto;display:flex;align-items:center;justify-content:space-between;
+  gap:8px;min-width:0;padding-right:6px;padding-top:6px;border-top:1px dashed var(--panel-b)}
+.phasebar .auto-act .auto-btns{display:flex;align-items:center;gap:6px;min-width:0}
+.phasebar .auto-act .tbtn{white-space:nowrap}
+.phasebar .auto-act .tbtn.running{border-color:var(--gold);background:rgba(232,184,75,.22);color:var(--gold-l)}
+.phasebar .auto-speed{display:flex;flex:0 0 auto;border:1px solid var(--panel-b);border-radius:999px;overflow:hidden}
+.phasebar .auto-speed .sp{font:inherit;font-size:11.5px;padding:3px 10px;border:0;cursor:pointer;
+  background:transparent;color:var(--muted);line-height:1.5}
+.phasebar .auto-speed .sp + .sp{border-left:1px solid var(--panel-b)}
+.phasebar .auto-speed .sp.on{background:rgba(232,184,75,.24);color:var(--gold-l);font-weight:800}
 .phasebar .pill{font-size:11.5px;padding:3px 9px;border-radius:999px;
   background:rgba(255,255,255,.08);border:1px solid var(--panel-b)}
 .phasebar .pill.hot{background:rgba(207,32,39,.4);border-color:var(--red-l);color:#ffdede}
@@ -437,7 +449,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   /* 右列定宽 76px（按钮正好放得下）→ 左侧文字区宽度恒定，状态栏高度只由"行数"决定。
      who 在手机上允许折成 2 行（不再 ellipsis 截断），高度变化只发生在"换名字"这一刻，
      而不会因为"秒表数字多了一位"这种小事去挤动版面。 */
-  .phasebar{padding:8px 10px;gap:5px 8px;grid-template-columns:minmax(0,1fr) 76px;grid-template-areas:"who act" "meta .";align-items:start}
+  .phasebar{padding:8px 10px;gap:5px 8px;grid-template-columns:minmax(0,1fr) 76px;grid-template-areas:"who act" "meta ." "auto auto";align-items:start}
   .phasebar .who{font-size:13.5px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}
   .phasebar .who em{font-size:14.5px}
   .phasebar .pill{font-size:11px;padding:2px 7px}
@@ -449,7 +461,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   .brand b{font-size:17px}
   /* 窄屏（iPhone SE 375 / 360 安卓）再收一档：胶囊字号降一级，右列不变。
      右列不变是关键 —— 变的是左列文字，行数变化不牵动按钮位置。 */
-  .phasebar{grid-template-columns:minmax(0,1fr) 76px;padding:7px 9px;grid-template-areas:"who act" "meta .";align-items:start}
+  .phasebar{grid-template-columns:minmax(0,1fr) 76px;padding:7px 9px;grid-template-areas:"who act" "meta ." "auto auto";align-items:start}
   .phasebar .who{font-size:12.5px}
   .phasebar .who em{font-size:13.5px}
   .phasebar .pill{font-size:10px;padding:2px 6px}
@@ -512,6 +524,18 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
       <span class="who" id="bar-who" data-page-node-id="7fQd9CdrPreqoRHP7OqFCc">轮到 <em data-page-node-id="kJPomecwsfGSvWYtoB9fK2">玩家1</em> 博饼</span>
       <span class="meta2" data-page-node-id="Ex6n8OnAgdfeAlnQglkUGE"><span class="pill" id="bar-round" data-page-node-id="jNUwFUtj7ygjaEalWCxr4B">第 1 轮</span><span class="pill" id="bar-left" data-page-node-id="72s32didK76U1FfNN9KMLn">场上剩 63 份</span></span>
       <div class="phase-act"><button class="tbtn" id="btn-restart" data-page-node-id="djWhEViP2QlMtJiJ4yz6pm">重开一局</button></div>
+      <div class="auto-act">
+        <span class="auto-btns">
+          <button class="tbtn" id="btn-auto" title="自动一路博到本局结束">▶ 自动</button>
+          <button class="tbtn" id="btn-auto-pause" style="display:none" title="暂停 / 继续">⏸ 暂停</button>
+          <button class="tbtn" id="btn-auto-stop" style="display:none" title="退出自动模式（局面保留）">■ 停止</button>
+        </span>
+        <span class="auto-speed" id="auto-speed" role="group" aria-label="自动模式速度">
+          <button class="sp" data-sp="0" title="慢：约 2.4 秒一次">慢</button>
+          <button class="sp" data-sp="1" title="中：约 1.5 秒一次">中</button>
+          <button class="sp" data-sp="2" title="快：约 0.4 秒一次（跳过骰子动画）">快</button>
+        </span>
+      </div>
     </div>
 
     <div class="layout" data-page-node-id="jQkMbW7DXSISwfhOeetUMw">
@@ -1198,6 +1222,102 @@ var SKIP = null;           /* 动画进行中：点一下就能跳过（下一�
    从 1600+220 收到 1150+140 —— 一轮少等约 0.5 秒，一局几十轮就是十几秒。 */
 var TIMING = { spin: 1150, after: 140, jitter: 0 };   /* 六颗同时抛出（轨迹由物理模拟给出，没有逐颗延迟） */
 
+/* ============================================================================
+   自动模式：不用一直手点「博一次」
+   - 默认一路博到本局结束（奖项全部有主 → 结算弹层），中途可暂停 / 继续 / 停止
+   - 三档速度：慢 / 中 / 快。快档把骰子动画一刀切到落定（skipAnim），
+     但结果条、奖项音效、特效照常 —— 那些是玩家真正要看的东西，不能省。
+     ⚠️ 不能用 doRoll(_, true) 的静默路径：它不刷结果条（只有 showResult 刷）。
+   - 暂停 = 就地冻住；继续 = 接着跑；停止 = 退出自动（局面保留，仍可手动博）
+   - 打开规则 / 战绩 / 概率弹层时照常继续（用户明确要的）
+   ============================================================================ */
+var AUTO_SPEEDS = [
+  { label: '慢', gap: 1100, cut: 0 },   /* 等动画播完，再等 1.1s  */
+  { label: '中', gap: 250,  cut: 0 },   /* 等动画播完，再等 0.25s */
+  { label: '快', gap: 340,  cut: 90 }   /* 起动画后 90ms 切到落定，再等 0.34s */
+];
+var autoSpeedIdx = 1;        /* 速度是使用偏好，跨局保留（不算局面状态） */
+var autoTimer = null, autoCutTimer = null;
+
+function autoSpeed() { return AUTO_SPEEDS[autoSpeedIdx] || AUTO_SPEEDS[1]; }
+function autoActive() { return !!(state && state.auto && state.auto.on); }
+function autoRunning() { return autoActive() && !state.auto.paused; }
+
+function autoClearTimers() {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  if (autoCutTimer) { clearTimeout(autoCutTimer); autoCutTimer = null; }
+}
+function autoStart() {
+  if (!state || state.phase === 'over') return;
+  state.auto.on = true; state.auto.paused = false;
+  renderAutoBar();
+  autoKick(60);
+}
+function autoPause() {
+  if (!autoActive()) return;
+  state.auto.paused = true;
+  autoClearTimers();                 /* 暂停要连"快档那一刀"一起取消 */
+  renderAutoBar();
+}
+function autoResume() {
+  if (!autoActive()) return;
+  state.auto.paused = false;
+  renderAutoBar();
+  autoKick(60);
+}
+function autoStop(silent) {
+  var was = autoActive();
+  autoClearTimers();
+  if (state && state.auto) { state.auto.on = false; state.auto.paused = false; }
+  renderAutoBar();
+  if (was && !silent) toast('已退出自动模式');
+}
+function autoSetSpeed(i) {
+  autoSpeedIdx = Math.max(0, Math.min(AUTO_SPEEDS.length - 1, i | 0));
+  renderAutoBar();
+  if (autoRunning()) autoKick(60);   /* 立刻按新节奏走 */
+}
+function autoKick(delay) {
+  autoClearTimers();
+  if (!autoRunning()) return;
+  autoTimer = setTimeout(autoTick, delay == null ? autoSpeed().gap : delay);
+}
+function autoTick() {
+  autoTimer = null;
+  if (!autoRunning()) return;
+  if (state.phase === 'over') { autoStop(true); toast('本局结束，自动模式已停'); return; }
+  if (state.busy) { autoKick(70); return; }        /* 动画还没落定，下一拍再看 */
+  var sp = autoSpeed();
+  doRoll(null, false);
+  if (sp.cut) {
+    autoCutTimer = setTimeout(function () {
+      autoCutTimer = null;
+      if (autoRunning()) skipAnim();
+    }, sp.cut);
+  }
+  autoKick(sp.gap);
+}
+function renderAutoBar() {
+  var b = document.getElementById('btn-auto');
+  var bp = document.getElementById('btn-auto-pause');
+  var bs = document.getElementById('btn-auto-stop');
+  if (!b || !bp || !bs) return;
+  var on = autoActive(), paused = on && state.auto.paused;
+  b.style.display = on ? 'none' : '';
+  bp.style.display = on ? '' : 'none';
+  bs.style.display = on ? '' : 'none';
+  b.disabled = !!(state && state.phase === 'over');
+  bp.textContent = paused ? '▶ 继续' : '⏸ 暂停';
+  bp.classList.toggle('running', on && !paused);
+  var sp = document.getElementById('auto-speed');
+  if (sp) {
+    var chips = sp.querySelectorAll('.sp');
+    for (var ci = 0; ci < chips.length; ci++) {
+      chips[ci].classList.toggle('on', Number(chips[ci].getAttribute('data-sp')) === autoSpeedIdx);
+    }
+  }
+}
+
 function newGame(cfg) {
   cfg = cfg || {};
   /* 配额：优先用本局传来的，其次用设置页当前的，最后回落默认 */
@@ -1224,6 +1344,7 @@ function newGame(cfg) {
     current: 0,
     round: 1,
     rollCount: 0,
+    auto: { on: false, paused: false },   /* 自动模式：on = 正在跑；paused = 就地冻住 */
     poolEmpty: false,
     finalRoundNo: 0,
     finalRolls: 0,
@@ -1446,6 +1567,7 @@ function finishGame() {
   var zy = state.zyHolder === null ? null : state.players[state.zyHolder];
   pushSystemLog('🏁 全部奖项各有其主，本局结束。' + (zy ? '状元是 <strong>' + escapeHtml(zy.name) + '</strong>！' : '状元无人博得。'));
   saveGameRecord();
+  autoStop(true);                          /* 本局结束 → 自动模式自己收工 */
   renderAll();
   showResultModal();
 }
@@ -1962,6 +2084,7 @@ function renderAll() {
   renderPlayers();
   renderLog();
   updateRollButton();
+  renderAutoBar();                         /* 自动模式的按钮组/速度高亮 */
   renderRulesOdds();                       /* 规则页的"本局 N 次"要跟着掷骰实时走 */
   var sm = document.getElementById('modal-stat');
   if (sm && sm.classList.contains('show')) renderStatModal();   /* 概率弹层开着时才重建 */
@@ -2549,6 +2672,20 @@ function bindEvents() {
     if (state && state.busy) { skipAnim(); return; }    /* 动画中再点 = 跳过 */
     doRoll(null, false);
   });
+  /* 自动模式：一个开始键 + 暂停/继续 + 停止 + 三档速度 */
+  document.getElementById('btn-auto').addEventListener('click', function () { Sfx.wake(); autoStart(); });
+  document.getElementById('btn-auto-pause').addEventListener('click', function () {
+    if (state && state.auto && state.auto.paused) autoResume(); else autoPause();
+  });
+  document.getElementById('btn-auto-stop').addEventListener('click', function () { autoStop(false); });
+  (function () {
+    var sp = document.getElementById('auto-speed');
+    if (!sp) return;
+    sp.addEventListener('click', function (e) {
+      var b = e.target.closest('.sp');
+      if (b) { Sfx.wake(); autoSetSpeed(Number(b.getAttribute('data-sp'))); }
+    });
+  })();
   /* 点碗也能跳过 —— 手机上碗比按钮大，更好点 */
   var bw = document.getElementById('bowl-wrap');
   if (bw) bw.addEventListener('click', function () { if (state && state.busy) skipAnim(); });
@@ -2563,6 +2700,7 @@ function bindEvents() {
     }
   });
   document.getElementById('btn-restart').addEventListener('click', function () {
+    autoStop(true);                      /* 回设置页 = 这一局不博了，自动也停掉 */
     document.getElementById('view-table').style.display = 'none';
     document.getElementById('view-setup').style.display = '';
     renderSetup();
@@ -2573,6 +2711,7 @@ function bindEvents() {
   document.getElementById('btn-hist').addEventListener('click', function () { renderHistModal(); openModal('modal-hist'); });
   document.getElementById('btn-clear-hist').addEventListener('click', function () { saveHistory([]); renderHistModal(); toast('历史战绩已清空'); });
   document.getElementById('btn-again').addEventListener('click', function () {
+    autoStop(true);
     closeModal('modal-result');
     document.getElementById('view-table').style.display = 'none';
     document.getElementById('view-setup').style.display = '';
@@ -3055,6 +3194,55 @@ window.__game = {
         (document.querySelector('meta[property="og:title"]') || {}).content === document.title,
         (document.querySelector('meta[property="og:title"]') || {}).content);
     })();
+
+    /* ---- 自动模式 ----
+       定时器类功能不好用真时间测，所以把 doRoll 换成计数器、同步调 autoTick：
+       既不碰真定时器，也不真掷骰，整个流程可以确定性地断言。 */
+    var autoAct = document.querySelector('.phasebar .auto-act');
+    ok('自动模式控件在状态栏里', !!autoAct && !!(autoAct.closest && autoAct.closest('.phasebar')));
+    var areas = getComputedStyle(document.querySelector('.phasebar')).gridTemplateAreas;
+    ok('状态栏是 3 行栅格，第三行留给自动模式（auto）', areas.indexOf('auto') >= 0, areas);
+    ok('速度三档都在', document.querySelectorAll('#auto-speed .sp').length === 3,
+      String(document.querySelectorAll('#auto-speed .sp').length));
+    /* 比的是【实际间隔】而不是 gap 字段：一轮 = 动画（或"切动画"那一刻）+ 之后的等待。
+       慢档 gap 比中档大、快档 gap 又比中档大 —— 单看 gap 会得出相反的顺序。 */
+    var autoCycle = AUTO_SPEEDS.map(function (s) {
+      return s.cut ? s.cut + s.gap : TIMING.spin + TIMING.after + s.gap;
+    });
+    ok('三档的实际间隔有序（慢 > 中 > 快），且只有快档会切动画',
+      autoCycle[0] > autoCycle[1] && autoCycle[1] > autoCycle[2] &&
+      AUTO_SPEEDS[0].cut === 0 && AUTO_SPEEDS[1].cut === 0 && AUTO_SPEEDS[2].cut > 0,
+      AUTO_SPEEDS.map(function (s, i) { return s.label + ' ≈ ' + (autoCycle[i] / 1000).toFixed(2) + 's'; }).join(' / '));
+
+    var realDoRoll = doRoll, rollCalls = 0;
+    newGame({ players: [{ name: '甲' }, { name: '乙' }], fast: true });
+    doRoll = function () { rollCalls++; state.busy = false; };
+    autoStart();
+    ok('开始自动后按钮组切换（自动收起，暂停/停止出现）',
+      state.auto.on === true &&
+      document.getElementById('btn-auto').style.display === 'none' &&
+      document.getElementById('btn-auto-pause').style.display !== 'none' &&
+      document.getElementById('btn-auto-stop').style.display !== 'none');
+    autoTick(); autoTick(); autoTick();
+    ok('运行中每次 tick 推进一步', rollCalls === 3, rollCalls + ' 步');
+    autoPause();
+    autoTick(); autoTick();
+    ok('暂停后不再推进（tick 空转）', rollCalls === 3, rollCalls + ' 步');
+    ok('暂停时按钮文案变成「继续」',
+      document.getElementById('btn-auto-pause').textContent.indexOf('继续') >= 0,
+      document.getElementById('btn-auto-pause').textContent);
+    autoResume(); autoTick();
+    ok('继续后接着推进', rollCalls === 4, rollCalls + ' 步');
+    state.phase = 'over';
+    autoTick();
+    ok('本局结束时自动模式自己停掉（不用人点停止）', state.auto.on === false);
+    autoStop(true);
+    autoSetSpeed(0);
+    ok('切到慢档后高亮跟着走',
+      document.querySelector('#auto-speed .sp.on').getAttribute('data-sp') === '0');
+    autoSetSpeed(1);
+    doRoll = realDoRoll;
+    newGame({ players: [{ name: '我' }], fast: true });
 
     testPhaseBarStable();
 
