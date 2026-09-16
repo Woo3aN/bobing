@@ -38,7 +38,8 @@
 - 本级奖项发完就**空手**，不作他用
 - **状元只有一份，以各人最后博出的状元为准** —— 自己再博出更小的也会降级，
   此时别人早前博出的更大就能拿走（多人之间比较的就是各自最后博出的那个）
-- 奖项发完后还有**收官轮**：每人再各博一次，这一轮仍可夺状元
+- **收官轮**只在全部奖项都有主（含状元）之后：每人再各博一次作为谢幕；
+  只剩状元没出时继续正常博弈，博出即收官
 
 ## 功能
 
@@ -78,7 +79,7 @@ python -m http.server 8000
 - `?demo=N` —— 直接开一桌 4 人并先博 N 次
 - `?demo=N&solo=1` —— 直接进单人挑战
 - `&open=rules|hist|stat|result` —— 直接打开对应弹层
-- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota` —— 自检探针（8 组共 279 项断言）
+- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota` —— 自检探针（8 组共 282 项断言）
 
 ---
 
