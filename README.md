@@ -44,6 +44,9 @@
 ## 功能
 
 - **2–6 人本地传阅** / **单人挑战**（一项设备围一圈轮流博）
+- **联机对战（实验性）** —— 开局页点「🌐 联机对战」建房，把 4 位房间号发给朋友即可加入；
+  同一浏览器开两个标签页就能先试玩（同机演示模式）。跨设备联机需在源码顶部填入
+  CloudBase 免费环境 ID（`NET_TCB_ENV`），其余零配置、零费用
 - **自动模式** —— 一键挂机：自动替所有玩家轮流博到本局结束（含收官轮与结算），
   随时 ⏸ 暂停 / ▶ 继续 / ■ 停止（局面保留）；慢 / 中 / 快三档节奏，
   快档会跳过骰子动画直接落定。本局结束时自动模式自己停，不用人管
@@ -79,7 +82,7 @@ python -m http.server 8000
 - `?demo=N` —— 直接开一桌 4 人并先博 N 次
 - `?demo=N&solo=1` —— 直接进单人挑战
 - `&open=rules|hist|stat|result` —— 直接打开对应弹层
-- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota` —— 自检探针（8 组共 282 项断言）
+- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota|net` —— 自检探针（9 组共 294 项断言）
 
 ---
 

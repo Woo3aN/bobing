@@ -467,6 +467,19 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   .phasebar .who em{font-size:13.5px}
   .phasebar .pill{font-size:10px;padding:2px 6px}
 }
+/* 联机面板 */
+#net-modal{position:fixed;inset:0;z-index:95;display:none;align-items:center;justify-content:center;background:rgba(10,2,2,.62);padding:18px}
+#net-modal.show{display:flex}
+.net-card{position:relative;background:var(--panel);border:1px solid var(--panel-b);border-radius:16px;padding:20px 18px;width:100%;max-width:340px;box-shadow:0 18px 60px rgba(0,0,0,.5)}
+.net-code{font-size:38px;font-weight:800;letter-spacing:10px;color:var(--gold-l);text-align:center;padding:8px 0 2px;font-variant-numeric:tabular-nums}
+.net-input{width:100%;background:rgba(0,0,0,.25);border:1px solid var(--panel-b);border-radius:10px;color:#f6e7c8;font-size:15px;padding:9px 10px;box-sizing:border-box}
+.net-lb{display:block;font-size:12px;color:#b89f78;margin:10px 0 5px;letter-spacing:1px}
+.net-or{text-align:center;color:#8d7a5c;font-size:12px;margin:12px 0}
+.net-note{font-size:12px;color:#a08c68;line-height:1.6;margin:10px 0 0}
+.net-err{font-size:13px;color:#ff9d8a;background:rgba(120,20,10,.25);border-radius:8px;padding:7px 10px;margin:0 0 8px}
+.net-roster{display:flex;flex-direction:column;gap:5px;margin-top:4px}
+.net-seat{background:rgba(0,0,0,.22);border-radius:8px;padding:6px 10px;font-size:13.5px}
+#net-close-x{position:absolute;top:10px;right:10px}
 </style>
 </head>
 <body data-page-node-id="ZPNBYQFNlC6GPLvxbqMHgq">
@@ -515,7 +528,16 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
       <div class="setup-actions" data-page-node-id="5uuYKKy9av6m2RLdKKJQMQ">
         <button class="btn-primary" id="btn-start" data-page-node-id="4jV5TcCFT6fxUTTKZcIIRP">开 桌</button>
         <button class="btn-ghost" id="btn-rules2" data-page-node-id="TxOiYmmc1njFtRrBHXQ50O">先看规则</button>
+        <button class="btn-ghost" id="btn-net" title="和不同设备的朋友联机博饼">🌐 联机对战</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 联机面板 -->
+  <div id="net-modal">
+    <div class="net-card">
+      <button class="tbtn" id="net-close-x" title="关闭">✕</button>
+      <div id="net-body"></div>
     </div>
   </div>
 
@@ -1418,7 +1440,14 @@ function doRoll(diceOrNull, silent) {
   if (!state) return null;
   if (state.phase === 'over') return null;
   if (state.busy && !silent) return null;
+  /* 联机回合守卫：只有轮到自己才能掷。远端事件回放走 NET_APPLY 放行；
+     静默路径（rollForced/自检）不拦 —— 探针要能确定性驱动当前玩家。 */
+  if (state.online && !silent && !NET_APPLY && state.online.seat !== state.current) return null;
   var dice = diceOrNull || randomDice();
+  /* 联机：这一把成为事实 → 广播事件（整条链路里唯一的"写"）。
+     ⚠️ 条件里没有 !silent：联机时 rollForced 也是一次真实掷骰，同样要广播；
+     重连回放（NET_APPLY=true）绝不重发。 */
+  if (state.online && !NET_APPLY) NET.sendRoll(state.online.seat, dice);
   state.dice = dice.slice();
   var grade = evaluate(dice);
   if (state.dist) state.dist[grade.key] = (state.dist[grade.key] || 0) + 1;   /* 本局等级分布 */
@@ -2310,6 +2339,13 @@ function updateRollButton() {
   var b = document.getElementById('btn-roll');
   if (!b) return;
   if (state.phase === 'over') { b.disabled = true; b.textContent = '本局结束'; return; }
+  if (state.online) {
+    var mine = state.current === state.online.seat;
+    b.disabled = !!state.busy || !mine;
+    var op = state.players[state.current];
+    b.textContent = state.busy ? '骰子飞着呢…' : (mine ? '轮到你了 · 博！' : '等 ' + op.name + ' 博…');
+    return;
+  }
   b.disabled = !!state.busy;
   var p = state.players[state.current];
   b.textContent = state.busy ? '骰子飞着呢…'
@@ -2708,7 +2744,10 @@ function bindEvents() {
     doRoll(null, false);
   });
   /* 自动模式：一个开始键 + 暂停/继续 + 停止 + 三档速度 */
-  document.getElementById('btn-auto').addEventListener('click', function () { Sfx.wake(); autoStart(); });
+  document.getElementById('btn-auto').addEventListener('click', function () {
+    if (state && state.online) { toast('联机模式不能挂机，得自己来'); return; }
+    Sfx.wake(); autoStart();
+  });
   document.getElementById('btn-auto-pause').addEventListener('click', function () {
     if (state && state.auto && state.auto.paused) autoResume(); else autoPause();
   });
@@ -2735,6 +2774,7 @@ function bindEvents() {
     }
   });
   document.getElementById('btn-restart').addEventListener('click', function () {
+    if (state && state.online) NET.leave();   /* 联机局退场 = 离开房间 */
     autoStop(true);                      /* 回设置页 = 这一局不博了，自动也停掉 */
     document.getElementById('view-table').style.display = 'none';
     document.getElementById('view-setup').style.display = '';
@@ -2746,6 +2786,7 @@ function bindEvents() {
   document.getElementById('btn-hist').addEventListener('click', function () { renderHistModal(); openModal('modal-hist'); });
   document.getElementById('btn-clear-hist').addEventListener('click', function () { saveHistory([]); renderHistModal(); toast('历史战绩已清空'); });
   document.getElementById('btn-again').addEventListener('click', function () {
+    if (state && state.online) NET.leave();   /* 结算页"再来一局"：联机时先退房 */
     autoStop(true);
     closeModal('modal-result');
     document.getElementById('view-table').style.display = 'none';
@@ -2862,8 +2903,422 @@ window.__game = {
     document.getElementById('view-table').style.display = '';
     if (!diceEls.length) buildDice();
   },
-  render: function () { renderAll(); }
+  render: function () { renderAll(); },
+  doRoll: doRoll,
+  skipAnim: skipAnim,
+  net: {
+    create: function (name) { var out; NET.create(name, function (e, r) { out = e || (r && r.code); }); return out; },
+    join: function (code, name) { var out; NET.join(code, name, function (e) { out = e || null; }); return out; },
+    start: function (fast) { var out; NET._fast(!!fast); NET.start(function (e) { out = e; }); return out; },
+    leave: function () { NET.leave(); },
+    canRoll: function () { return NET.canRoll(); },
+    state: function () { return (state && state.online) ? { seat: state.online.seat, code: state.online.code, kind: state.online.kind } : null; },
+    _adoptPeer: function (code, idx) { NET._adoptPeer(code, idx); },   /* 自检：模拟老成员重连 */
+    _fast: function (v) { NET._fast(v); },                             /* 自检：跳过动画 */
+    tick: function () { NET._tick(); }
+  }
 };
+
+/* ============================================================================
+   ⑫½ 联机模式（2026-09-16 起）
+   ----------------------------------------------------------------------------
+   架构：**事件回放**。房间只存「座次名单 + 掷骰事件序列」，所有客户端从同一
+   序列出发各自跑本地规则引擎（doRoll），结果必然一致。
+   - 每把恰好一条事件 {s: 座次, d: 六颗点数}；动画/音效/结算全部本地播
+   - 传输层可替换：
+     Local —— localStorage，同机多标签页互博（开发/演示/自测用）
+     TCB  —— CloudBase 免费环境（跨设备联机）。NET_TCB_ENV 填了环境 ID 才启用；
+             纪律：每把恰好一次数据库写，绝不轮询主通道
+   - 断线重连 = 重新加入 + 把事件序列静默回放一遍
+   ============================================================================ */
+var NET_TCB_ENV = '';                 /* ← 注册 CloudBase 后把环境 ID 填在这里 */
+var NET_APPLY = false;                /* 回放远端事件时置 true：放行回合守卫、且不再发送 */
+var CODE_RE = /^\d{4}$/;             /* 房间号：4 位数字 */
+var NET = (function () {
+  var PEER = 'p' + Math.random().toString(36).slice(2, 10);
+  var pollTimer = null, subCode = null, lastSnap = '', onRoomCb = null;
+  var cur = null;                     /* 当前传输层 'local' | 'tcb' */
+
+  /* ---------- 传输层 A：localStorage（同机多标签页） ---------- */
+  function lkey(code) { return 'bbnet_' + code; }
+  function lread(code) { try { return JSON.parse(localStorage.getItem(lkey(code)) || 'null'); } catch (e) { return null; } }
+  function lwrite(r) { localStorage.setItem(lkey(r.code), JSON.stringify(r)); }
+  var Local = {
+    name: 'local',
+    create: function (name, cb) {
+      var code, r;
+      do { code = String(1000 + Math.floor(Math.random() * 9000)); } while (localStorage.getItem(lkey(code)));
+      r = { code: code, host: PEER, started: false, closed: false, roster: [{ id: PEER, name: name }], events: [] };
+      lwrite(r); cb(null, r);
+    },
+    join: function (code, name, cb) {
+      var r = lread(code);
+      if (!r || r.closed) { cb('没有这个房间号'); return; }
+      var mine = null;
+      for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) mine = r.roster[i];
+      if (r.started && !mine) { cb('这局已经开始了'); return; }
+      if (!mine) { r.roster.push({ id: PEER, name: name }); lwrite(r); }
+      cb(null, r);
+    },
+    start: function (code, cb) {
+      var r = lread(code);
+      if (!r) { cb('房间不存在'); return; }
+      if (r.roster.length < 2) { cb('至少要 2 个玩家'); return; }
+      r.started = true; lwrite(r); cb(null, r);
+    },
+    addEvent: function (code, evt, cb) {
+      var r = lread(code); if (!r) { cb && cb('房间不存在'); return; }
+      r.events.push(evt); lwrite(r); cb && cb(null, r);
+    },
+    leave: function (code, started) {
+      var r = lread(code); if (!r) return;
+      if (!started) {
+        r.roster = r.roster.filter(function (p) { return p.id !== PEER; });
+        if (!r.roster.length) { localStorage.removeItem(lkey(code)); return; }
+        lwrite(r);
+      }
+      else { r.closed = true; lwrite(r); }   /* 开局后退场 = 解散，大家都回设置页 */
+    },
+    read: function (code) { return lread(code); },
+    watch: function (code, cb) {
+      subCode = code; onRoomCb = cb; lastSnap = null;   /* 置 null：紧跟着的 watchTick 必须把当前快照推出去（重连回放靠它触发） */
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(watchTick, 350);
+      window.addEventListener('storage', watchStorage);
+      watchTick();   /* 立即推一次当前快照：重连回放靠这一帧触发 */
+    },
+    unwatch: function () {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      window.removeEventListener('storage', watchStorage);
+    },
+    tick: watchTick
+  };
+  function watchTick() {
+    if (!subCode || !onRoomCb) return;
+    var r = lread(subCode); if (!r) return;
+    var now = JSON.stringify(r);
+    if (now !== lastSnap) { lastSnap = now; onRoomCb(r); }
+  }
+  function watchStorage(e) {
+    if (e.key === lkey(subCode) && e.newValue) { lastSnap = e.newValue; onRoomCb(JSON.parse(e.newValue)); }
+  }
+
+  /* ---------- 传输层 B：CloudBase（跨设备）。NET_TCB_ENV 填了才启用 ---------- */
+  var TCB = {
+    name: 'tcb', app: null, db: null, cmd: null, docId: null, watcher: null,
+    ready: function () { return !!NET_TCB_ENV; },
+    init: function (done) {
+      var self = this;
+      if (self.db) { done(null); return; }
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/@cloudbase/js-sdk@2.5.0/tcb/index.js';
+      s.onload = function () {
+        try {
+          self.app = cloudbase.init({ env: NET_TCB_ENV });
+          self.app.auth({ persistence: 'local' }).signInAnonymously().then(function () {
+            self.db = self.app.database();
+            self.cmd = self.db.command;
+            done(null);
+          }).catch(function (e) { done('匿名登录失败: ' + (e.message || e)); });
+        } catch (e) { done('SDK 初始化失败: ' + (e.message || e)); }
+      };
+      s.onerror = function () { done('CloudBase SDK 加载失败'); };
+      document.head.appendChild(s);
+    },
+    docOf: function (code) { return this.db.collection('bbnet_rooms').doc('r' + code); },
+    create: function (name, cb) {
+      var self = this, code = String(1000 + Math.floor(Math.random() * 9000));
+      self.docId = 'r' + code;
+      self.db.collection('bbnet_rooms').doc(self.docId).set({
+        code: code, host: PEER, started: false, closed: false,
+        roster: [{ id: PEER, name: name }], events: []
+      }).then(function () { cb(null, { code: code, roster: [{ id: PEER, name: name }], started: false, events: [] }); })
+        .catch(function (e) { cb('建房间失败: ' + (e.message || e)); });
+    },
+    join: function (code, name, cb) {
+      var self = this, doc = self.docOf(code);
+      doc.get().then(function (res) {
+        var r = res.data && res.data[0];
+        if (!r || r.closed) { cb('没有这个房间号'); return; }
+        var mine = null;
+        for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) mine = r.roster[i];
+        if (r.started && !mine) { cb('这局已经开始了'); return; }
+        if (!mine) {
+          doc.update({ roster: self.cmd.addToSet({ id: PEER, name: name }) }).then(function () {
+            cb(null, null);   /* roster 以 watch 回调为准 */
+          }).catch(function (e) { cb('加入失败: ' + (e.message || e)); });
+        } else cb(null, null);
+      }).catch(function (e) { cb('没有这个房间号'); });
+    },
+    start: function (code, cb) { this.docOf(code).update({ started: true }).then(function () { cb(null); }).catch(function (e) { cb(e.message || e); }); },
+    addEvent: function (code, evt, cb) {
+      this.docOf(code).update({ events: this.cmd.push(evt) }).then(function () { cb && cb(null); }).catch(function (e) { cb && cb(e.message || e); });
+    },
+    leave: function (code, started) {
+      var self = this;
+      if (!started) { self.docOf(code).update({ roster: self.cmd.pull({ id: PEER }) }).catch(function () {}); }
+      else { self.docOf(code).update({ closed: true }).catch(function () {}); }
+    },
+    read: function (code, cb) { this.docOf(code).get().then(function (res) { cb(res.data && res.data[0] || null); }).catch(function () { cb(null); }); },
+    watch: function (code, cb) {
+      var self = this; self.docId = 'r' + code;
+      self.watcher = self.docOf(code).watch({
+        onChange: function (snap) {
+          var r = snap && snap.doc && snap.doc[0] !== undefined ? snap.doc[0] : (snap.doc || null);
+          if (r && r.code) cb(r);
+        },
+        onError: function () {}
+      });
+    },
+    unwatch: function () { if (this.watcher) { try { this.watcher.close(); } catch (e) {} this.watcher = null; } },
+    tick: function () {}
+  };
+
+  /* ---------- 游戏侧状态 ---------- */
+  var seat = -1, codeNow = null, startedSeen = false, lobbyCb = null, inLobby = false;
+  var wantFast = false;
+
+  function pick() { return TCB.ready() ? TCB : Local; }
+
+  function exitToSetup() {
+    document.getElementById('view-table').style.display = 'none';
+    document.getElementById('view-setup').style.display = '';
+    if (state) state.online = null;
+    seat = -1; codeNow = null; startedSeen = false;
+  }
+
+  function onRoom(r) {
+    if (!r) return;
+    /* 过期快照防护：storage 事件/轮询在极端时序下会把【旧快照】迟到派发过来
+       （实测：本地已经博到第 14 把，却收到一张只有 2 把的旧快照）。
+       盲信它会导致 beginGame 把整局回滚重开。本地已应用到更新序列 → 直接忽略。 */
+    if (state && state.online && r.events.length < state.rollCount) return;
+    lastRoom = r;
+    if (r.closed) {                                   /* 房主解散了房间 */
+      if (state && state.online) { toast('房主解散了房间'); exitToSetup(); }
+      else if (lobbyCb) lobbyCb(r);
+      return;
+    }
+    if (!r.started) { startedSeen = false; if (lobbyCb) lobbyCb(r); return; }
+    if (!startedSeen) {
+      startedSeen = true;
+      var mine = -1;
+      for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) mine = i;
+      if (mine < 0) return;
+      beginGame(r, mine, r.events.length > 0);   /* 房间里已有事件 = 重连，静默回放 */
+    } else applyRemoteEvents(r);
+  }
+
+  function beginGame(r, mySeat, resync) {
+    seat = mySeat; codeNow = r.code;
+    var ps = r.roster.map(function (p) { return { name: p.name }; });
+    document.getElementById('view-setup').style.display = 'none';
+    document.getElementById('net-modal').classList.remove('show');
+    document.getElementById('view-table').style.display = '';
+    newGame({ players: ps, mode: r.roster.length === 1 ? 'solo' : 'local', fast: wantFast });
+    buildDice();
+    state.online = { seat: seat, code: r.code, kind: cur };
+    if (resync) {
+      NET_APPLY = true;
+      try { for (var i = 0; i < r.events.length; i++) doRoll(r.events[i].d, true); }
+      finally { NET_APPLY = false; }
+      toast('已重新加入房间 ' + r.code + '，同步了 ' + r.events.length + ' 把');
+    } else {
+      toast('联机开局！你是 ' + r.roster[seat].name + (seat === 0 ? '（房主）' : ''));
+    }
+    renderAll();
+  }
+
+  var lastRoom = null;                /* 最近一次房间快照：busy 期间挂起的事件靠它重试 */
+  function applyRemoteEvents(r) {
+    if (!state || !state.online) return;
+    var guard = 0;
+    while (state.rollCount < r.events.length && guard++ < 1000) {
+      var ev = r.events[state.rollCount];
+      if (!ev) break;
+      if (state.current !== ev.s) {
+        toast('同步出错了，请退出重进'); NET.leave(); return;
+      }
+      /* ⚠️ 本端动画没落定时绝不能把事件丢掉 —— 回合制下对手手快是完全正常的时序。
+         挂起：把快照存下来，重试定时器 300ms 后再试（本地计算，零数据库开销）。 */
+      if (state.busy) { lastRoom = r; return; }
+      NET_APPLY = true;
+      try { doRoll(ev.d, false); } finally { NET_APPLY = false; }
+    }
+  }
+  setInterval(function () {
+    if (state && state.online && lastRoom && state.rollCount < lastRoom.events.length)
+      applyRemoteEvents(lastRoom);
+  }, 300);
+
+  /* ---------- 对外 API ---------- */
+  return {
+    peerId: function () { return PEER; },
+    kind: function () { return cur; },
+    seat: function () { return seat; },
+    code: function () { return codeNow; },
+    tcbReady: function () { return TCB.ready(); },
+    create: function (name, cb) {
+      var self = this;
+      cur = pick();
+      if (cur === TCB) {
+        TCB.init(function (err) {
+          if (err) { cur = Local; cb(err, null, 'local'); return; }
+          TCB.create(name, function (err2, r) {
+            if (err2) { cur = Local; cb(err2, null, 'local'); return; }
+            self._afterCreate(r, cb);
+          });
+        });
+      } else { Local.create(name, function (err, r) { self._afterCreate(r, cb); }); }
+    },
+    _afterCreate: function (r, cb) {
+      codeNow = r.code; seat = 0; inLobby = true;
+      cur = pick();
+      cur.watch(r.code, onRoom);
+      cb(null, r, cur.name);
+    },
+    join: function (code, name, cb) {
+      var self = this;
+      if (!CODE_RE.test(code)) { cb('房间号是 4 位数字'); return; }
+      cur = pick();
+      var go = function () {
+        cur.join(code, name, function (err, r) {
+          if (err) { cb(err, null, cur.name); return; }
+          codeNow = code; inLobby = true;
+          cur.watch(code, onRoom);
+          cb(null, r || cur.read(code), cur.name);
+        });
+      };
+      if (cur === TCB) TCB.init(function (err) { if (err) { cur = Local; cb('CloudBase 连不上，已改用同机演示', null, 'local'); return; } go(); });
+      else go();
+    },
+    start: function (a, b) {                       /* start(cb) 或 start(fast, cb) */
+      var fast = typeof a === 'boolean' ? a : false;
+      var cb = typeof a === 'function' ? a : b;
+      wantFast = fast;
+      cur.start(codeNow, function (err) { cb && cb(err); });
+    },
+    roster: function () { return cur ? cur.read(codeNow) : null; },
+    sendRoll: function (s, dice) { cur.addEvent(codeNow, { s: s, d: dice }, null); },
+    leave: function () {
+      var wasStarted = startedSeen;
+      if (cur && codeNow) cur.leave(codeNow, wasStarted);
+      cur && cur.unwatch && cur.unwatch();
+      startedSeen = false; seat = -1; codeNow = null; inLobby = false;
+      if (state) state.online = null;
+      var m = document.getElementById('net-modal'); if (m) m.classList.remove('show');
+    },
+    onLobby: function (cb) { lobbyCb = cb; },
+    canRoll: function () {
+      return !!(state && state.online && state.phase !== 'over' &&
+        state.current === state.online.seat && !state.busy);
+    },
+    /* 远端事件应用 + 本地自测钩子 */
+    _applyRemote: applyRemoteEvents,
+    _adoptPeer: function (code, rosterIdx) {     /* 自检专用：接管某个座次的身份（模拟老成员重连） */
+      var r = Local.read(code);
+      if (r && r.roster[rosterIdx]) PEER = r.roster[rosterIdx].id;
+    },
+    _fast: function (v) { wantFast = !!v; },
+    _tick: function () { if (cur && cur.tick) cur.tick(); },
+    _local: Local,
+    _tcb: TCB
+  };
+})();
+
+/* ---------- 联机面板 UI ---------- */
+var NETUI = (function () {
+  var myName = '';
+  function el(id) { return document.getElementById(id); }
+  function open() {
+    var inp = el('net-name');
+    if (inp && inp.value.trim()) myName = inp.value.trim();
+    if (!myName) myName = '玩家' + Math.floor(10 + Math.random() * 90);
+    el('net-modal').classList.add('show');
+    renderMenu('');
+  }
+  function close() { el('net-modal').classList.remove('show'); }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+  function renderMenu(err) {
+    el('net-body').innerHTML =
+      '<h3 style="margin:0 0 10px;color:var(--gold-l)">联机对战</h3>' +
+      (err ? '<p class="net-err">' + esc(err) + '</p>' : '') +
+      '<label class="net-lb">你的昵称</label>' +
+      '<input class="net-input" id="net-name" maxlength="8" value="' + esc(myName) + '">' +
+      '<button class="btn-primary" id="net-do-create" style="width:100%;margin-top:14px">创建房间</button>' +
+      '<div class="net-or">—— 或 ——</div>' +
+      '<div style="display:flex;gap:8px">' +
+      '  <input class="net-input" id="net-join-code" inputmode="numeric" maxlength="4" placeholder="房间号" style="flex:1">' +
+      '  <button class="btn-ghost" id="net-do-join" style="flex:1">加入</button>' +
+      '</div>' +
+      '<p class="net-note">同机演示：本浏览器开两个标签页即可互博。<br>跨设备联机需配置 CloudBase 环境后自动启用。</p>' +
+      '<button class="btn-ghost" id="net-close" style="width:100%;margin-top:10px">返回</button>';
+    el('net-do-create').onclick = function () { doCreate(); };
+    el('net-do-join').onclick = function () { doJoin(el('net-join-code').value.trim()); };
+    el('net-close').onclick = close;
+  }
+
+  function renderLobby(r, kindName) {
+    var isHost = r.roster.length && r.roster[0].id === NET.peerId();
+    var list = r.roster.map(function (p, i) {
+      return '<span class="net-seat">' + (i + 1) + '. ' + esc(p.name) +
+        (p.id === NET.peerId() ? '（你' + (i === 0 ? '，房主' : '') + '）' : '') + '</span>';
+    }).join('');
+    el('net-body').innerHTML =
+      '<h3 style="margin:0 0 6px;color:var(--gold-l)">房间已建好</h3>' +
+      '<div class="net-code" id="net-code">' + esc(r.code) + '</div>' +
+      '<button class="btn-ghost" id="net-copy" style="width:100%;margin:6px 0 12px">复制房间号</button>' +
+      '<div class="net-roster">' + list + '</div>' +
+      (kindName === 'local' ? '<p class="net-note">同机演示模式：另开一个本页标签页，用房间号加入。</p>' : '') +
+      (isHost
+        ? '<button class="btn-primary" id="net-do-start" style="width:100%;margin-top:12px">开始游戏（' + r.roster.length + ' 人）</button>'
+        : '<p class="net-note" style="text-align:center">等待房主开始…</p>') +
+      '<button class="btn-ghost" id="net-leave" style="width:100%;margin-top:10px">退出房间</button>';
+    el('net-copy').onclick = function () {
+      var t = el('net-code').textContent;
+      if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast('房间号已复制'); }, function () {});
+      else toast('房间号：' + t);
+    };
+    if (isHost) el('net-do-start').onclick = function () {
+      NET.start(function (err) { if (err) toast(err); });
+    };
+    el('net-leave').onclick = function () { NET.leave(); close(); };
+  }
+
+  function doCreate() {
+    myName = el('net-name').value.trim() || myName;
+    el('net-body').innerHTML = '<p class="net-note" style="text-align:center;padding:30px 0">正在创建房间…</p>';
+    NET.create(myName, function (err, r, kindName) {
+      if (err) { renderMenu(err); return; }
+      renderLobby(r, kindName);
+    });
+  }
+  function doJoin(code) {
+    myName = el('net-name') ? (el('net-name').value.trim() || myName) : myName;
+    if (!code) { renderMenu('先填房间号'); return; }
+    el('net-body').innerHTML = '<p class="net-note" style="text-align:center;padding:30px 0">正在加入…</p>';
+    NET.join(code, myName, function (err, r, kindName) {
+      if (err) { renderMenu(err); return; }
+      renderLobby(r || NET._local.read(code) || { code: code, roster: [{ id: '', name: '?' }] }, kindName);
+    });
+  }
+
+  /* 房间快照变化：大厅刷新 / 开局 / 远端事件 */
+  NET.onLobby(function (r) {
+    if (!el('net-modal').classList.contains('show') && !startedSeenGlobal()) return;
+    if (!r.started) { if (el('net-modal').classList.contains('show')) renderLobby(r, NET.kind()); return; }
+    close();   /* 开局了就收面板；开局/事件应用由 NET.onRoom 内部处理 */
+  });
+  function startedSeenGlobal() { return !!(typeof state !== 'undefined' && state && state.online); }
+
+  function bind() {
+    el('btn-net').addEventListener('click', function () { Sfx.wake(); open(); });
+    el('net-close-x').addEventListener('click', function () { close(); });
+  }
+  return { bind: bind, open: open };
+})();
+NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用，否则 NET/NETUI 还是 undefined */
 
 /* ============================================================================
    ⑬ 自检探针：?selftest=exhaustive|flow|steal|input|rules
@@ -2872,6 +3327,7 @@ window.__game = {
   var m = /[?&]selftest=([a-z]+)/.exec(location.search);
   if (!m) return;
   var mode = m[1];
+  if (/[?&]netchild=1/.test(location.search)) return;   /* net 探针的子页面：不跑检查，等父页面驱动 */
   var checks = [];
   function ok(name, pass, detail) { checks.push({ name: name, pass: !!pass, detail: detail == null ? '' : String(detail) }); }
   function report() {
@@ -2899,12 +3355,137 @@ window.__game = {
       else if (mode === 'dice') testDice();
       else if (mode === 'solo') testSolo();
       else if (mode === 'quota') testQuota();
+      else if (mode === 'net') testNet();
       else ok('未知探针', false, mode);
     } catch (e) {
       window.__logErr('探针异常: ' + e.stack);
       ok('探针自身异常', false, e.message);
     }
-    report();
+    if (mode !== 'net') report();   /* net 探针是异步的（要等 iframe 互博），由 testNet 自己收尾 */
+  }
+
+  /* ---- 联机模式：父页面驱动两个真实游戏子页面互博 ---- */
+  function testNet() {
+    var SRC = location.pathname + '?selftest=net&netchild=1';
+    function mkFrame() {
+      var f = document.createElement('iframe');
+      f.style.cssText = 'width:430px;height:620px;border:0;visibility:hidden;position:absolute;left:0;top:0';
+      document.body.appendChild(f);
+      return f;
+    }
+    /* 两端状态的关键字段快照：联机的正确性 = 同一事件序列推出完全一致的状态 */
+    function snap(g) {
+      var s = g.state();
+      return JSON.stringify({
+        rollCount: s.rollCount, round: s.round, current: s.current, phase: s.phase,
+        pool: s.pool, zyHolder: s.zyHolder, logLen: s.log.length,
+        cakes: s.players.map(function (p) { return p.cakes; })
+      });
+    }
+    var f1 = mkFrame(), f2 = mkFrame(), loaded = 0;
+    f1.addEventListener('load', function () { if (++loaded === 2) run2(); });
+    f2.addEventListener('load', function () { if (++loaded === 2) run2(); });
+    f1.src = SRC; f2.src = SRC;
+
+    function run2() {
+      try {
+      var g1 = f1.contentWindow.__game, g2 = f2.contentWindow.__game;
+      var code = g1.net.create('阿澈');
+      ok('〔联机〕创建房间：房号是 4 位数字', /^\d{4}$/.test(String(code)), code);
+      var jerr = g2.net.join(code, 'WooSaN');
+      ok('〔联机〕第二个客户端加入成功', !jerr, jerr);
+      g1.net.start(true);
+      g1.net.tick(); g2.net.tick(); g1.net.tick(); g2.net.tick();
+      var on1 = g1.net.state(), on2 = g2.net.state();
+      ok('〔联机〕开始后双方都进入对局', !!on1 && !!on2,
+        (on1 && on2) ? 'seat ' + on1.seat + '/' + on2.seat : '未进入');
+      ok('〔联机〕座次正确：房主 0、加入者 1', !!on1 && !!on2 && on1.seat === 0 && on2.seat === 1,
+        (on1 ? on1.seat : '-') + ' / ' + (on2 ? on2.seat : '-'));
+      var n1 = g1.state().players.map(function (p) { return p.name; });
+      var n2 = g2.state().players.map(function (p) { return p.name; });
+      ok('〔联机〕双方玩家名单一致（事件回放的前提）',
+        JSON.stringify(n1) === JSON.stringify(n2), n1.join('/') + ' vs ' + n2.join('/'));
+
+      /* 14 把轮替掷：每次由"当前回合的那一端"走正常掷骰路径（含事件广播） */
+      var i;
+      for (i = 0; i < 14; i++) {
+        /* 先把上一把的远端事件灌进来、把灌进来的动画就地落定 —— 真实用户靠
+           300ms 重试定时器兜底，同步探针循环里必须手动做这两步。
+           注意：回放动画期间 rollCount 尚未落账（afterRoll 在落定时才跑），
+           所以迭代中段两端数字可以合法地相差一把 —— 不能在迭代中段断言相等。 */
+        g1.net.tick(); g2.net.tick();
+        if (g1.state().busy) g1.skipAnim();
+        if (g2.state().busy) g2.skipAnim();
+        g1.net.tick(); g2.net.tick();
+        if (g1.state().busy) g1.skipAnim();
+        if (g2.state().busy) g2.skipAnim();
+        var cur = g1.state().current;
+        var driver = cur === 0 ? g1 : g2;
+        driver.doRoll(null, false);
+        if (g1.state().busy) g1.skipAnim();
+        if (g2.state().busy) g2.skipAnim();
+        g1.net.tick(); g2.net.tick(); g1.net.tick(); g2.net.tick();
+      }
+      /* 终局冲刷：把最后一条事件灌完、落定，再断言 */
+      g1.net.tick(); g2.net.tick();
+      if (g1.state().busy) g1.skipAnim();
+      if (g2.state().busy) g2.skipAnim();
+      g1.net.tick(); g2.net.tick();
+      if (g1.state().busy) g1.skipAnim();
+      if (g2.state().busy) g2.skipAnim();
+      ok('〔联机〕14 把轮替掷：两端都完整跑完且同步',
+        g1.state().rollCount === 14 && g2.state().rollCount === 14,
+        'rollCount=' + g1.state().rollCount + '/' + g2.state().rollCount);
+      ok('〔联机〕14 把后两端状态快照完全一致（回合/轮次/奖池/状元/日志）',
+        snap(g1) === snap(g2), snap(g1) + ' vs ' + snap(g2));
+
+      /* 回合守卫：不是自己回合时掷骰必须被拒 */
+      var g1Turn = g1.state().current === 0;
+      var wrong = g1Turn ? g2 : g1;
+      var rc = wrong.state().rollCount;
+      var refused = wrong.doRoll(null, false);
+      ok('〔联机〕不是自己的回合时掷骰被拒绝',
+        refused === null && wrong.state().rollCount === rc, '返回 ' + refused);
+      g1.net.tick(); g2.net.tick();
+
+      /* 联机时自动模式必须禁用（一个人替全桌挂机就没意思了） */
+      f1.contentDocument.getElementById('btn-auto').click();
+      ok('〔联机〕自动模式被禁用', g1.state().auto.on === false, 'auto.on=' + g1.state().auto.on);
+
+      /* 断线重连：第三个客户端接管 1 号座的身份重新加入 → 静默回放全部事件 */
+      var f3 = mkFrame();
+      f3.addEventListener('load', function () {
+        var g3 = f3.contentWindow.__game;
+        g3.net._adoptPeer(code, 1);
+        var jerr3 = g3.net.join(code, 'WooSaN');
+        var on3 = g3.net.state();
+        ok('〔联机〕断线重连：老成员重新加入被接受', !jerr3 && !!on3,
+          jerr3 || (on3 ? 'seat ' + on3.seat : '未进入'));
+        /* 重连回放是同步的，但给 300ms 重试定时器留机会（虚拟时钟推进），
+           确认"挂起的事件最终一定会被补上"—— 这正是真实弱网下最重要的一致性 */
+        setTimeout(function () {
+          try {
+            var s1 = g1.state(), s3 = g3.state();
+            var on3b = g3.net.state();
+            if (on3 && on3b) {
+              var same = s1.rollCount === s3.rollCount && s1.phase === s3.phase &&
+                JSON.stringify(s1.pool) === JSON.stringify(s3.pool) &&
+                s1.log.length === s3.log.length && s1.current === s3.current;
+              ok('〔联机〕重连后静默回放：状态与在场玩家完全一致（同步了 ' + s3.rollCount + ' 把）', same,
+                'rollCount ' + s1.rollCount + '/' + s3.rollCount + ' log ' + s1.log.length + '/' + s3.log.length +
+                ' jerr=' + jerr3 + ' seat=' + (s3.online ? s3.online.seat : 'none'));
+              g3.net.tick(); g3.net.tick();
+              ok('〔联机〕重复事件防护：快照重放不会重复计把数',
+                g3.state().rollCount === g1.state().rollCount,
+                g3.state().rollCount + ' vs ' + g1.state().rollCount);
+            }
+          } catch (e) { window.__logErr('net f3: ' + e.stack); ok('〔联机〕f3 检查异常', false, e.message); }
+          report();
+        }, 900);
+      });
+      f3.src = SRC;
+      } catch (e) { window.__logErr('net run2: ' + e.stack); ok('〔联机〕探针 run2 异常', false, e.message); report(); }
+    }
   }
 
   /* ---- 穷举 6^6 = 46656 种组合，比对理论分布 ---- */
