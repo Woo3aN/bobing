@@ -114,9 +114,13 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   border-radius:50%;
   background:radial-gradient(closest-side,rgba(0,0,0,.62),rgba(0,0,0,0));pointer-events:none}
 .bowl-svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;z-index:1}
-/* 骰子落区 = SVG 里碗底椭圆的外接矩形（cx500 cy572.93 rx311.52 ry296.27，viewBox 1000×1040）
-   ⚠️ 改了碗底椭圆的任何一个数，这三个百分比都要跟着重算（有断言查"落区与碗底同心"）。 */
-.bowl-inner{position:absolute;left:18.85%;right:18.85%;top:26.6%;bottom:16.42%;z-index:3}
+/* 骰子落区：宽 = 碗底椭圆外接矩形的宽（左右对齐碗底），高故意取【正方形】。
+   ⚠️ 别把高也写成碗底外接矩形的高：骰子平面自己还要 rotateX(18°) 压缩一次，
+   布局高若已等于碗底的投影高（= 宽×cos18°）就会被压缩两次，
+   视觉高只剩碗底的 95.1%（实测）—— 骰子的竖直散布比碗底短一截。
+   取正方形（边长 = 宽）后只压缩一次，正好等于碗底椭圆的投影高。
+   中心仍与碗底同心（断言查同心 + 尺寸 + 压缩后的高度）。 */
+.bowl-inner{position:absolute;left:18.85%;right:18.85%;top:25.14%;bottom:14.96%;z-index:3}
 /* 骰子落区平面：倾角 18°（用户要的"原版角度"——数值面几乎正对镜头，最好认）。
    ⚠️ 碗口椭圆比例必须 = cos(这个倾角) = 0.9511，这才是"碗和骰子同一个视角"。
    换算：碗口比例 = sin(相机仰角)，平面压缩系数 = cos(倾角)，相等要求 倾角 = 90° − 仰角。
@@ -128,10 +132,11 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
 .die-wrap{position:absolute;left:50%;top:50%;width:var(--die);height:var(--die);margin:0;
   transform-style:preserve-3d;will-change:transform}   /* 位置与旋转都交给 WAAPI，不再用 CSS transition */
 /* 接触阴影：投在碗底平面上（骰子整体被抬高半个边长坐在碗底，影子要落回平面） */
-.die-wrap::before{content:"";position:absolute;left:50%;top:99%;width:90%;height:9%;
+.die-wrap::before{content:"";position:absolute;left:50%;top:99%;width:84%;height:8%;
   transform:translate(-50%,-50%) translateZ(calc(var(--die) / -2));
   border-radius:50%;
-  background:radial-gradient(closest-side,rgba(0,0,0,.42),rgba(0,0,0,0));pointer-events:none}
+  /* 偏暖的暗红而不是纯黑：碗底是红釉，纯黑影子会把骰子衬得发脏 */
+  background:radial-gradient(closest-side,rgba(74,8,4,.30),rgba(74,8,4,0));pointer-events:none}
 .cube{position:absolute;inset:0;transform-style:preserve-3d}
 /* 骰面：一条发丝边收边 + 极轻的上下过渡，不做厚重内框。
    ⚠️ 这里曾经有一条 `inset 0 0 0 3px rgba(255,252,240,.5)` 的白色内框。
@@ -142,15 +147,15 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   grid-template-rows:repeat(3,1fr);padding:13%;border-radius:17%;
   background:
     radial-gradient(58% 40% at 30% 15%, rgba(255,255,255,.62) 0%, rgba(255,255,255,0) 70%),
-    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.16) 0%, rgba(150,110,50,0) 72%),
+    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.07) 0%, rgba(150,110,50,0) 72%),
     /* 这条从亮到暗必须【单调】。曾经末段用的是 --die-white-d(#efe2ca)，
        比它前一档的 #ece2cb 还亮 → 渐变在 80% 处最暗、到角上又亮回来，
        面上就没有"越靠下越暗"的体积感，看着发平。 */
-    linear-gradient(150deg,#fffdf6 0%,#f8f1e0 44%,#e9dcc0 78%,#dccaa6 100%);
+    linear-gradient(150deg,#fffefb 0%,#fdf9ef 42%,#f6efdd 76%,#eee3c9 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(105,66,20,.30),
-    inset 0 -3px 5px rgba(120,80,34,.24),
-    inset 0 2px 2px rgba(255,255,255,.70);
+    inset 0 0 0 1px rgba(120,80,30,.18),
+    inset 0 -3px 5px rgba(130,92,40,.13),
+    inset 0 2px 2px rgba(255,255,255,.88);
   backface-visibility:visible}
 .cell{display:grid;place-items:center;width:100%;height:100%}
 /* 点数：真内凹 —— 坑口一圈细暗边、坑内有阴影、坑底一点反光 */
@@ -547,41 +552,41 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
                 <path d="M188.48,572.93 A311.52,296.27 0 0 0 811.52,572.93 A311.52,296.27 0 0 0 188.48,572.93 Z"/>
               </clipPath>
               <linearGradient id="gWallBand" x1="0" y1="0" x2="0.16" y2="1">
-                <stop offset="0%" stop-color="#c23e2a"/>
-                <stop offset="10%" stop-color="#bc3222"/>
-                <stop offset="25.12%" stop-color="#ac261a"/>
-                <stop offset="58%" stop-color="#941a14"/>
-                <stop offset="82%" stop-color="#7a1010"/>
-                <stop offset="91.12%" stop-color="#5a0a0b"/>
-                <stop offset="96%" stop-color="#420608"/>
-                <stop offset="100%" stop-color="#300405"/>
+                <stop offset="0%" stop-color="#dc3a18"/>
+                <stop offset="10%" stop-color="#c62210"/>
+                <stop offset="25.12%" stop-color="#a91109"/>
+                <stop offset="58%" stop-color="#840708"/>
+                <stop offset="82%" stop-color="#600306"/>
+                <stop offset="91.12%" stop-color="#3d0204"/>
+                <stop offset="96%" stop-color="#2a0102"/>
+                <stop offset="100%" stop-color="#1c0001"/>
               </linearGradient>
               <!-- 内壁上的暖光团：让远端的亮区偏左上，而不是整条横带一样亮 -->
               <radialGradient id="gFarGlow" cx="29%" cy="10%" r="64%">
-                <stop offset="0%" stop-color="#ffd6bc" stop-opacity=".14"/>
-                <stop offset="55%" stop-color="#ffb08c" stop-opacity=".04"/>
+                <stop offset="0%" stop-color="#ffd6bc" stop-opacity=".17"/>
+                <stop offset="55%" stop-color="#ffb08c" stop-opacity=".05"/>
                 <stop offset="100%" stop-color="#ff9c78" stop-opacity="0"/>
               </radialGradient>
               <!-- 内腔底色：只在环带没盖到的地方（几乎没有）兜底 -->
               <radialGradient id="gCav" cx="42%" cy="24%" r="92%">
-                <stop offset="0%" stop-color="#a81f18"/>
-                <stop offset="45%" stop-color="#84100f"/>
-                <stop offset="78%" stop-color="#640a0c"/>
-                <stop offset="100%" stop-color="#4a0507"/>
+                <stop offset="0%" stop-color="#a01410"/>
+                <stop offset="45%" stop-color="#7a080a"/>
+                <stop offset="78%" stop-color="#570507"/>
+                <stop offset="100%" stop-color="#3d0304"/>
               </radialGradient>
               <radialGradient id="gFloor" cx="38%" cy="22%" r="92%">
-                <stop offset="0%" stop-color="#b32a1c"/>
-                <stop offset="30%" stop-color="#8e1713"/>
-                <stop offset="56%" stop-color="#6e0d0d"/>
-                <stop offset="78%" stop-color="#560708"/>
-                <stop offset="93%" stop-color="#440406"/>
-                <stop offset="100%" stop-color="#2f0304"/>
+                <stop offset="0%" stop-color="#ab2014"/>
+                <stop offset="30%" stop-color="#820e0c"/>
+                <stop offset="56%" stop-color="#5f0708"/>
+                <stop offset="78%" stop-color="#460406"/>
+                <stop offset="93%" stop-color="#330204"/>
+                <stop offset="100%" stop-color="#240102"/>
               </radialGradient>
               <!-- 碗底那片大而软的反光。刻意【不叫 gSheen】——
                    gSheen 被"高光只许在远端内壁"那条断言整类盯着，碗底反光不属于那一类。 -->
               <radialGradient id="gFloorSheen">
-                <stop offset="0%" stop-color="#ffd7c0" stop-opacity=".10"/>
-                <stop offset="55%" stop-color="#ffb492" stop-opacity=".03"/>
+                <stop offset="0%" stop-color="#ffd7c0" stop-opacity=".15"/>
+                <stop offset="55%" stop-color="#ffb492" stop-opacity=".05"/>
                 <stop offset="100%" stop-color="#ff9c78" stop-opacity="0"/>
               </radialGradient>
               <!-- 壁与底交界的接触阴影：中间透明、边缘暗 —— 填一个略大于碗底的椭圆，
@@ -598,6 +603,14 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
                    椭圆左右两端会停在渐变中段（≈0.3 不透明度）而不是 0，
                    于是椭圆轮廓被切出一圈硬边，看起来就是"糊了一块奇怪的灯光"。
                    径向渐变四周都能收到 0，边缘自然消失，才是釉面反光该有的样子。 -->
+              <!-- 陶瓷釉的"镜面"高光：比 gSheen 收得更快（26% 就掉一半）。
+                   釉面是光亮的，高光要小而锐 —— 用一大片软光去表现就成了消光陶。 -->
+              <radialGradient id="gSpec">
+                <stop offset="0%" stop-color="#fffefb" stop-opacity="1"/>
+                <stop offset="26%" stop-color="#fffaf0" stop-opacity=".62"/>
+                <stop offset="62%" stop-color="#fff6e6" stop-opacity=".16"/>
+                <stop offset="100%" stop-color="#fff2e0" stop-opacity="0"/>
+              </radialGradient>
               <radialGradient id="gSheen">
                 <stop offset="0%" stop-color="#fffdf6" stop-opacity="1"/>
                 <stop offset="46%" stop-color="#fffdf6" stop-opacity=".52"/>
@@ -684,8 +697,9 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
             <!-- 釉面高光：只画在【远端】内壁的左上半（光源方向）。
                  近侧内壁的法线偏离观察者，反光背对镜头，本该是暗的 —— 那里出现亮块就是假的。
                  fill 必须是 gSheen（径向）而不是线性，否则椭圆边缘是硬的。 -->
-            <ellipse cx="330.08" cy="221.68" rx="188.8" ry="76.31" data-role="glaze-specular" fill="url(#gSheen)" opacity=".12" transform="rotate(-18 330.08 221.68)"/>
-            <ellipse cx="311.2" cy="257.59" rx="94.4" ry="33.67" data-role="glaze-specular" fill="url(#gSheen)" opacity=".20" transform="rotate(-18 311.2 257.59)"/>
+            <ellipse cx="339.52" cy="212.7" rx="217.12" ry="85.29" data-role="glaze-specular" fill="url(#gSheen)" opacity=".16" transform="rotate(-18 339.52 212.7)"/>
+            <ellipse cx="320.64" cy="253.11" rx="103.84" ry="36.81" data-role="glaze-specular" fill="url(#gSpec)" opacity=".28" transform="rotate(-18 320.64 253.11)"/>
+            <ellipse cx="315.92" cy="262.08" rx="47.2" ry="16.16" data-role="glaze-specular" fill="url(#gSpec)" opacity=".42" transform="rotate(-18 315.92 262.08)"/>
           </svg>
           <div class="bowl-inner" id="bowl-inner" data-page-node-id="Ps9GtvwU84fv88Q0QbCieA">
             <div class="dice-field" id="dice-field" data-page-node-id="WuojffUJBFESOdUle87xNX"></div>
@@ -2656,6 +2670,11 @@ window.__game = {
   renderStatModal: renderStatModal,
   renderRulesOdds: renderRulesOdds,
   buildDice: buildDice,
+  /* 测试钩子：每颗骰子在落区本地坐标里的位置（px，落区中心为原点）。
+     给「落点有没有落在碗底椭圆里」这类几何断言用。 */
+  dicePositions: function () {
+    return diceEls.map(function (d) { return { x: d.x, y: d.y, rot: d.rot }; });
+  },
   needsRelayout: needsRelayout,
   settle: settle,
   spinPlan: spinPlan,
@@ -3389,6 +3408,32 @@ window.__game = {
     var cyErr = Math.abs((innerRect.top + innerRect.height / 2 - wrapRect.top) / wrapRect.height - (Number(floorEl.getAttribute('cy')) / vbH));
     ok('骰子落区与 SVG 碗底同心（偏差 <2%）', cxErr < 0.02 && cyErr < 0.02,
       'x偏差 ' + (cxErr * 100).toFixed(2) + '% / y偏差 ' + (cyErr * 100).toFixed(2) + '%');
+    /* 落区的【尺寸】也得对得上。只查同心是不够的 —— 碗底半径改了、
+       CSS 百分比忘了跟着改，圆心照样是对的，但骰子会摊到内壁上去。 */
+    var fRXp = Number(floorEl.getAttribute('rx'));
+    var kxp = wrapRect.width / vbW, kyp = wrapRect.height / vbH;
+    var floorW = 2 * fRXp * kxp, floorH = 2 * Number(floorEl.getAttribute('ry')) * kyp;
+    ok('骰子落区尺寸 = 碗底外接矩形的宽，且高取同一值（正方形，±2%）',
+      Math.abs(innerRect.width / floorW - 1) < 0.02 && Math.abs(innerRect.height / floorW - 1) < 0.02,
+      '宽 ' + innerRect.width.toFixed(1) + '/' + floorW.toFixed(1) + '  高 ' + innerRect.height.toFixed(1) + '/' + floorW.toFixed(1));
+    /* 骰子平面只许被压缩【一次】：压缩后的视觉高必须等于碗底椭圆的投影高。
+       曾经落区的布局高直接取了碗底外接矩形的高，于是 cos18° 被乘了两遍，
+       视觉高只剩碗底的 95.1%，骰子的竖直散布比碗底短一截。 */
+    var fldRect = document.getElementById('dice-field').getBoundingClientRect();
+    ok('骰子平面只被压缩一次（视觉高 = 碗底椭圆的投影高）',
+      Math.abs(fldRect.height / floorH - 1) < 0.02,
+      fldRect.height.toFixed(1) + ' vs 碗底投影高 ' + floorH.toFixed(1) + '（比 ' + (fldRect.height / floorH).toFixed(3) + '）');
+    /* 每颗骰子连外缘都要落在【碗底椭圆】之内 —— 骰子是落在碗底那一小块上的，
+       不是摊在整只碗里。外缘按方块绕法线任意角度的外接半径算。 */
+    var cosT = Math.cos(18 * Math.PI / 180), footRp = dieSize * FOOT_R;
+    var dpos = window.__game.dicePositions(), outFloor = [];
+    for (i = 0; i < dpos.length; i++) {
+      var exF = (Math.abs(dpos[i].x) + footRp) / (floorW / 2);
+      var eyF = (Math.abs(dpos[i].y * cosT) + footRp * cosT) / (floorH / 2);
+      if (exF * exF + eyF * eyF > 1) outFloor.push('第' + (i + 1) + '颗 ' + (exF * exF + eyF * eyF).toFixed(2));
+    }
+    ok('每颗骰子连外缘都落在碗底椭圆之内（骰子落在碗底那一小块上）',
+      outFloor.length === 0, outFloor.join('; ') || 'ok');
 
     /* 翻滚动画：从当前角顺向滚够整圈，落定角 ≡ 目标角 (mod 360) —— 保证精确显示目标点数 */
     var planBad = [];
