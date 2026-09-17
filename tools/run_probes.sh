@@ -22,7 +22,7 @@ BAD=0
 run_probe() {   # mode w h tag
   local mode="$1" w="$2" h="$3" tag="$4" ud="$UD/$tag"
   rm -rf "$ud"
-  "$CHROME" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+  "$CHROME" --headless=new --disable-gpu --allow-file-access-from-files \
     --user-data-dir="$ud" --window-size="$w,$h" --virtual-time-budget=90000 \
     --dump-dom "file:///$URLROOT/博饼.html?selftest=$mode" 2>/dev/null \
     | grep -o '<pre id="__state">.*</pre>' | tail -1 \

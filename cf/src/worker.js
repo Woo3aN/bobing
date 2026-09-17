@@ -208,6 +208,16 @@ export class RoomDO {
     const pid = (ws.deserializeAttachment() || {}).pid;
     this.dead = this.dead || new Set();
     if (pid) this.dead.add(pid);          /* 广播前先记账：见 markOffline 注释 */
+
+    /* 主动退出：把"谁走了"写进记录再广播 —— 否则打完之后有人退出，房间照常在、
+       其他人却完全看不出人少了（实测用户报的问题）。带 seq 让客户端只提示一次。
+       掉线（没发 bye）不写，那是"暂时联系不上"，不是"离场"。 */
+    if (explicit) {
+      const who = this.rec.roster.find(p => p.id === pid);
+      this.rec.leftSeq = (this.rec.leftSeq || 0) + 1;
+      this.rec.left = { seq: this.rec.leftSeq, name: who ? who.name : '有人', done: !!done };
+    }
+
     const leaveRoster = !this.rec.started || done;
     if (leaveRoster) {
       const before = this.rec.roster.length;

@@ -150,6 +150,9 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   ok('打完后退出带 done：只把自己摘出名单，房间保留',
     await waitFor(() => lastRoom(host).roster.length === 2 && lastRoom(host).closed === false),
     'roster=' + lastRoom(host).roster.length + ' closed=' + lastRoom(host).closed);
+  ok('退出要带上「谁走了」（否则其他人完全看不出人少了）',
+    lastRoom(host).left && lastRoom(host).left.name === '客人甲' && lastRoom(host).left.done === true,
+    JSON.stringify(lastRoom(host).left));
 
   /* ===== 已开局后主动退出 = 解散 ===== */
   send(host, { t: 'start' });
@@ -158,6 +161,9 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   send(late, { t: 'bye' });
   ok('开局后任何人主动退出 → 本局解散（避免全场干等）',
     await waitFor(() => lastRoom(host).closed === true), 'closed=' + lastRoom(host).closed);
+  ok('中途退出同样带「谁走了」（解散提示里要点名）',
+    lastRoom(host).left && lastRoom(host).left.name === '客人乙' && lastRoom(host).left.done === false,
+    JSON.stringify(lastRoom(host).left));
 
   /* ===== 加入失败原因可诊断 ===== */
   const q1 = await httpGet('?code=' + code);
@@ -180,6 +186,8 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   ok('大厅里房主退出：房间保留，房主顺位给剩下的人（否则剩下的人点「开始」会被服务端拒绝）',
     await waitFor(() => lastRoom(g3).roster.length === 1 && lastRoom(g3).host === 'pGuest3' && lastRoom(g3).closed === false),
     'roster=' + lastRoom(g3).roster.length + ' host=' + lastRoom(g3).host + ' closed=' + lastRoom(g3).closed);
+  ok('大厅里退出也点名（房主退了大厅也要让剩下的人知道）',
+    lastRoom(g3).left && lastRoom(g3).left.name === '房主丙', JSON.stringify(lastRoom(g3).left));
   const g4 = await connect(code3, 'join', '客人丁', 'pGuest4');
   await waitFor(() => lastRoom(g3).roster.length === 2);
   send(g3, { t: 'start' });

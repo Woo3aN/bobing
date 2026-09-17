@@ -214,6 +214,23 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     if (g1.state().rollCount !== 0 || g2.state().rollCount !== 0) fail('新一局事件没清零');
     log('[16] 新一局已开始，双方事件清零 ✓');
 
+    /* [17] 有人退出 → 其他人必须收到点名提示（用户报的：退出后对方毫无感知） */
+    N2.leave();
+    const toast1 = f1.contentDocument.getElementById('toast');
+    let tTxt = '';
+    for (let k = 0; k < 60; k++) {
+      await sleep(150);
+      tTxt = (toast1 && toast1.textContent) || '';
+      if (tTxt.indexOf('WooSaN') >= 0) break;
+    }
+    if (tTxt.indexOf('WooSaN') < 0) fail('对方退出后没有收到提示，toast 实际内容：' + JSON.stringify(tTxt));
+    if (tTxt.indexOf('解散') < 0) fail('中途退出的提示应当说明本局解散，实际：' + tTxt);
+    log('[17] 对方退出 → 本端收到提示「' + tTxt + '」✓');
+    let kicked = false;
+    for (let k = 0; k < 40; k++) { await sleep(300); if (!g1.state() || !g1.state().online) { kicked = true; break; } }
+    if (!kicked) fail('房间解散后本端还留在对局里');
+    log('[18] 本端已退出对局回到设置页 ✓');
+
     /* 清理：解散房间 */
     N1.leave();
     log('=== 端到端全部通过 ===');

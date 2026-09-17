@@ -808,7 +808,7 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
       <li data-page-node-id="XdOzlMGtAcDjcO6zDAZtBh">两方完全同级同点：不算夺，先博到的人保留。</li>
     </ul>
     <h4 data-page-node-id="YIVd0qKBo9j3gtcZXCcHaC">收官轮</h4>
-    <p data-page-node-id="5BNab1pqhtDrtJmhFMoi2E">全部奖项都有主（含状元）之后，还有<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">最后一轮（收官轮）</b>：每人再各博一次，博到状元级仍按「最后博出为准」互换，其他科名只作展示；跑完即结算。若非状元的 <span id="rules-nonzy">62</span> 份发完时状元还没有主，就继续正常博弈，直到有人博出状元。</p>
+    <p data-page-node-id="5BNab1pqhtDrtJmhFMoi2E">全部奖项都有主（含状元）之后，还有<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">最后一轮（收官轮）</b>：从<b>博出最后一个奖项那个人的下一位</b>开始，每人再各博一次；博到状元级仍按「最后博出为准」互换，其他科名只作展示；转完一整圈即结算。若非状元的 <span id="rules-nonzy">62</span> 份发完时状元还没有主，就继续正常博弈，直到有人博出状元。</p>
     <h4 data-page-node-id="J4igrP9OLHzkv2hkAXxhHp">各地口径</h4>
     <p data-page-node-id="COE95vN4MRV47GKhpcnx5x">古法有「六抔红 &gt; 五红 &gt; 五子 &gt; 插金花」的排法，厦门现行玩法公认<b data-page-node-id="3Bu2KkGHKmWsmHifAA55kj">状元插金花最大</b>，本游戏按后者执行。关于“五子登科”内部比大小，各地亦有分别，本桌按“比带点”执行。</p>
   </div>
@@ -1582,8 +1582,8 @@ function afterRoll(silent) {
   var nonLeft = state.pool.duitang + state.pool.sanhong + state.pool.sijin + state.pool.erju + state.pool.yixiu;
   if (nonLeft === 0 && !state.poolEmpty) {
     state.poolEmpty = true;
-    /* 规则（2026-09-16 用户定）：只剩状元没出时【不算收官轮】，正常继续博；
-       全部奖项都有主之后的那一轮才是收官轮。 */
+    /* 规则（用户定）：只剩状元没出时【不算收官轮】，正常继续博；
+       全部奖项都有主（含状元）的那一把博完，立刻从下家起算收官轮（见下面 afterRoll 的推进）。 */
     if (state.zyHolder === null)
       pushSystemLog('🀄 非状元奖项已全部发完 —— 只差状元了，继续博，博出即收官！');
   }
@@ -1592,12 +1592,11 @@ function afterRoll(silent) {
 
   if (state.phase === 'playing') {
     state.current = (state.current + 1) % n;
-    if (wrapped) {
-      state.round++;
-      /* 收官轮只在【全部奖项都有主】（含状元）之后进入 ——
-         只剩状元没出时继续正常博弈，博出状元的下一轮才是收官轮。 */
-      if (state.poolEmpty && state.zyHolder !== null) enterFinalRound();
-    }
+    /* 收官轮：从**博出最后一个奖项那个人的下一位**开始，每人再各博一次（用户 2026-09-17 定）。
+       ⚠️ 不能等"这一轮转完"再开：那样先博的人（含刚得奖的那位）会白多博一把，
+       而且收官轮会从第 0 座起算，跟"下家起算"对不上 —— 两种口径的差别就在这里。 */
+    if (state.poolEmpty && state.zyHolder !== null) enterFinalRound();
+    else if (wrapped) state.round++;
   } else if (state.phase === 'final') {
     state.finalRolls++;
     state.current = (state.current + 1) % n;
@@ -1617,8 +1616,9 @@ function enterFinalRound() {
   state.phase = 'final';
   state.finalRoundNo = 1;
   state.finalRolls = 0;
-  state.current = state.current % state.players.length;
-  pushSystemLog('🀄 所有奖项都有主 —— 进入<strong>收官轮（最后一轮）</strong>，每人再各博一次！');
+  /* current 此刻正好是"最后一位得奖者的下家"（afterRoll 已推进过）→ 从这里转一整圈
+     （n 把）算收官轮，转回得奖者本人时结束 */
+  pushSystemLog('🀄 所有奖项都有主 —— 从下一位开始<strong>收官轮（最后一轮）</strong>，每人再各博一次！');
   toast('收官轮开始！最后一博');
 }
 
@@ -3228,7 +3228,12 @@ var NET = (function () {
     },
     leave: function (code, started, done) {
       var r = lread(code); if (!r) return;
-      if (!started || done) {          /* 未开局 / 本局已打完：只把自己摘掉（语义与 Worker 版一致） */
+      /* 与 Worker 版一致：主动退出要留下"谁走了"，否则别人那边毫无提示 */
+      var me = null;
+      for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) me = r.roster[i];
+      r.leftSeq = (r.leftSeq || 0) + 1;
+      r.left = { seq: r.leftSeq, name: me ? me.name : '有人', done: !!done };
+      if (!started || done) {          /* 未开局 / 本局已打完：只把自己摘掉 */
         r.roster = r.roster.filter(function (p) { return p.id !== PEER; });
         if (!r.roster.length) { localStorage.removeItem(lkey(code)); return; }
         if (!r.roster.some(function (p) { return p.id === r.host; })) r.host = r.roster[0].id;
@@ -3431,7 +3436,17 @@ var NET = (function () {
     startedSeen = false; seat = -1; codeNow = null;
     if (state) state.online = null;
     clearSession();
+    leftArmed = false;                 /* 换房间要重新做"谁走了"的基线 */
     var m = document.getElementById('net-modal'); if (m) m.classList.remove('show');
+  }
+
+  /* 「谁退出了房间」——记录里带 left{seq,name}，按 seq 只提示一次。
+     ⚠️ 首个快照只做基线（否则刚进房就会把历史上的"某人已退出"当成刚发生）。 */
+  var seenLeftSeq = 0, leftArmed = false;
+  function takeLeaver(r) {
+    if (!leftArmed) { leftArmed = true; seenLeftSeq = (r.left && r.left.seq) || 0; return null; }
+    if (r.left && r.left.seq !== seenLeftSeq) { seenLeftSeq = r.left.seq; return r.left.name || '有人'; }
+    return null;
   }
 
   function onRoom(r) {
@@ -3444,14 +3459,18 @@ var NET = (function () {
     if (state && state.online && r.started && !r.closed && r.events.length < state.rollCount) return;
     lastRoom = r;
     if (state && state.online) applyOff(r.off);      /* 在线状态给 UI（掉线跳过）用 */
+    var leaver = takeLeaver(r);                       /* 主动退出的人（掉线不算） */
     if (r.closed) {                                   /* 房间解散（房主关房 / 中途有人退出） */
       if (state && state.online) {
         localLeave();                                 /* 收拾干净：断连接、清"回到房间"记忆 */
-        toast('房间已解散');
+        toast(leaver ? (leaver + ' 退出了房间，本局解散') : '房间已解散');
         exitToSetup();
       } else if (lobbyCb) lobbyCb(r);
       return;
     }
+    /* 房间还在但人少了 = 本局已打完时有人退出（大厅里退出也走这里）→ 必须说一声，
+       否则其他人完全看不出人少了（用户报的问题） */
+    if (leaver) toast(leaver + ' 离开了房间');
     if (!r.started) {
       var fromGame = startedSeen;                     /* 房主点了「再来一局」：从牌桌回大厅 */
       startedSeen = false; seat = -1;
@@ -4197,23 +4216,31 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     ok('〔最后为准〕降级丢状元的日志写明来龙去脉',
       e3.action === '失状元' && e3.msg.indexOf('降级') >= 0 && e3.msg.indexOf('B') >= 0,
       e3.action + ' / ' + e3.msg);
-    /* ---- 收官轮：只在全部奖项都有主（含状元）之后（2026-09-16 用户定）----
-       只剩状元没出时不算收官轮，正常继续博。
-       场景要构造「poolEmpty 且状元没主时轮次先收尾」—— 旧逻辑在这里就会进收官。 */
+    /* ---- 收官轮：从「博出最后一个奖项的人的下一位」开始，每人再各博一次（2026-09-17 用户定）----
+       · 只剩状元没出时不算收官轮，正常继续博；
+       · 全部奖项都有主的那一把博完，**立刻**从下家起算收官轮（不等这一轮转完 ——
+         否则先博的人会白多博一把，且起点会跑到第 0 座去）。 */
     var st5 = window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
     st5.pool.duitang = 0; st5.pool.sanhong = 0; st5.pool.sijin = 0;
     st5.pool.erju = 0; st5.pool.yixiu = 0;
     window.__game.rollForced([1, 2, 3, 5, 6, 6]);            /* A：空手 */
-    window.__game.rollForced([2, 2, 3, 5, 6, 6]);            /* B：空手 → 轮次收尾，状元还没主 */
+    window.__game.rollForced([2, 2, 3, 5, 6, 6]);            /* B：空手 → 一轮走完，状元还没主 */
     ok('〔收官轮〕只剩状元没出时，跑完一轮也不进收官',
       st5.phase === 'playing' && st5.poolEmpty === true,
       'phase=' + st5.phase + ' poolEmpty=' + st5.poolEmpty);
-    window.__game.rollForced([4, 4, 4, 4, 4, 6]);            /* A：博出状元 */
-    ok('〔收官轮〕状元有主后，下一轮才进收官（博出这把本身还在正常轮）',
-      st5.phase === 'playing', 'phase=' + st5.phase);
-    window.__game.rollForced([2, 2, 3, 5, 6, 6]);            /* B：空手 → 收官轮开始 */
-    ok('〔收官轮〕状元有主后的下一轮进收官', st5.phase === 'final' && st5.zyHolder === 0,
-      'phase=' + st5.phase + ' zyHolder=' + st5.zyHolder);
+    window.__game.rollForced([4, 4, 4, 4, 4, 6]);            /* A：五红 → 状元有主，奖项全清 */
+    ok('〔收官轮〕博出最后奖项的那一把立刻进收官，并从下家（座次 1）起算',
+      st5.phase === 'final' && st5.current === 1 && st5.finalRolls === 0,
+      'phase=' + st5.phase + ' current=' + st5.current + ' finalRolls=' + st5.finalRolls);
+    ok('〔收官轮〕状元归博出者', st5.zyHolder === 0, 'zyHolder=' + st5.zyHolder);
+    window.__game.rollForced([2, 2, 3, 5, 6, 6]);            /* B：收官第 1 把 */
+    ok('〔收官轮〕转半圈仍在收官（每人都要轮到）',
+      st5.phase === 'final' && st5.finalRolls === 1 && st5.current === 0,
+      'phase=' + st5.phase + ' finalRolls=' + st5.finalRolls + ' current=' + st5.current);
+    window.__game.rollForced([2, 2, 3, 5, 6, 6]);            /* A：收官第 2 把 → 转回得奖者，结束 */
+    ok('〔收官轮〕转回得奖者本人（每人恰好再博一次）即结算',
+      st5.phase === 'over' && st5.rollCount === 5,
+      'phase=' + st5.phase + ' rollCount=' + st5.rollCount);
     /* 非状元博完 → 空手 */
     var st2 = window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
     st2.pool.yixiu = 0;

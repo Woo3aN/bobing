@@ -26,6 +26,11 @@ function broadcast(code) {
 function dropPlayer(ws, explicit, done) {
   const rec = rooms.get(ws.roomCode);
   if (!rec) return;
+  if (explicit) {   /* 主动退出：记录"谁走了"，客户端据此提示（与 Worker 版一致） */
+    const who = rec.roster.find(p => p.id === ws.pid);
+    rec.leftSeq = (rec.leftSeq || 0) + 1;
+    rec.left = { seq: rec.leftSeq, name: who ? who.name : '有人', done: !!done };
+  }
   const leaveRoster = !rec.started || done;   /* 未开局 / 本局已打完 → 只把自己摘掉 */
   if (leaveRoster) {
     const before = rec.roster.length;
