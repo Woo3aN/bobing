@@ -2352,7 +2352,9 @@ function showResult(grade, entry) {
 function updateRollButton() {
   var b = document.getElementById('btn-roll');
   if (!b) return;
-  if (state.phase === 'over') { b.disabled = true; b.textContent = '本局结束'; return; }
+  /* 本局结束后这个按钮变成「看结算」的入口 —— 结算面板点过「先看看」关掉之后，
+     这是唯一能回去（并点「再来一局」）的地方。旧版本关掉就再也回不去（用户报的）。 */
+  if (state.phase === 'over') { b.disabled = false; b.textContent = '本局结束 · 看结算'; return; }
   if (state.online) {
     /* 掉线时 send 会被静默丢弃 —— 必须换成明确文案，否则看起来就是"点了没反应" */
     var lk = state.online.link;
@@ -2769,6 +2771,8 @@ function bindEvents() {
 
   document.getElementById('btn-roll').addEventListener('click', function () {
     Sfx.wake();
+    /* 本局已结束 → 这个按钮是「看结算」入口（回去才能点「再来一局」） */
+    if (state && state.phase === 'over') { showResultModal(); return; }
     if (state && state.busy) { skipAnim(); return; }    /* 动画中再点 = 跳过 */
     /* 掉线跳过：轮到的玩家掉线时，这个按钮变成「跳过这一把」（服务端校验掉线才允许） */
     if (state && state.online && state.phase !== 'over' &&
@@ -4170,6 +4174,23 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     ok('各人掷骰次数之和 = 总掷骰次数', sumRolls === st.rollCount, sumRolls + ' vs ' + st.rollCount);
     ok('收官轮确实跑过', st.finalRoundNo >= 1, st.finalRoundNo);
     ok('对局过程中没有运行时错误', window.__errors.length === 0, window.__errors.join(' | '));
+
+    /* 结束后掷骰按钮要变成「看结算」入口 —— 结算面板点过「先看看」关掉后，
+       这是唯一能回去点「再来一局」的地方（用户报的"关掉就回不去了"）。 */
+    var rb = document.getElementById('btn-roll');
+    ok('结束后掷骰按钮变「看结算」且可点',
+      !rb.disabled && rb.textContent.indexOf('看结算') >= 0,
+      (rb.disabled ? '已禁用' : '可点') + ' / ' + rb.textContent);
+    closeModal('modal-result');
+    ok('「先看看」关掉结算面板后按钮仍在（可回去）',
+      document.getElementById('modal-result').className.indexOf('show') < 0 &&
+      document.getElementById('btn-roll').textContent.indexOf('看结算') >= 0);
+    document.getElementById('btn-roll').click();
+    ok('点它能重新打开结算面板（面板里有「再来一局」）',
+      document.getElementById('modal-result').className.indexOf('show') >= 0 &&
+      !!document.getElementById('btn-again'), 'modal-result show=' +
+      (document.getElementById('modal-result').className.indexOf('show') >= 0));
+    closeModal('modal-result');
   }
 
   /* ---- 状元可夺 / 不可夺 ---- */

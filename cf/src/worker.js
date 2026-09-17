@@ -143,10 +143,12 @@ export class RoomDO {
       if (seat < 0 || seat >= this.rec.roster.length) return;
       if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
       /* 防冒名：只能替**自己**掷（客户端本来就只发自己的座次）。
-         服务端不跑规则、判不了"轮到谁"，但"谁在替谁掷"是可以判的 —— 这道检查挡掉
-         一半的伪造路径，也让出 bug 的客户端不至于污染整条事件序列。 */
+         服务端不跑规则、判不了"轮到谁"，但"谁在替谁掷"是可以判的。
+         ⚠️ 拿不到发送者身份时**放行**（fail-open）：这只是第二道防线，
+         为了它把合法掷骰丢掉（运行时瞬时给不出 attachment）才是真事故。
+         注意带上 pid 的判断必须在 roster 里找得到人才生效。 */
       const pid = (ws.deserializeAttachment() || {}).pid;
-      if (this.rec.roster.findIndex(p => p.id === pid) !== seat) return;
+      if (pid && this.rec.roster.findIndex(p => p.id === pid) !== seat) return;
       if (this.rec.events.length >= 5000) return;      /* 兜底：别让异常客户端把记录撑爆 */
       this.rec.events.push({ s: seat, d: m.d.slice() });
       await this.save();

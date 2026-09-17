@@ -103,7 +103,8 @@ python -m http.server 8000
 - `?demo=N` —— 直接开一桌 4 人并先博 N 次
 - `?demo=N&solo=1` —— 直接进单人挑战
 - `&open=rules|hist|stat|result` —— 直接打开对应弹层
-- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota|net` —— 自检探针（9 组共 294 项断言）
+- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota|net` —— 自检探针（9 组共 298 项断言）
+  仓库自带批量脚本：`bash tools/run_probes.sh`（一条命令跑完全套，含 520/360 窄视口回归）
 
 ---
 

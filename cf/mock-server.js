@@ -128,7 +128,7 @@ server.on('upgrade', (req, socket, head) => {
         const seat = m.s | 0;
         if (seat < 0 || seat >= r.roster.length) return;
         if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
-        if (r.roster.findIndex(p => p.id === pid) !== seat) return;   /* 防冒名：只能替自己掷 */
+        if (pid && r.roster.findIndex(p => p.id === pid) !== seat) return;   /* 防冒名：只能替自己掷（拿不到身份则放行） */
         if (r.events.length >= 5000) return;
         r.events.push({ s: seat, d: m.d.slice() });
         broadcast(code);
