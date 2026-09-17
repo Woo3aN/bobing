@@ -1,29 +1,45 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>博饼联机探针</title>
+<title>博饼联机探针 v2</title>
 <style>
-body{background:#1a1208;color:#e8dcc8;font:14px/1.7 -apple-system,"PingFang SC",monospace;margin:0;padding:16px;max-width:560px;margin:0 auto}
+body{background:#1a1208;color:#e8dcc8;font:15px/1.7 -apple-system,"PingFang SC",monospace;margin:0;padding:16px;max-width:560px;margin:0 auto}
 h1{font-size:18px;color:#f4c542;margin:8px 0}
-h2{font-size:15px;margin:14px 0 4px;color:#f4c542}
 .item{padding:8px 10px;border-radius:8px;margin:4px 0;background:#241a0e}
 .ok{border-left:4px solid #4caf50}
 .fail{border-left:4px solid #e53935}
 .wait{border-left:4px solid #999}
+#env{padding:8px 10px;border-radius:8px;background:#241a0e;font-size:13px;margin:8px 0}
+#env.bad{border-left:4px solid #ffb300}
 #final{font-size:16px;font-weight:bold;margin:16px 0;padding:12px;border-radius:10px;text-align:center}
+.wait2{background:#241a0e}
+#copyBtn{width:100%;padding:12px;border-radius:10px;border:0;background:#f4c542;color:#1a1208;font-size:15px;font-weight:bold;margin-top:8px}
 small{color:#a09078}
 </style></head><body>
-<h1>⚡ 博饼联机可行性探针</h1>
-<small>本页只做网络测试，不收集任何数据。测完把整页截图发给阿澈即可。</small>
-<div id="final" class="wait">测试中…</div>
+<h1>⚡ 博饼联机探针 v2</h1>
+<div id="env"></div>
+<div id="final" class="wait2">测试中…（约 15 秒）</div>
 <div id="list"></div>
+<button id="copyBtn">复制测试结果</button>
+<small style="display:block;margin-top:8px">请用<b>手机 Safari</b> 打开本页测试；电脑预览/无头环境的红叉不代表真机结果。</small>
 <script>
 var list = document.getElementById('list');
-var results = {};
+var results = {}, order = [];
+var UA = navigator.userAgent;
+var isMobile = /iPhone|iPad|Android|Mobile/i.test(UA);
+var env = document.getElementById('env');
+if (!isMobile) {
+  env.className = 'bad';
+  env.innerHTML = '⚠️ 检测到你正在<b>电脑</b>上打开。电脑预览环境无法代表真机——<b>请用手机 Safari 打开本页</b>（地址栏发到手机，或扫二维码）。电脑上测试红叉是正常的。';
+} else {
+  env.innerHTML = '📱 真机环境 ✓ ' + (/iPhone|iPad/i.test(UA) ? 'iOS' : 'Android');
+}
+
 function item(id, name) {
   var d = document.createElement('div');
   d.className = 'wait'; d.id = id; d.textContent = '⏳ ' + name;
   list.appendChild(d);
+  results[id] = null; order.push(id);
   return d;
 }
 function done(id, ok, text) {
@@ -31,57 +47,67 @@ function done(id, ok, text) {
   d.className = ok ? 'ok' : 'fail';
   d.textContent = (ok ? '✅ ' : '❌ ') + text;
   results[id] = ok;
-  var all = Object.keys(results).length, passed = 0;
-  for (var k in results) if (results[k]) passed++;
+  var finished = 0, passed = 0;
+  for (var k in results) { if (results[k] !== null) { finished++; if (results[k]) passed++; } }
   var f = document.getElementById('final');
-  if (all >= 4) {
-    var verdict = passed === all
-      ? '🎉 全部通过：你的网络可以用 PeerJS 直连连机！'
-      : (results.t2 ? '⚠️ 部分通过：信令可用，打洞受限——同 WiFi 联机可用，跨网看运气'
-                    : '❌ 信令不通：PeerJS 公共信令在你的网络不可用');
-    f.className = passed >= 2 ? 'ok' : 'fail';
-    f.textContent = verdict;
+  if (finished >= 4) {
+    var v;
+    if (results.t2) {
+      v = passed === 4 ? '🎉 全部通过！你的网络可以跑 PeerJS 直连连机'
+        : '⚠️ 信令可用' + (results.t4 ? '' : '，但跨网打洞受限——同 WiFi 联机没问题，跨网看运气');
+      f.style.background = '#1d3a1d';
+    } else {
+      v = '❌ PeerJS 公共信令在你的网络不可用 → 走 CloudBase 联机方案（已就绪）';
+      f.style.background = '#3a1d1d';
+    }
+    f.textContent = v;
+    f.id && 0;
   }
 }
+document.getElementById('copyBtn').onclick = function () {
+  var t = '【博饼联机探针 v2】' + UA + '\n' + order.map(function (id) {
+    var d = document.getElementById(id);
+    return (results[id] ? '[OK] ' : '[FAIL] ') + d.textContent;
+  }).join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(function () { alert('已复制，发给阿澈即可'); }, function () { prompt('手动复制：', t); });
+  } else prompt('手动复制：', t);
+};
 
-/* 测试1：裸 WebSocket 到 PeerJS 公共信令云 */
+/* 测试1：裸 WebSocket 握手到 PeerJS 公共信令云（区分"被拒"与"超时"） */
 (function () {
   var id = item('t1', '信令云握手（0.peerjs.com WebSocket）');
-  var t0 = Date.now();
-  var ws;
+  var t0 = Date.now(), ws;
   try { ws = new WebSocket('wss://0.peerjs.com/peerjs?key=peerjs'); }
-  catch (e) { return done(id, false, '信令云握手失败（构造异常 ' + e.message + '）'); }
-  var to = setTimeout(function () { done(id, false, '信令云握手失败（8 秒无响应 = 被拦/不可达）'); try { ws.close(); } catch (x) {} }, 8000);
-  ws.onopen = function () { clearTimeout(to); done(id, true, '信令云握手 OK（' + (Date.now() - t0) + 'ms）'); try { ws.close(); } catch (x) {} };
-  ws.onerror = function () { clearTimeout(to); done(id, false, '信令云握手失败（onerror）'); };
+  catch (e) { return done(id, false, '构造异常 ' + e.message); }
+  var to = setTimeout(function () { done(id, false, '8 秒无响应（超时 = 被墙/被拦）'); try { ws.close(); } catch (x) {} }, 8000);
+  ws.onopen = function () { clearTimeout(to); done(id, true, '握手 OK（' + (Date.now() - t0) + 'ms）'); try { ws.close(); } catch (x) {} };
+  ws.onerror = function () { clearTimeout(to); done(id, false, 'onerror（连接被拒/被防火墙拦）'); };
 })();
 
-/* 测试2：PeerJS 真实信令（new Peer → open） */
+/* 测试2：PeerJS 真实注册（核心指标） */
 (function () {
-  var id = item('t2', 'PeerJS 信令注册（new Peer → open）');
-  if (typeof Peer === 'undefined') { done(id, false, 'peerjs.min.js 加载失败'); return; }
+  var id = item('t2', 'PeerJS 信令注册（核心）');
+  if (typeof Peer === 'undefined') { done(id, false, 'peerjs.min.js 没加载出来'); return; }
   var t0 = Date.now();
   var peer = new Peer('bbnetprobe' + Math.floor(Math.random() * 90000), { debug: 0 });
-  var to = setTimeout(function () { done(id, false, 'PeerJS 信令注册失败（10 秒未 open）'); try { peer.destroy(); } catch (x) {} }, 10000);
-  peer.on('open', function () { clearTimeout(to); done(id, true, 'PeerJS 信令注册 OK（' + (Date.now() - t0) + 'ms）—— 这条是联机可行性的核心'); });
-  peer.on('error', function (e) { clearTimeout(to); done(id, false, 'PeerJS 信令错误: ' + e.type); });
+  var to = setTimeout(function () { done(id, false, '10 秒未注册成功（信令不可达）'); try { peer.destroy(); } catch (x) {} }, 10000);
+  peer.on('open', function () { clearTimeout(to); done(id, true, '注册 OK（' + (Date.now() - t0) + 'ms）'); });
+  peer.on('error', function (e) { clearTimeout(to); done(id, false, '错误: ' + e.type); });
 })();
 
-/* 测试3：本机双 peer DataChannel 回环（验证 WebRTC 数据面） */
+/* 测试3：本机双 peer DataChannel 回环 */
 (function () {
   var id = item('t3', 'WebRTC 数据通道回环');
   var a = new Peer({ debug: 0 }), b = new Peer({ debug: 0 });
-  var opened = 0;
+  var opened = 0, closed = false;
+  function cleanup() { if (!closed) { closed = true; try { a.destroy(); b.destroy(); } catch (x) {} } }
   function maybeStart() {
     if (opened < 2) return;
     var conn = a.connect(b.id);
-    var to = setTimeout(function () { done(id, false, '数据通道建立超时'); try { a.destroy(); b.destroy(); } catch (x) {} }, 12000);
+    var to = setTimeout(function () { done(id, false, '数据通道建立超时'); cleanup(); }, 12000);
     conn.on('open', function () {
-      conn.on('data', function (d) {
-        clearTimeout(to);
-        done(id, true, 'WebRTC 数据通道 OK（收到回显: ' + d + '）');
-        try { a.destroy(); b.destroy(); } catch (x) {}
-      });
+      conn.on('data', function (d) { clearTimeout(to); done(id, true, 'OK（收到回显「' + d + '」）'); cleanup(); });
       conn.send('博饼');
     });
   }
@@ -90,27 +116,26 @@ function done(id, ok, text) {
   a.on('error', function () {}); b.on('error', function () {});
 })();
 
-/* 测试4：STUN 打洞（决定跨网络能不能直连） */
+/* 测试4：STUN 打洞（跨网直连前提） */
 (function () {
   var id = item('t4', 'STUN 打洞（跨网直连前提）');
-  var found = [];
-  var pcs = 0, finished = 0;
+  var found = [], finished = 0;
   [['小米', 'stun:stun.miwifi.com:3478'], ['谷歌', 'stun:stun.l.google.com:19302']].forEach(function (s) {
     var pc;
-    try { pc = new RTCPeerConnection({ iceServers: [{ urls: s[1] }] }); } catch (e) { finished++; check(); return; }
-    pcs++;
+    try { pc = new RTCPeerConnection({ iceServers: [{ urls: s[1] }] }); }
+    catch (e) { finished++; check(); return; }
     pc.createDataChannel('t');
     var to = setTimeout(function () { fin(); }, 8000);
     function fin() { if (to) { clearTimeout(to); to = null; finished++; check(); try { pc.close(); } catch (x) {} } }
     pc.onicecandidate = function (e) {
       if (!e.candidate) return fin();
-      if (/typ srflx/.test(e.candidate.candidate)) { found.push(s[0] + ':' + e.candidate.candidate.split(' ')[4]); fin(); }
+      if (/typ srflx/.test(e.candidate.candidate)) { found.push(s[0] + ' ✓'); fin(); }
     };
     pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(function () { fin(); });
   });
   function check() {
     if (finished < 2) return;
-    done(id, found.length > 0, found.length ? 'STUN 打洞 OK（' + found.join('；') + '）' : '两个 STUN 都没拿到公网映射（跨网直连受限）');
+    done(id, found.length > 0, found.length ? 'OK（' + found.join('，') + '）' : '两个 STUN 都没拿到公网映射');
   }
 })();
 </script></body></html>
