@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head><body>
+<pre id="out">…</pre>
+<script>
+/* 最小驱动：复现 net 探针的 Local 传输层流程，逐步打日志找出断点 */
+const out = document.getElementById('out');
+const log = m => { out.textContent += '\n' + m; console.log('[L] ' + m); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function mk(src) {
+  const f = document.createElement('iframe');
+  const loaded = new Promise(r => { f.onload = r; });
+  f.src = src;
+  f.style.cssText = 'width:430px;height:620px;border:0;visibility:hidden';
+  document.body.appendChild(f);
+  return { f, loaded };
+}
+
+(async () => {
+  try {
+    const a1 = mk('/index.html?selftest=localdrive'), a2 = mk('/index.html?selftest=localdrive');
+    await Promise.all([a1.loaded, a2.loaded]);
+    await sleep(400);
+    const g1 = a1.f.contentWindow.__game, g2 = a2.f.contentWindow.__game;
+    log('1 两实例就绪: ' + !!g1 + '/' + !!g2);
+
+    const code = g1.net.create('阿澈');
+    log('2 create 返回: ' + code);
+    const jerr = g2.net.join(code, 'WooSaN');
+    log('3 join 返回: ' + jerr);
+
+    g1.net.tick(); g2.net.tick();
+    log('4 tick 后 state: g1=' + JSON.stringify(g1.net.state()) + ' g2=' + JSON.stringify(g2.net.state()));
+
+    const s = g1.net.start(true);
+    log('5 start 返回: ' + s);
+    g1.net.tick(); g2.net.tick(); g1.net.tick(); g2.net.tick();
+    log('6 开局后 state: g1=' + JSON.stringify(g1.net.state()) + ' g2=' + JSON.stringify(g2.net.state()));
+
+    await sleep(300);
+    g1.net.tick(); g2.net.tick();
+    log('7 再 tick: g1=' + JSON.stringify(g1.net.state()) + ' g2=' + JSON.stringify(g2.net.state()));
+
+    /* 直接看房间记录 */
+    const r = g1.net._raw()._local.read(code);
+    log('8 房间记录: ' + JSON.stringify(r ? { started: r.started, roster: r.roster.length, events: r.events.length } : null));
+
+    log('=== 诊断结束 ===');
+  } catch (e) { log('异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 3).join(' | ')); }
+})();
+</script></body></html>

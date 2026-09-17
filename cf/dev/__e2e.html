@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head><body style="background:#111;color:#8f8;font:13px monospace">
+<pre id="out">…</pre>
+<script>
+/* 端到端：两份真实游戏（http 源 → pick() 选 TCB）经 CloudBase 对博 */
+const out = document.getElementById('out');
+const log = m => { out.textContent += '\n' + m; console.log('[E2E] ' + m); };
+const sleep = ms => new Promise(r => { const t0 = Date.now(); setTimeout(() => { console.log('E2E sleep(' + ms + ') fired after ' + (Date.now()-t0) + 'ms'); r(); }, ms); });
+const fail = m => { log('=== 失败: ' + m + ' ==='); throw new Error(m); };
+
+console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.now()), 2000);
+(async () => {
+  try {
+    /* 挂两个 iframe 游戏实例 */
+    function mkFrame(id) {
+      const f = document.createElement('iframe');
+      const loaded = new Promise(r => { f.onload = r; });   /* 先挂监听再设 src，防 load 竞态 */
+      f.src = '/index.html?wstimeout=600000&ws=' + encodeURIComponent(location.origin.replace(/^http/, 'ws') + '/ws');
+      f.style.cssText = 'width:430px;height:620px;border:0;visibility:hidden;position:absolute';
+      document.body.appendChild(f);
+      return { f: f, loaded: loaded };
+    }
+    const a1 = mkFrame(), a2 = mkFrame(); console.log('E2E frames created');
+    const f1 = a1.f, f2 = a2.f;
+    await Promise.all([a1.loaded, a2.loaded]); console.log('E2E iframes loaded');
+    await sleep(500); console.log('E2E after sleep');
+    const g1 = f1.contentWindow.__game, g2 = f2.contentWindow.__game;
+    if (!g1 || !g2) fail('__game 未就绪');
+    const N1 = g1.net._raw(), N2 = g2.net._raw();
+    log('[1] 两实例就绪，传输层自动选择：' + (N1._tcb.ready() ? 'tcb（环境已配置）' : 'local'));
+
+    /* 房主建房 */
+    const created = await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error('create 超时 30s')), 30000);
+      N1.create('阿澈', (e, r, kind) => { clearTimeout(t); e ? rej(new Error(e)) : res({ r: r, kind: kind }); });
+    });
+    const code = created.r.code;
+    log('[2] 房主建房 OK code=' + code + ' 传输层=' + created.kind);
+
+    /* 客人加入 */
+    await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error('join 超时 30s')), 30000);
+      N2.join(code, 'WooSaN', (e) => { clearTimeout(t); e ? rej(new Error(e)) : res(); });
+    });
+    log('[3] 客人加入 OK');
+    await sleep(2500);   /* 等轮询把 roster 同步给房主大厅 */
+    async function readRoom() {
+      const r = N1.roster();            /* WS/Local：同步返回最近快照 */
+      if (r) return r;
+      return new Promise(res => N1._tcb.read(code, res));
+    }
+    const lobby = await readRoom();
+    log('[4] 房间名册: ' + JSON.stringify(lobby.roster.map(p => p.name)));
+
+    /* 开局 */
+    await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error('start 超时 20s')), 20000);
+      N1._fast(true);
+      N1.start(true, (e) => { clearTimeout(t); e ? rej(new Error(e)) : res(); });
+    });
+    /* 等两端都进入对局 */
+    let inGame = 0;
+    for (let i = 0; i < 30; i++) {
+      await sleep(1000);
+      inGame = (g1.state() && g1.state().online ? 1 : 0) + (g2.state() && g2.state().online ? 1 : 0);
+      if (inGame === 2) break;
+    }
+    if (inGame !== 2) fail('两端未都进入对局');
+    const s1 = g1.net.state(), s2 = g2.net.state();
+    log('[5] 双方进入对局 ✓ seat ' + s1.seat + '/' + s2.seat);
+
+    /* 3 把轮替掷：当前回合方掷 → 对方轮询拉到事件 → 两端 rollCount 一致 */
+    for (let i = 0; i < 3; i++) {
+      let cur = g1.state().current;
+      const drv = cur === 0 ? g1 : g2, oth = cur === 0 ? g2 : g1;
+      drv.doRoll(null, false);
+      await sleep(400);
+      if (drv.state().busy) drv.skipAnim();
+      /* 等对端收到并应用 */
+      for (let k = 0; k < 20; k++) {
+        await sleep(700);
+        if (oth.state().busy) oth.skipAnim();
+        if (g1.state().rollCount === i + 1 && g2.state().rollCount === i + 1 && !g1.state().busy && !g2.state().busy) break;
+      }
+      const rc1 = g1.state().rollCount, rc2 = g2.state().rollCount;
+      if (rc1 !== i + 1 || rc2 !== i + 1) fail('第' + (i + 1) + '把同步失败 rc=' + rc1 + '/' + rc2);
+      log('[6.' + i + '] 第' + (i + 1) + '把两端同步 ✓ (rollCount=' + rc1 + ')');
+    }
+
+    /* 状态快照一致性 */
+    function snap(g) {
+      const s = g.state();
+      return JSON.stringify({ rc: s.rollCount, cur: s.current, pool: s.pool, zy: s.zyHolder,
+        cakes: s.players.map(p => p.cakes) });
+    }
+    if (snap(g1) !== snap(g2)) fail('两端快照不一致\n' + snap(g1) + '\n' + snap(g2));
+    log('[7] 两端状态快照一致 ✓ ' + snap(g1));
+
+    /* [8] 断线重连：强制掐断双方连接 → 客户端 3 秒后自动重连并补齐事件 */
+    await fetch('/__kick?code=' + code);
+    log('[8] 已掐断双方连接，等待自动重连…');
+    const wsReady = g => { const w = g.net._raw()._ws(); return !!(w.sock && w.sock.readyState === 1); };
+    let re = 0;
+    for (let k = 0; k < 40; k++) {
+      await sleep(500);
+      re = (wsReady(g1) ? 1 : 0) + (wsReady(g2) ? 1 : 0);
+      if (re === 2) break;
+    }
+    if (re !== 2) fail('自动重连失败：只有 ' + re + '/2 端连回来');
+    log('[9] 双方自动重连成功 ✓');
+    let cur2 = g1.state().current;
+    const drv2 = cur2 === 0 ? g1 : g2, oth2 = cur2 === 0 ? g2 : g1;
+    drv2.doRoll(null, false);
+    await sleep(400);
+    if (drv2.state().busy) drv2.skipAnim();
+    for (let k = 0; k < 30; k++) {
+      await sleep(700);
+      if (g1.state().busy) g1.skipAnim();
+      if (g2.state().busy) g2.skipAnim();
+      if (g1.state().rollCount === 4 && g2.state().rollCount === 4 && !g1.state().busy && !g2.state().busy) break;
+    }
+    if (g1.state().rollCount !== 4 || g2.state().rollCount !== 4) fail('重连后第 4 把未同步 rc=' + g1.state().rollCount + '/' + g2.state().rollCount);
+    log('[10] 重连后第 4 把照常同步 ✓');
+
+    /* [11] 再来一局（reset）：房主清空房间 → 双方回大厅 → 再开一局 → 照常同步 */
+    N1.rematch(function (err) { if (err) log('[11] rematch 返回: ' + err); });
+    let backLobby = 0;
+    for (let k = 0; k < 40; k++) {
+      await sleep(500);
+      backLobby = ((g1.state() === null || !g1.state().online) ? 1 : 0) + ((g2.state() === null || !g2.state().online) ? 1 : 0);
+      if (backLobby === 2) break;
+    }
+    if (backLobby !== 2) fail('再来一局后没有回到大厅：' + backLobby + '/2');
+    log('[11] 双方回到大厅 ✓');
+    await sleep(500);
+    N1._fast(true);
+    await new Promise(res => N1.start(true, res));
+    let again = 0;
+    for (let k = 0; k < 40; k++) {
+      await sleep(500);
+      again = ((g1.state() && g1.state().online) ? 1 : 0) + ((g2.state() && g2.state().online) ? 1 : 0);
+      if (again === 2) break;
+    }
+    if (again !== 2) fail('新一局没开起来：' + again + '/2');
+    if (g1.state().rollCount !== 0 || g2.state().rollCount !== 0) fail('新一局事件没清零');
+    log('[12] 新一局已开始，双方事件清零 ✓');
+
+    /* 清理：解散房间 */
+    N1.leave();
+    log('=== 端到端全部通过 ===');
+  } catch (e) { if (!/=== 失败/.test(out.textContent)) log('=== 失败: ' + e.message + ' ==='); }
+})();
+</script></body></html>
