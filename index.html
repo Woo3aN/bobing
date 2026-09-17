@@ -1244,6 +1244,8 @@ var state = null;
 var FAST = false;          /* 自检时跳过动画 */
 var GAME_TIMER = null;     /* 全局秒表（每秒刷新一次状态栏里的用时） */
 var SKIP = null;           /* 动画进行中：点一下就能跳过（下一把不用干等） */
+var gameAborted = false;   /* 牌桌已被收掉（房间解散 / 手动重开）：在飞的最后一博落地时
+                              不许再弹结算、不许把被丢弃的局写进战绩（finishGame 里消费） */
 /* spin: 抛掷动画总时长；after: 落定后再等多久才解锁。
    从 1600+220 收到 1150+140 —— 一轮少等约 0.5 秒，一局几十轮就是十几秒。 */
 var TIMING = { spin: 1000, after: 140, jitter: 0 };   /* 六颗同时抛出（轨迹由物理模拟给出，没有逐颗延迟） */
@@ -1357,6 +1359,7 @@ function renderAutoBar() {
 
 function newGame(cfg) {
   cfg = cfg || {};
+  gameAborted = false;               /* 新的一局：允许正常收尾 */
   /* 配额：优先用本局传来的，其次用设置页当前的，最后回落默认 */
   if (cfg.quotas) setQuota(cfg.quotas);
   var quotaSnap = Object.assign({}, QUOTA);
@@ -1592,11 +1595,11 @@ function afterRoll(silent) {
 
   if (state.phase === 'playing') {
     state.current = (state.current + 1) % n;
+    if (wrapped) state.round++;          /* 该轮确实完整走完才记一轮 */
     /* 收官轮：从**博出最后一个奖项那个人的下一位**开始，每人再各博一次（用户 2026-09-17 定）。
        ⚠️ 不能等"这一轮转完"再开：那样先博的人（含刚得奖的那位）会白多博一把，
        而且收官轮会从第 0 座起算，跟"下家起算"对不上 —— 两种口径的差别就在这里。 */
     if (state.poolEmpty && state.zyHolder !== null) enterFinalRound();
-    else if (wrapped) state.round++;
   } else if (state.phase === 'final') {
     state.finalRolls++;
     state.current = (state.current + 1) % n;
@@ -1633,6 +1636,13 @@ function pushSystemLog(html) {
 
 function finishGame() {
   state.phase = 'over';
+  if (gameAborted) {
+    /* 牌桌已经被收掉（房间解散 / 手动重开），这把只是延迟落定的残局：
+       不能把结算弹层盖到设置页上，也不能把被丢弃的局写进战绩（实测过的场景） */
+    gameAborted = false;
+    renderAll();
+    return;
+  }
   var now = Date.now();
   state.endedAt = now;                 /* 多人局也要算用时 */
   state.solo.endedAt = now;
@@ -2366,7 +2376,9 @@ function updateRollButton() {
                   (Date.now() - state.online.skipAt < 4000);
     if (dead && !state.busy) {          /* 轮到的玩家掉线 → 变成「跳过」按钮，别人能接着玩 */
       b.disabled = !!pending;
-      b.textContent = pending ? '已请求跳过…' : '对方掉线 · 跳过这一把';
+      /* 掉线的偏偏是自己（服务端视角的连接异常）→ 文案要说人话，别喊"对方掉线" */
+      b.textContent = mine ? '连接不稳 · 跳过我这把'
+        : (pending ? '已请求跳过…' : '对方掉线 · 跳过这一把');
       return;
     }
     b.disabled = !!state.busy || !mine;
@@ -2769,14 +2781,16 @@ function bindEvents() {
     renderAll();
   });
 
-  document.getElementById('btn-roll').addEventListener('click', function () {
+  /* 掷骰按钮的唯一动作入口：点击与空格/回车共用 ——
+     两处各写一份必然跑偏（实测：结束态按钮已经是「看结算」，空格却还是什么都不做）。 */
+  function primaryAction() {
     Sfx.wake();
+    if (!state) return;
     /* 本局已结束 → 这个按钮是「看结算」入口（回去才能点「再来一局」） */
-    if (state && state.phase === 'over') { showResultModal(); return; }
-    if (state && state.busy) { skipAnim(); return; }    /* 动画中再点 = 跳过 */
+    if (state.phase === 'over') { showResultModal(); return; }
+    if (state.busy) { skipAnim(); return; }              /* 动画中再点 = 跳过 */
     /* 掉线跳过：轮到的玩家掉线时，这个按钮变成「跳过这一把」（服务端校验掉线才允许） */
-    if (state && state.online && state.phase !== 'over' &&
-        state.online.off && state.online.off[state.current]) {
+    if (state.online && state.online.off && state.online.off[state.current]) {
       var s = state.current;
       /* 两个人同时点跳过是正常时序：本地压住 4 秒，别把重复请求发出去
          （服务端也会去重，这里只是别让两个人都以为"世界卡住了"） */
@@ -2788,7 +2802,8 @@ function bindEvents() {
       return;
     }
     doRoll(null, false);
-  });
+  }
+  document.getElementById('btn-roll').addEventListener('click', primaryAction);
   /* 自动模式：一个开始键 + 暂停/继续 + 停止 + 三档速度 */
   document.getElementById('btn-auto').addEventListener('click', function () {
     if (state && state.online) { toast('联机模式不能挂机，得自己来'); return; }
@@ -2816,10 +2831,16 @@ function bindEvents() {
     if ((e.code === 'Space' || e.code === 'Enter') && document.getElementById('view-table').style.display !== 'none') {
       var m = document.querySelector('.modal.show');
       if (m) return;
-      e.preventDefault(); doRoll(null, false);
+      /* ⚠️ 焦点在按钮上时让浏览器自己处理：keydown 先掷一次（置 busy），
+         按钮的原生 click 会跟着再进一次 → 进 busy 分支把动画秒跳掉（实测过）。
+         这里有 BUTTON 就 return，原生 click 只会触发一次 primaryAction。 */
+      var ae = document.activeElement;
+      if (ae && ae.tagName === 'BUTTON') return;
+      e.preventDefault(); primaryAction();      /* 与按钮完全同一套行为 */
     }
   });
   document.getElementById('btn-restart').addEventListener('click', function () {
+    gameAborted = true;    /* 本局作废：在飞的最后一博落地时别再弹结算/记战绩 */
     if (typeof NET !== 'undefined' && NET.code()) {
       /* ⚠️ 判据是"在房间里"，不是"在牌桌上"：房主点完「再来一局」后大家回到大厅，
          此时 state.online 已清空，但人还在房间里 —— 旧写法会让人以为退出了、其实还挂着，
@@ -3061,6 +3082,7 @@ var NET = (function () {
        ?wstimeout=毫秒 可覆盖超时（自测专用：虚拟时钟环境下 8 秒会被瞬间跳过） */
     open: function (code, op, name, cb, timeoutMs) {
       var self = this, settled = false, s;
+      self.aborted = false;    /* 本轮连接已作废（超时）：迟到的 onclose 不许再叠一层 reconnect */
       var tov = location.search.match(/[?&]wstimeout=(\d+)/);
       var effTo = tov ? parseInt(tov[1], 10) : (timeoutMs || 8000);
       try { s = new WebSocket(self.ep(code, op, name)); } catch (e) { cb('房间服务地址无效'); return; }
@@ -3072,7 +3094,7 @@ var NET = (function () {
         try { if (s.readyState === 1) s.send('{"t":"ping"}'); } catch (e) {}
       }, 45000);
       var to = setTimeout(function () {
-        if (!settled) { settled = true; try { s.close(); } catch (e) {} cb('连接房间服务超时'); }
+        if (!settled) { settled = true; self.aborted = true; try { s.close(); } catch (e) {} cb('连接房间服务超时'); }
       }, effTo);
       s.onmessage = function (ev) {
         var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
@@ -3091,6 +3113,7 @@ var NET = (function () {
         self.deliver(m.r);
       };
       s.onclose = function () {
+        if (self.aborted) return;   /* 超时作废的连接：别再叠一层 reconnect（retry 会被双速烧完） */
         if (!settled) { settled = true; clearTimeout(to); cb('连不上房间服务'); return; }
         if (self.wantClose || !self.lastRec || self.lastRec.closed) return;
         setLink('down');
@@ -3109,6 +3132,7 @@ var NET = (function () {
       if (self.wantClose) return;
       if (self.retry >= 5) {
         /* 重试耗尽：明确告诉用户，别让他对着"等 XX 博…"干瞪眼 */
+        if (self.pingTimer) { clearInterval(self.pingTimer); self.pingTimer = null; }
         setLink('dead');
         toast('与房间服务断开，请点「退出房间」后重新加入');
         return;
@@ -3228,6 +3252,7 @@ var NET = (function () {
        缺了它，同机演示模式下房主点「再来一局」只会得到"当前模式不支持" */
     reset: function (code, cb) {
       var r = lread(code); if (!r) { cb && cb('房间不存在'); return; }
+      r.gen = (r.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局" */
       r.events = []; r.started = false; lwrite(r); cb && cb(null);
     },
     leave: function (code, started, done) {
@@ -3275,6 +3300,9 @@ var NET = (function () {
   }
 
   /* ---------- 传输层 B：CloudBase（跨设备，新版平台 2026-09 接入） ----------
+     ⚠️ 未对齐 2026-09-17 的联机语义：无 skip（掉线跳过发不出去）、无 left（退出不点名）、
+     无防冒名/幂等/事件上限、房主退出不顺位。当前 pick() 里 NET_WS_URL 恒有值 → TCB 实际不可达；
+     若将来要启用（NET_WS_URL 置空 + tcloudbase 域名），必须先把这四项补齐，否则跨设备会悄悄坏。
      新版平台差异（实测结论，别改回旧版写法）：
      · SDK 无 UMD 打包 → 用自托管 tcb_sdk.js（esbuild 打包，与页面同目录部署）
      · init 必须带 accessKey（匿名访问令牌），光有环境 ID 会静默登录失败
@@ -3333,7 +3361,7 @@ var NET = (function () {
     start: function (code, cb) { this.docOf(code).update({ started: true }).then(function () { cb(null); }).catch(function (e) { cb((e && e.message) || e); }); },
     /* 再来一局（与 Worker 版同语义） */
     reset: function (code, cb) {
-      this.docOf(code).update({ events: [], started: false })
+      this.docOf(code).update({ events: [], started: false, gen: this.cmd.inc(1) })
         .then(function () { cb && cb(null); })
         .catch(function (e) { cb && cb('重置失败: ' + ((e && e.message) || e)); });
     },
@@ -3413,11 +3441,17 @@ var NET = (function () {
   }
 
   function exitToSetup() {
+    gameAborted = true;    /* 牌桌被收掉：在飞的最后一博落地时别再弹结算/记战绩 */
+    /* 收掉可能开着的弹层（房间解散时结算层若还开着，会盖在设置页上） */
+    if (typeof closeModal === 'function') {
+      closeModal('modal-result');
+    }
     document.getElementById('view-table').style.display = 'none';
     document.getElementById('view-setup').style.display = '';
     var rb = document.getElementById('btn-restart');
     if (rb) rb.textContent = '重开一局';       /* 回到单机语义 */
     if (state) state.online = null;
+    lastRoom = null;
     seat = -1; codeNow = null; startedSeen = false;
   }
 
@@ -3455,12 +3489,19 @@ var NET = (function () {
 
   function onRoom(r) {
     if (!r) return;
-    /* 过期快照防护：storage 事件/轮询在极端时序下会把【旧快照】迟到派发过来
-       （实测：本地已经博到第 14 把，却收到一张只有 2 把的旧快照）。
-       盲信它会导致 beginGame 把整局回滚重开。本地已应用到更新序列 → 直接忽略。
-       ⚠️ 只在【对局进行中且未解散】时生效：房主点「再来一局」会把事件清零，
-       那张 r.started=false / r.closed=true 的快照事件数必然更少，不能被误杀。 */
-    if (state && state.online && r.started && !r.closed && r.events.length < state.rollCount) return;
+    /* 过期快照防护（只对【同一局】生效）：storage 事件/轮询在极端时序下会把【旧快照】迟到派发过来
+       （实测：本地已经博到第 14 把，却收到一张只有 2 把的旧快照）。盲信它会导致 beginGame 把整局回滚重开。
+       ⚠️ 判据必须带世代号 gen：房主「再来一局」会把事件清零，若只比事件数，
+       掉线的玩家重连时会把手里【新一局】的快照当旧快照永久丢弃 → 整局冻死在旧视图（实测过的场景）。
+       异世代且已开局 = 房间已重开（我们错过了 reset+start）→ 按新事件序列整局重建。 */
+    if (state && state.online && r.started && !r.closed) {
+      if ((r.gen || 0) !== (state.online.gen || 0)) {
+        leftArmed = false;              /* 新一局：重新做"谁走了"的基线 */
+        beginGame(r, seat, true, true);
+        return;
+      }
+      if (r.events.length < state.rollCount) return;   /* 同一局里的旧快照 → 丢 */
+    }
     lastRoom = r;
     if (state && state.online) applyOff(r.off);      /* 在线状态给 UI（掉线跳过）用 */
     var leaver = takeLeaver(r);                       /* 主动退出的人（掉线不算） */
@@ -3492,6 +3533,12 @@ var NET = (function () {
   }
 
   function beginGame(r, mySeat, resync, quiet) {
+    if (resync) {
+      /* 重建时按身份重查座次：名单可能因有人退出而缩短，沿用旧下标会张冠李戴 */
+      mySeat = -1;
+      for (var mi = 0; mi < r.roster.length; mi++) if (r.roster[mi].id === PEER) mySeat = mi;
+      if (mySeat < 0) { localLeave(); toast('你已不在房间里'); exitToSetup(); return; }
+    }
     seat = mySeat; codeNow = r.code;
     var ps = r.roster.map(function (p) { return { name: p.name }; });
     document.getElementById('view-setup').style.display = 'none';
@@ -3499,7 +3546,7 @@ var NET = (function () {
     document.getElementById('view-table').style.display = '';
     newGame({ players: ps, mode: r.roster.length === 1 ? 'solo' : 'local', fast: wantFast });
     buildDice();
-    state.online = { seat: seat, code: r.code, kind: cur && cur.name, off: r.off || [], offSig: (r.off || []).join(',') };
+    state.online = { seat: seat, code: r.code, kind: cur && cur.name, gen: r.gen || 0, off: r.off || [], offSig: (r.off || []).join(',') };
     setLink('ok');
     var rb0 = document.getElementById('btn-restart');
     if (rb0) rb0.textContent = '退出房间';   /* 联机时它就是"退房"（中途退出 = 本局解散） */
@@ -4178,6 +4225,9 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     /* 结束后掷骰按钮要变成「看结算」入口 —— 结算面板点过「先看看」关掉后，
        这是唯一能回去点「再来一局」的地方（用户报的"关掉就回不去了"）。 */
     var rb = document.getElementById('btn-roll');
+    /* 探针直接 newGame() 跳过了开场按钮，牌桌还是隐藏的 —— 键盘路径要求牌桌可见，
+       这里补上（也更贴近真实场景：玩家就是在牌桌上结束这一局的） */
+    window.__game.enterView();
     ok('结束后掷骰按钮变「看结算」且可点',
       !rb.disabled && rb.textContent.indexOf('看结算') >= 0,
       (rb.disabled ? '已禁用' : '可点') + ' / ' + rb.textContent);
@@ -4190,6 +4240,12 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
       document.getElementById('modal-result').className.indexOf('show') >= 0 &&
       !!document.getElementById('btn-again'), 'modal-result show=' +
       (document.getElementById('modal-result').className.indexOf('show') >= 0));
+    closeModal('modal-result');
+    /* 空格/回车必须与按钮走同一条路径 —— 两处各写一份必然跑偏（旧代码这里什么都不做） */
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', bubbles: true }));
+    ok('空格键在结束态同样打开结算面板（与按钮同一套行为）',
+      document.getElementById('modal-result').className.indexOf('show') >= 0,
+      'show=' + (document.getElementById('modal-result').className.indexOf('show') >= 0));
     closeModal('modal-result');
   }
 

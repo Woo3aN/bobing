@@ -26,7 +26,14 @@ export default {
       const id = env.ROOMS.idFromName(code);
       return env.ROOMS.get(id).fetch(request);
     }
-    if (env.ASSETS) return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      /* 游戏挂在 /bobing，根路径留给将来的主页（2026-09-17 用户定） */
+      if (url.pathname === '/' ) return Response.redirect(url.origin + '/bobing', 302);
+      if (url.pathname === '/bobing' || url.pathname === '/bobing/') {
+        return env.ASSETS.fetch(new Request(new URL('/index.html', url)));
+      }
+      return env.ASSETS.fetch(request);
+    }
     return new Response('not found', { status: 404 });
   }
 };
@@ -181,12 +188,15 @@ export class RoomDO {
       /* 再来一局：房主清空事件回到大厅，原班人马直接开下一局（不用重建房间） */
       const pid = (ws.deserializeAttachment() || {}).pid;
       if (pid !== this.rec.host) return;
+      this.rec.gen = (this.rec.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"，
+                                                   过期快照防护只对同世代生效（防重开局被冻死在旧视图） */
       this.rec.events = [];
       this.rec.started = false;
       await this.save();
       this.broadcast();
     } else if (m.t === 'bye') {
       await this.dropPlayer(ws, true, !!m.done);   /* 主动退出（区别于掉线） */
+      try { ws.close(); } catch (e) {}             /* 退都退了，别让连接挂着（与 mock 一致） */
     }
   }
 

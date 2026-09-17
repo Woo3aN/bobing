@@ -6,8 +6,8 @@
 ## 架构
 
 ```
-woo3an.top/            静态资源（游戏本体，public/index.html）
-woo3an.top/ws?...      Worker → 每个房间号一个 Durable Object
+woo3an.top/bobing/      游戏本体（public/index.html；/ 302 → /bobing，根路径留给将来的主页）
+woo3an.top/ws?...       Worker → 每个房间号一个 Durable Object
                        · WebSocket 常驻推送（无轮询）
                        · 房间记录 {code, host, started, closed, roster, events} 存 DO SQLite
                        · Hibernation API：空闲不计时长

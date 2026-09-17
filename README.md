@@ -3,7 +3,7 @@
 一个单文件的闽南中秋博饼网页小游戏 —— **打开就能玩，不用装任何东西**。
 
 > **在线玩（两个入口都能跨设备联机）：**
-> 🌐 https://woo3an.top/ ｜ https://woo3an.github.io/bobing/
+> 🌐 https://woo3an.top/bobing/ ｜ https://woo3an.github.io/bobing/
 >
 > 两个网址是同一份游戏、连同一个房间服务 —— 一人从哪个进、另一人从另一个进，照样能进同一间房。
 

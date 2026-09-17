@@ -214,7 +214,78 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     if (g1.state().rollCount !== 0 || g2.state().rollCount !== 0) fail('新一局事件没清零');
     log('[16] 新一局已开始，双方事件清零 ✓');
 
-    /* [17] 有人退出 → 其他人必须收到点名提示（用户报的：退出后对方毫无感知） */
+    /* [17] 打完一局（造终局条件：清空非状元奖项 + 指定状元持有者 → 下一次掷骰即进收官轮）。
+       真博一局要上百把，这里直接构造终局态 —— 目标是覆盖"结算/再来一局"这段链路。 */
+    for (const g of [g1, g2]) {
+      const s = g.state();
+      ['duitang', 'sanhong', 'sijin', 'erju', 'yixiu'].forEach(k => { s.pool[k] = 0; });
+      s.poolEmpty = true; s.zyHolder = 0; s.players[0].cakes.zhuangyuan = 1;
+    }
+    let guard2 = 0;
+    while ((g1.state().phase !== 'over' || g2.state().phase !== 'over') && guard2++ < 12) {
+      if (g1.state().phase === 'over') {
+        /* g1 已结算、g2 还在补事件+动画：必须帮 g2 跳动画（300ms 重试定时器会补事件），
+           旧写法只 sleep(400) 干等，8 次守卫耗尽 → 假失败（实测：g2 卡在 busy 补放）。 */
+        if (g2.state().busy) g2.skipAnim();
+        await sleep(400);
+        continue;
+      }
+      const cur = g1.state().current;
+      (cur === 0 ? g1 : g2).doRoll(null, false);
+      await sleep(300);
+      if (g1.state().busy) g1.skipAnim();
+      if (g2.state().busy) g2.skipAnim();
+      for (let k = 0; k < 20; k++) {
+        await sleep(500);
+        if (g1.state().busy) g1.skipAnim();
+        if (g2.state().busy) g2.skipAnim();
+        if (!g1.state().busy && !g2.state().busy) break;
+      }
+    }
+    const dmp = g => { const s = g.state(); return s.phase + ' rc' + s.rollCount + ' fr' + s.finalRolls + ' cur' + s.current
+      + ' zy' + s.zyHolder + ' pe' + s.poolEmpty + ' busy' + s.busy; };
+    if (g1.state().phase !== 'over' || g2.state().phase !== 'over')
+      fail('两端没有都进入结算 | g1: ' + dmp(g1) + ' | g2: ' + dmp(g2));
+    log('[17] 收官轮跑完，两端都进结算 ✓ rollCount=' + g1.state().rollCount + ' phase=' + g1.state().phase);
+    if (!f1.contentDocument.getElementById('modal-result').classList.contains('show')) fail('房主端结算面板没弹出');
+    if (!f2.contentDocument.getElementById('modal-result').classList.contains('show')) fail('客人端结算面板没弹出');
+    log('[18] 双方结算面板都自动弹出 ✓');
+
+    /* [19] 点「先看看」关掉 → 掷骰按钮变「看结算」→ 一键回到面板（用户报的"关掉就回不去"） */
+    f1.contentDocument.querySelector('#modal-result [data-close]').click();
+    await sleep(250);
+    const rb1 = f1.contentDocument.getElementById('btn-roll');
+    if (rb1.disabled || rb1.textContent.indexOf('看结算') < 0)
+      fail('结束后按钮没变成可点的「看结算」：' + rb1.textContent + ' disabled=' + rb1.disabled);
+    rb1.click();
+    await sleep(300);
+    if (!f1.contentDocument.getElementById('modal-result').classList.contains('show')) fail('点「看结算」没能回到结算面板');
+    log('[19] 关掉结算面板后一键回得去 ✓');
+
+    /* [20] 房主从结算面板点「再来一局」→ 原班人马直接再开一局 */
+    N1.rematch(function (err) { if (err) log('[20] rematch 返回: ' + err); });
+    let backLobby2 = 0;
+    for (let k = 0; k < 60; k++) {
+      await sleep(500);
+      backLobby2 = ((!g1.state() || !g1.state().online) ? 1 : 0) + ((!g2.state() || !g2.state().online) ? 1 : 0);
+      if (backLobby2 === 2) break;
+    }
+    if (backLobby2 !== 2) fail('打完一局后「再来一局」没把双方带回大厅：' + backLobby2 + '/2');
+    log('[20] 结算面板点「再来一局」→ 双方回大厅 ✓');
+    await sleep(400);
+    N1._fast(true);
+    await new Promise(res => N1.start(true, res));
+    let again2 = 0;
+    for (let k = 0; k < 60; k++) {
+      await sleep(500);
+      again2 = ((g1.state() && g1.state().online) ? 1 : 0) + ((g2.state() && g2.state().online) ? 1 : 0);
+      if (again2 === 2) break;
+    }
+    if (again2 !== 2) fail('再来一局后没能再开局：' + again2 + '/2');
+    if (g1.state().rollCount !== 0) fail('再开一局后事件没清零');
+    log('[21] 原班人马直接再开一局（事件清零）✓');
+
+    /* [22] 有人退出 → 其他人必须收到点名提示（用户报的：退出后对方毫无感知） */
     N2.leave();
     const toast1 = f1.contentDocument.getElementById('toast');
     let tTxt = '';
@@ -225,11 +296,11 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     }
     if (tTxt.indexOf('WooSaN') < 0) fail('对方退出后没有收到提示，toast 实际内容：' + JSON.stringify(tTxt));
     if (tTxt.indexOf('解散') < 0) fail('中途退出的提示应当说明本局解散，实际：' + tTxt);
-    log('[17] 对方退出 → 本端收到提示「' + tTxt + '」✓');
+    log('[22] 对方退出 → 本端收到提示「' + tTxt + '」✓');
     let kicked = false;
     for (let k = 0; k < 40; k++) { await sleep(300); if (!g1.state() || !g1.state().online) { kicked = true; break; } }
     if (!kicked) fail('房间解散后本端还留在对局里');
-    log('[18] 本端已退出对局回到设置页 ✓');
+    log('[23] 本端已退出对局回到设置页 ✓');
 
     /* 清理：解散房间 */
     N1.leave();

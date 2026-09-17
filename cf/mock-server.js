@@ -148,6 +148,7 @@ server.on('upgrade', (req, socket, head) => {
         r.started = true; broadcast(code);
       } else if (m.t === 'reset') {
         if (pid !== r.host) return;
+        r.gen = (r.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"（与 Worker 一致） */
         r.events = []; r.started = false; broadcast(code);
       } else if (m.t === 'bye') {
         dropPlayer(ws, true, !!m.done);
