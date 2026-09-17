@@ -2936,12 +2936,119 @@ var NET_TCB_ENV = 'woosan-d7gj0igeyb8289479';   /* CloudBase 环境 ID（新版�
 var NET_TCB_REGION = 'ap-shanghai';             /* 环境地域 */
 var NET_TCB_AK = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjlkMWRjMzFlLWI0ZDAtNDQ4Yi1hNzZmLWIwY2M2M2Q4MTQ5OCJ9.eyJpc3MiOiJodHRwczovL3dvb3Nhbi1kN2dqMGlnZXliODI4OTQ3OS5hcC1zaGFuZ2hhaS50Y2ItYXBpLnRlbmNlbnRjbG91ZGFwaS5jb20iLCJzdWIiOiJhbm9uIiwiYXVkIjoid29vc2FuLWQ3Z2owaWdleWI4Mjg5NDc5IiwiZXhwIjo0MDkzMjYwNjkwLCJpYXQiOjE3ODk1Nzc0OTAsIm5vbmNlIjoiSU9feU9RR01USWFZX1J6X0hhSFFLdyIsImF0X2hhc2giOiJJT195T1FHTVRJYVlfUnpfSGFIUUt3IiwibmFtZSI6IkFub255bW91cyIsInNjb3BlIjoiYW5vbnltb3VzIiwicHJvamVjdF9pZCI6Indvb3Nhbi1kN2dqMGlnZXliODI4OTQ3OSIsIm1ldGEiOnsicGxhdGZvcm0iOiJQdWJsaXNoYWJsZUtleSJ9LCJ1c2VyX3R5cGUiOiIiLCJjbGllbnRfdHlwZSI6ImNsaWVudF91c2VyIiwiaXNfc3lzdGVtX2FkbWluIjpmYWxzZX0.EUih-RjGPOxaBWxVUN3dhsfi8veySkbPe7Fi2szhz4rNfSbSO5u_XBYSOorAMlr-d4P1-pog4d5BrmZa1_dnJeak8sJWRlkcEbAob94hYi93DYNd7PB-o1h5iwZi7dVM8bt0pL6o1x28vD4ePJqMjp1P7UppIFC4-lh8y2g2vRuSjAz2h2FoGuxo4so9q0c2a1PCu7x1rBveXAwdL2lYTUZhKqVRThn4rUrOBDWEk3r03lANHKPz62Q33na-cibKH0o5c2PGpiw-Kqs73t9E1XcOwfwNdLdl0KctXWe2D2j_5R8q988piiRSe9Z0zZucqz29ThpfDJ9WfE-ggWaj2Q';  /* 匿名访问令牌 accessKey */
 var NET_TCB_URL = '';                 /* ← 静态托管部署后填默认域名完整地址（如 https://xxx.ap-shanghai.app.tcloudbase.com），GitHub Pages 入口跳转用 */
+var NET_WS_URL = 'wss://woo3an.top/ws';  /* 自建 WebSocket 房间服务（Cloudflare Worker + Durable Object）。留空 = 同源 /ws */
 var NET_APPLY = false;                /* 回放远端事件时置 true：放行回合守卫、且不再发送 */
 var CODE_RE = /^\d{4}$/;             /* 房间号：4 位数字 */
 var NET = (function () {
   var PEER = 'p' + Math.random().toString(36).slice(2, 10);
   var pollTimer = null, subCode = null, lastSnap = '', onRoomCb = null;
   var cur = null;                     /* 当前传输层 'local' | 'tcb' */
+
+  /* ---------- 传输层 A2：WebSocket 房间服务（Cloudflare Worker + Durable Object） ----------
+     一个房间号 = 一个 Durable Object；WebSocket 常驻推送，**不需要轮询**（CloudBase 版是
+     1.2s 轮询，受免费额度约束；这里是推送，一局约 50 个请求当量，等于无限）。
+     地址：NET_WS_URL 优先（跨站指向自建服务）；留空 = 同源 /ws。
+     协议：连上即收 {t:'room', r:房间记录}；上行 {t:'roll',s,d} / {t:'start'} / {t:'bye'}。
+     房间记录 shape 与 Local/TCB 完全一致 → onRoom(r) 回放逻辑零改动。 */
+  var WS = {
+    name: 'ws', sock: null, lastRec: null, lastSnap: '', onCb: null,
+    retry: 0, wantClose: false, codeNow: null, nameNow: null,
+    ready: function () { return location.protocol === 'https:' || location.protocol === 'http:'; },
+    ep: function (code, op, name) {
+      var base = NET_WS_URL || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+      /* ?ws=wss://xxx/ws 覆盖（自测/指向备用部署用） */
+      var ov = location.search.match(/[?&]ws=([^&]+)/);
+      if (ov) base = decodeURIComponent(ov[1]);
+      return base + '?code=' + code + '&op=' + op + '&name=' + encodeURIComponent(name) + '&pid=' + PEER;
+    },
+    /* 建连。cb(err, rec)：err 为字符串 = 失败；失败细节服务端放在 HTTP 状态里（4xx），
+       浏览器拿不到 status，所以靠"能否收到首帧 room"判定成败。
+       ?wstimeout=毫秒 可覆盖超时（自测专用：虚拟时钟环境下 8 秒会被瞬间跳过） */
+    open: function (code, op, name, cb, timeoutMs) {
+      var self = this, settled = false, s;
+      var tov = location.search.match(/[?&]wstimeout=(\d+)/);
+      var effTo = tov ? parseInt(tov[1], 10) : (timeoutMs || 8000);
+      try { s = new WebSocket(self.ep(code, op, name)); } catch (e) { cb('房间服务地址无效'); return; }
+      self.sock = s; self.wantClose = false;
+      var to = setTimeout(function () {
+        if (!settled) { settled = true; try { s.close(); } catch (e) {} cb('连接房间服务超时'); }
+      }, effTo);
+      s.onmessage = function (ev) {
+        var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+        if (m.t !== 'room' || !m.r) return;
+        self.lastRec = m.r;
+        if (!settled) { settled = true; clearTimeout(to); self.retry = 0; cb(null, m.r); return; }
+        self.deliver(m.r);
+      };
+      s.onclose = function () {
+        if (!settled) { settled = true; clearTimeout(to); cb('连不上房间服务'); return; }
+        if (!self.wantClose && self.lastRec && !self.lastRec.closed) self.reconnect();
+      };
+      s.onerror = function () { /* onclose 兜底 */ };
+    },
+    deliver: function (r) {
+      var now = JSON.stringify(r);
+      if (now !== this.lastSnap) { this.lastSnap = now; this.onCb && this.onCb(r); }
+    },
+    /* 意外掉线：3 秒后重连（最多 5 次）。重连成功后服务端会重推完整记录，
+       客户端 onRoom → 过期快照防护 + applyRemoteEvents 自动补齐漏掉的事件 = 断线恢复 */
+    reconnect: function () {
+      var self = this;
+      if (self.retry >= 5 || self.wantClose) return;
+      self.retry++;
+      setTimeout(function () {
+        if (self.wantClose || !self.codeNow) return;
+        self.open(self.codeNow, 'join', self.nameNow, function (err) {
+          if (err) self.reconnect();
+        });
+      }, 3000);
+    },
+    create: function (name, cb) {
+      var self = this, tries = 0;
+      (function attempt() {
+        var code = String(1000 + Math.floor(Math.random() * 9000));
+        self.open(code, 'create', name, function (err, r) {
+          if (!err) { self.codeNow = code; self.nameNow = name; cb(null, r); return; }
+          /* 失败可能是房间号撞车，也可能是服务不可达：换个号再试，最多 3 次 */
+          if (++tries < 3 && err !== '房间服务地址无效') { attempt(); return; }
+          cb(err, null);
+        }, 5000);
+      })();
+    },
+    join: function (code, name, cb) {
+      var self = this;
+      self.open(code, 'join', name, function (err, r) {
+        if (!err) { self.codeNow = code; self.nameNow = name; }
+        cb(err, r);
+      });
+    },
+    start: function (code, cb) {
+      try { this.sock.send(JSON.stringify({ t: 'start' })); } catch (e) {}
+      cb && cb(null);
+    },
+    addEvent: function (code, evt, cb) {
+      try { this.sock.send(JSON.stringify({ t: 'roll', s: evt.s, d: evt.d })); } catch (e) { cb && cb('发送失败'); return; }
+      cb && cb(null);
+    },
+    leave: function (code, started) {
+      this.wantClose = true;
+      var s = this.sock;
+      try { s.send(JSON.stringify({ t: 'bye' })); } catch (e) {}
+      setTimeout(function () { try { s && s.close(); } catch (e) {} }, 200);
+      this.codeNow = null; this.onCb = null;
+    },
+    read: function (code, cb) {
+      if (typeof cb === 'function') { cb(this.lastRec); return; }
+      return this.lastRec;   /* 同步返回最近快照：与 Local 语义一致（NET.join 里会无 cb 调用） */
+    },
+    watch: function (code, cb) {
+      this.onCb = cb;
+      this.lastSnap = '';
+      if (this.lastRec) this.deliver(this.lastRec);   /* 首帧立即推：重连回放靠它触发 */
+    },
+    unwatch: function () { this.onCb = null; },
+    tick: function () {}
+  };
 
   /* ---------- 传输层 A：localStorage（同机多标签页） ---------- */
   function lkey(code) { return 'bbnet_' + code; }
@@ -3125,9 +3232,12 @@ var NET = (function () {
 
   function pick() {
     /* 探针必须确定性（同步 tick 驱动，不碰网络）；file:// 的 null 源被网关 CORS
-       硬拦（实测 403），走 TCB 只会白等几秒再回退 —— 两处都直接短路进同机演示。 */
+       硬拦（实测 403），走 TCB 只会白等几秒再回退 —— 两处都直接短路进同机演示。
+       其余情况优先自建 WS 房间服务（推送、无限额度）；CloudBase 托管域名上用它自己
+       的数据库（同源白名单天然放行），WS 作为兜底链的下级。 */
     if (location.search.indexOf('selftest') >= 0) return Local;
     if (location.protocol === 'file:') return Local;
+    if (NET_WS_URL || location.hostname.indexOf('tcloudbase.com') < 0) return WS.ready() ? WS : Local;
     return TCB.ready() ? TCB : Local;
   }
 
@@ -3212,7 +3322,29 @@ var NET = (function () {
     create: function (name, cb) {
       var self = this;
       cur = pick();
-      if (cur === TCB) {
+      /* 降级链：自建 WS 失败 → CloudBase → 同机演示（网络不通也绝不让玩家卡死） */
+      function toTcbOrLocal(errMsg) {
+        if (TCB.ready()) {
+          cur = TCB;
+          TCB.init(function (err) {
+            if (err) { cur = Local; cb(errMsg || err, null, 'local'); return; }
+            TCB.create(name, function (e2, r) {
+              if (e2) { cur = Local; cb(e2, null, 'local'); return; }
+              self._afterCreate(r, cb);
+            });
+          });
+          return;
+        }
+        cur = Local;
+        Local.create(name, function (err, r) { self._afterCreate(r, cb); });
+        if (errMsg) toast(errMsg + '，已改用同机演示');
+      }
+      if (cur === WS) {
+        WS.create(name, function (err, r) {
+          if (err) { toTcbOrLocal(err); return; }
+          self._afterCreate(r, cb);
+        });
+      } else if (cur === TCB) {
         TCB.init(function (err) {
           if (err) { cur = Local; cb(err, null, 'local'); return; }
           TCB.create(name, function (err2, r) {
@@ -3224,7 +3356,7 @@ var NET = (function () {
     },
     _afterCreate: function (r, cb) {
       codeNow = r.code; seat = 0; inLobby = true;
-      cur = pick();
+      /* 注意：这里不能重新 pick() —— 降级链已经把 cur 定成"实际成功的那个传输层" */
       cur.watch(r.code, onRoom);
       cb(null, r, cur.name);
     },
@@ -3240,6 +3372,16 @@ var NET = (function () {
           cb(null, r || cur.read(code), cur.name);
         });
       };
+      if (cur === WS) {
+        /* 加入失败 = 房间不存在/已开局（业务错误），不降级——降级会给出误导性提示 */
+        WS.join(code, name, function (err, r) {
+          if (err) { cb(err, null, 'ws'); return; }
+          codeNow = code; inLobby = true;
+          cur.watch(code, onRoom);
+          cb(null, r || WS.read(code), 'ws');
+        });
+        return;
+      }
       if (cur === TCB) TCB.init(function (err) { if (err) { cur = Local; cb('CloudBase 连不上，已改用同机演示', null, 'local'); return; } go(); });
       else go();
     },
@@ -3273,7 +3415,8 @@ var NET = (function () {
     _fast: function (v) { wantFast = !!v; },
     _tick: function () { if (cur && cur.tick) cur.tick(); },
     _local: Local,
-    _tcb: TCB
+    _tcb: TCB,
+    _ws: function () { return WS; }                                     /* 测试钩子：断线重连状态可观测 */
   };
 })();
 
@@ -3303,7 +3446,7 @@ var NETUI = (function () {
       '  <input class="net-input" id="net-join-code" inputmode="numeric" maxlength="4" placeholder="房间号" style="flex:1">' +
       '  <button class="btn-ghost" id="net-do-join" style="flex:1">加入</button>' +
       '</div>' +
-      '<p class="net-note">同机演示：本浏览器开两个标签页即可互博。<br>跨设备联机：点创建/加入后自动跳到联机地址<br>（GitHub Pages 收藏夹照用，跳一次就到）。</p>' +
+      '<p class="net-note">同机演示：本浏览器开两个标签页即可互博。<br>跨设备联机：把房间号发给朋友，各自打开本页输入即可。</p>' +
       '<button class="btn-ghost" id="net-close" style="width:100%;margin-top:10px">返回</button>';
     el('net-do-create').onclick = function () { doCreate(); };
     el('net-do-join').onclick = function () { doJoin(el('net-join-code').value.trim()); };
