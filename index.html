@@ -2915,7 +2915,8 @@ window.__game = {
     state: function () { return (state && state.online) ? { seat: state.online.seat, code: state.online.code, kind: state.online.kind } : null; },
     _adoptPeer: function (code, idx) { NET._adoptPeer(code, idx); },   /* 自检：模拟老成员重连 */
     _fast: function (v) { NET._fast(v); },                             /* 自检：跳过动画 */
-    tick: function () { NET._tick(); }
+    tick: function () { NET._tick(); },
+    _raw: function () { return NET; }                                  /* 测试钩子：TCB 异步回调路径的 e2e 用 */
   }
 };
 
@@ -2931,7 +2932,10 @@ window.__game = {
              纪律：每把恰好一次数据库写，绝不轮询主通道
    - 断线重连 = 重新加入 + 把事件序列静默回放一遍
    ============================================================================ */
-var NET_TCB_ENV = '';                 /* ← 注册 CloudBase 后把环境 ID 填在这里 */
+var NET_TCB_ENV = 'woosan-d7gj0igeyb8289479';   /* CloudBase 环境 ID（新版平台） */
+var NET_TCB_REGION = 'ap-shanghai';             /* 环境地域 */
+var NET_TCB_AK = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjlkMWRjMzFlLWI0ZDAtNDQ4Yi1hNzZmLWIwY2M2M2Q4MTQ5OCJ9.eyJpc3MiOiJodHRwczovL3dvb3Nhbi1kN2dqMGlnZXliODI4OTQ3OS5hcC1zaGFuZ2hhaS50Y2ItYXBpLnRlbmNlbnRjbG91ZGFwaS5jb20iLCJzdWIiOiJhbm9uIiwiYXVkIjoid29vc2FuLWQ3Z2owaWdleWI4Mjg5NDc5IiwiZXhwIjo0MDkzMjYwNjkwLCJpYXQiOjE3ODk1Nzc0OTAsIm5vbmNlIjoiSU9feU9RR01USWFZX1J6X0hhSFFLdyIsImF0X2hhc2giOiJJT195T1FHTVRJYVlfUnpfSGFIUUt3IiwibmFtZSI6IkFub255bW91cyIsInNjb3BlIjoiYW5vbnltb3VzIiwicHJvamVjdF9pZCI6Indvb3Nhbi1kN2dqMGlnZXliODI4OTQ3OSIsIm1ldGEiOnsicGxhdGZvcm0iOiJQdWJsaXNoYWJsZUtleSJ9LCJ1c2VyX3R5cGUiOiIiLCJjbGllbnRfdHlwZSI6ImNsaWVudF91c2VyIiwiaXNfc3lzdGVtX2FkbWluIjpmYWxzZX0.EUih-RjGPOxaBWxVUN3dhsfi8veySkbPe7Fi2szhz4rNfSbSO5u_XBYSOorAMlr-d4P1-pog4d5BrmZa1_dnJeak8sJWRlkcEbAob94hYi93DYNd7PB-o1h5iwZi7dVM8bt0pL6o1x28vD4ePJqMjp1P7UppIFC4-lh8y2g2vRuSjAz2h2FoGuxo4so9q0c2a1PCu7x1rBveXAwdL2lYTUZhKqVRThn4rUrOBDWEk3r03lANHKPz62Q33na-cibKH0o5c2PGpiw-Kqs73t9E1XcOwfwNdLdl0KctXWe2D2j_5R8q988piiRSe9Z0zZucqz29ThpfDJ9WfE-ggWaj2Q';  /* 匿名访问令牌 accessKey */
+var NET_TCB_URL = '';                 /* ← 静态托管部署后填默认域名完整地址（如 https://xxx.ap-shanghai.app.tcloudbase.com），GitHub Pages 入口跳转用 */
 var NET_APPLY = false;                /* 回放远端事件时置 true：放行回合守卫、且不再发送 */
 var CODE_RE = /^\d{4}$/;             /* 房间号：4 位数字 */
 var NET = (function () {
@@ -3003,74 +3007,115 @@ var NET = (function () {
     if (e.key === lkey(subCode) && e.newValue) { lastSnap = e.newValue; onRoomCb(JSON.parse(e.newValue)); }
   }
 
-  /* ---------- 传输层 B：CloudBase（跨设备）。NET_TCB_ENV 填了才启用 ---------- */
+  /* ---------- 传输层 B：CloudBase（跨设备，新版平台 2026-09 接入） ----------
+     新版平台差异（实测结论，别改回旧版写法）：
+     · SDK 无 UMD 打包 → 用自托管 tcb_sdk.js（esbuild 打包，与页面同目录部署）
+     · init 必须带 accessKey（匿名访问令牌），光有环境 ID 会静默登录失败
+     · doc().get() 与按 _id 查询在 v3 SDK 上是坏的 → 所有读走 where({code})
+     · 无实时 watch（INIT_WATCH_FAIL）→ 1.2s 轮询 + 快照比对，首帧立即推
+     · 网关 CORS 只放行托管域名与 localhost；file:// null 源被拦 → pick() 里直接短路
+  -------------------------------------------------------------------------- */
   var TCB = {
-    name: 'tcb', app: null, db: null, cmd: null, docId: null, watcher: null,
+    name: 'tcb', app: null, db: null, cmd: null, pollTimer: null, pollCode: null, pollLast: null,
     ready: function () { return !!NET_TCB_ENV; },
     init: function (done) {
       var self = this;
       if (self.db) { done(null); return; }
       var s = document.createElement('script');
-      s.src = 'https://unpkg.com/@cloudbase/js-sdk@2.5.0/tcb/index.js';
+      s.src = 'tcb_sdk.js';
       s.onload = function () {
         try {
-          self.app = cloudbase.init({ env: NET_TCB_ENV });
+          var d = window.CloudbaseV3 && (CloudbaseV3.default || CloudbaseV3);
+          var initFn = d && (typeof d.init === 'function' ? d : d.cloudbase);
+          if (!initFn) { done('SDK 包不完整'); return; }
+          self.app = initFn.init({ env: NET_TCB_ENV, region: NET_TCB_REGION, accessKey: NET_TCB_AK });
           self.app.auth({ persistence: 'local' }).signInAnonymously().then(function () {
             self.db = self.app.database();
             self.cmd = self.db.command;
             done(null);
-          }).catch(function (e) { done('匿名登录失败: ' + (e.message || e)); });
-        } catch (e) { done('SDK 初始化失败: ' + (e.message || e)); }
+          }).catch(function (e) { done('匿名登录失败: ' + String((e && e.message) || JSON.stringify(e)).slice(0, 80)); });
+        } catch (e) { done('SDK 初始化失败: ' + ((e && e.message) || e)); }
       };
-      s.onerror = function () { done('CloudBase SDK 加载失败'); };
+      s.onerror = function () { done('tcb_sdk.js 加载失败（需与页面同目录部署）'); };
       document.head.appendChild(s);
     },
-    docOf: function (code) { return this.db.collection('bbnet_rooms').doc('r' + code); },
+    col: function () { return this.db.collection('bbnet_rooms'); },
+    docOf: function (code) { return this.col().doc('r' + code); },
     create: function (name, cb) {
       var self = this, code = String(1000 + Math.floor(Math.random() * 9000));
-      self.docId = 'r' + code;
-      self.db.collection('bbnet_rooms').doc(self.docId).set({
-        code: code, host: PEER, started: false, closed: false,
-        roster: [{ id: PEER, name: name }], events: []
-      }).then(function () { cb(null, { code: code, roster: [{ id: PEER, name: name }], started: false, events: [] }); })
-        .catch(function (e) { cb('建房间失败: ' + (e.message || e)); });
+      self.col().add({ _id: 'r' + code, code: code, host: PEER, started: false, closed: false,
+        roster: [{ id: PEER, name: name }], events: [] })
+        .then(function () { cb(null, { code: code, roster: [{ id: PEER, name: name }], started: false, events: [] }); })
+        .catch(function (e) { cb('建房间失败: ' + ((e && e.message) || e)); });
     },
     join: function (code, name, cb) {
-      var self = this, doc = self.docOf(code);
-      doc.get().then(function (res) {
+      var self = this;
+      self.col().where({ code: code }).get().then(function (res) {
         var r = res.data && res.data[0];
         if (!r || r.closed) { cb('没有这个房间号'); return; }
         var mine = null;
         for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) mine = r.roster[i];
         if (r.started && !mine) { cb('这局已经开始了'); return; }
         if (!mine) {
-          doc.update({ roster: self.cmd.addToSet({ id: PEER, name: name }) }).then(function () {
-            cb(null, null);   /* roster 以 watch 回调为准 */
-          }).catch(function (e) { cb('加入失败: ' + (e.message || e)); });
+          self.docOf(code).update({ roster: self.cmd.addToSet({ id: PEER, name: name }) }).then(function () {
+            cb(null, null);   /* roster 以轮询回调为准 */
+          }).catch(function (e) { cb('加入失败: ' + ((e && e.message) || e)); });
         } else cb(null, null);
       }).catch(function (e) { cb('没有这个房间号'); });
     },
-    start: function (code, cb) { this.docOf(code).update({ started: true }).then(function () { cb(null); }).catch(function (e) { cb(e.message || e); }); },
+    start: function (code, cb) { this.docOf(code).update({ started: true }).then(function () { cb(null); }).catch(function (e) { cb((e && e.message) || e); }); },
     addEvent: function (code, evt, cb) {
-      this.docOf(code).update({ events: this.cmd.push(evt) }).then(function () { cb && cb(null); }).catch(function (e) { cb && cb(e.message || e); });
+      this.docOf(code).update({ events: this.cmd.push(evt) }).then(function () { cb && cb(null); }).catch(function (e) { cb && cb(((e && e.message) || e)); });
     },
     leave: function (code, started) {
       var self = this;
       if (!started) { self.docOf(code).update({ roster: self.cmd.pull({ id: PEER }) }).catch(function () {}); }
       else { self.docOf(code).update({ closed: true }).catch(function () {}); }
     },
-    read: function (code, cb) { this.docOf(code).get().then(function (res) { cb(res.data && res.data[0] || null); }).catch(function () { cb(null); }); },
+    read: function (code, cb) {
+      /* Local.read 是同步返回；NET.join 里 `r || cur.read(code)` 会不带 cb 调用本方法
+         —— 异步版必须在这里挡住，否则 .then 里 cb(undefined) 直接抛 TypeError */
+      if (typeof cb !== 'function') return null;
+      this.col().where({ code: code }).get().then(function (res) { cb(res.data && res.data[0] || null); }).catch(function () { cb(null); });
+    },
+    /* 轮询版 watch：接口语义与 Local.watch 一致（首帧必须立即推，重连回放靠它触发）。
+       ⚠️ 额度意识：文档库 200 点/万次调用，免费档 3000 点/月。固定 1.2s 轮询
+       = 每人每分钟 1 点，一场 4 人局能烧掉半个月配额。改为自适应节奏：
+       - 等别人出骰（对局中、非我回合）→ 1.2s（实时性优先）
+       - 轮到我且空闲 → 4s（我roll之前不可能有新事件，只留慢心跳看解散）
+       - 大厅等开局 → 2.5s（进人低频）
+       - 本局已结束 → 5s（只看解散） */
     watch: function (code, cb) {
-      var self = this; self.docId = 'r' + code;
-      self.watcher = self.docOf(code).watch({
-        onChange: function (snap) {
-          var r = snap && snap.doc && snap.doc[0] !== undefined ? snap.doc[0] : (snap.doc || null);
-          if (r && r.code) cb(r);
-        },
-        onError: function () {}
+      var self = this;
+      self.pollCode = code; self.pollLast = null;
+      function delay() {
+        if (state && state.online) {
+          if (state.phase === 'over') return 15000;   /* 打完忘关页面：只留慢心跳看解散 */
+          if (state.current === state.online.seat && !state.busy) return 4000;
+          return 1200;
+        }
+        return 2500;   /* 大厅（含刚进房未开局） */
+      }
+      function loop() {
+        if (!self.pollCode) return;
+        self.read(self.pollCode, function (r) {
+          if (!r) return;
+          var now = JSON.stringify(r);
+          if (now !== self.pollLast) { self.pollLast = now; cb(r); }
+        });
+        if (!self.pollCode) return;
+        self.pollTimer = setTimeout(loop, delay());
+      }
+      if (self.pollTimer) clearTimeout(self.pollTimer);
+      self.pollTimer = setTimeout(loop, 0);
+      self.read(code, function (r) {   /* 首帧立即推 */
+        if (r && self.pollCode) { self.pollLast = JSON.stringify(r); cb(r); }
       });
     },
-    unwatch: function () { if (this.watcher) { try { this.watcher.close(); } catch (e) {} this.watcher = null; } },
+    unwatch: function () {
+      this.pollCode = null;
+      if (this.pollTimer) { clearTimeout(this.pollTimer); this.pollTimer = null; }
+    },
     tick: function () {}
   };
 
@@ -3078,7 +3123,13 @@ var NET = (function () {
   var seat = -1, codeNow = null, startedSeen = false, lobbyCb = null, inLobby = false;
   var wantFast = false;
 
-  function pick() { return TCB.ready() ? TCB : Local; }
+  function pick() {
+    /* 探针必须确定性（同步 tick 驱动，不碰网络）；file:// 的 null 源被网关 CORS
+       硬拦（实测 403），走 TCB 只会白等几秒再回退 —— 两处都直接短路进同机演示。 */
+    if (location.search.indexOf('selftest') >= 0) return Local;
+    if (location.protocol === 'file:') return Local;
+    return TCB.ready() ? TCB : Local;
+  }
 
   function exitToSetup() {
     document.getElementById('view-table').style.display = 'none';
@@ -3252,7 +3303,7 @@ var NETUI = (function () {
       '  <input class="net-input" id="net-join-code" inputmode="numeric" maxlength="4" placeholder="房间号" style="flex:1">' +
       '  <button class="btn-ghost" id="net-do-join" style="flex:1">加入</button>' +
       '</div>' +
-      '<p class="net-note">同机演示：本浏览器开两个标签页即可互博。<br>跨设备联机需配置 CloudBase 环境后自动启用。</p>' +
+      '<p class="net-note">同机演示：本浏览器开两个标签页即可互博。<br>跨设备联机：点创建/加入后自动跳到联机地址<br>（GitHub Pages 收藏夹照用，跳一次就到）。</p>' +
       '<button class="btn-ghost" id="net-close" style="width:100%;margin-top:10px">返回</button>';
     el('net-do-create').onclick = function () { doCreate(); };
     el('net-do-join').onclick = function () { doJoin(el('net-join-code').value.trim()); };
@@ -3286,8 +3337,21 @@ var NETUI = (function () {
     el('net-leave').onclick = function () { NET.leave(); close(); };
   }
 
+  /* GitHub Pages 入口桥：跨设备联机必须走 CloudBase 托管地址（网关 CORS 拦 github.io），
+     但收藏夹/二维码可以永远指向 GitHub Pages —— 在那边点「创建/加入」就带着昵称与房间号
+     跳到托管地址接着走，用户不用记第二个网址。NET_TCB_URL 填了才启用。 */
+  function maybeJump(intent, val) {
+    if (!NET_TCB_URL) return false;
+    if (location.href.indexOf(NET_TCB_URL) === 0) return false;
+    if (location.hostname.indexOf('github.io') < 0 && location.protocol !== 'file:') return false;
+    location.href = NET_TCB_URL + '?' + intent + (val ? '=' + encodeURIComponent(val) : '') +
+      '&n=' + encodeURIComponent(myName);
+    return true;
+  }
+
   function doCreate() {
     myName = el('net-name').value.trim() || myName;
+    if (maybeJump('create')) return;
     el('net-body').innerHTML = '<p class="net-note" style="text-align:center;padding:30px 0">正在创建房间…</p>';
     NET.create(myName, function (err, r, kindName) {
       if (err) { renderMenu(err); return; }
@@ -3297,12 +3361,27 @@ var NETUI = (function () {
   function doJoin(code) {
     myName = el('net-name') ? (el('net-name').value.trim() || myName) : myName;
     if (!code) { renderMenu('先填房间号'); return; }
+    if (maybeJump('join', code)) return;
     el('net-body').innerHTML = '<p class="net-note" style="text-align:center;padding:30px 0">正在加入…</p>';
     NET.join(code, myName, function (err, r, kindName) {
       if (err) { renderMenu(err); return; }
       renderLobby(r || NET._local.read(code) || { code: code, roster: [{ id: '', name: '?' }] }, kindName);
     });
   }
+
+  /* 托管地址带意图参数落地：?create=1 / ?join=1234 / ?n=昵称 —— 自动接着走 */
+  (function () {
+    if (location.protocol === 'file:' || location.search.indexOf('selftest') >= 0) return;
+    var q = location.search.match(/[?&](create|join)(?:=([^&]*))?/);
+    if (!q) return;
+    var nm = location.search.match(/[?&]n=([^&]*)/);
+    if (nm) { myName = decodeURIComponent(nm[1]); }
+    setTimeout(function () {
+      open();
+      if (q[1] === 'join') doJoin(decodeURIComponent(q[2] || ''));
+      else doCreate();
+    }, 300);
+  })();
 
   /* 房间快照变化：大厅刷新 / 开局 / 远端事件 */
   NET.onLobby(function (r) {

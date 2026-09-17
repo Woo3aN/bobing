@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>博饼联机探针</title>
+<style>
+body{background:#1a1208;color:#e8dcc8;font:14px/1.7 -apple-system,"PingFang SC",monospace;margin:0;padding:16px;max-width:560px;margin:0 auto}
+h1{font-size:18px;color:#f4c542;margin:8px 0}
+h2{font-size:15px;margin:14px 0 4px;color:#f4c542}
+.item{padding:8px 10px;border-radius:8px;margin:4px 0;background:#241a0e}
+.ok{border-left:4px solid #4caf50}
+.fail{border-left:4px solid #e53935}
+.wait{border-left:4px solid #999}
+#final{font-size:16px;font-weight:bold;margin:16px 0;padding:12px;border-radius:10px;text-align:center}
+small{color:#a09078}
+</style></head><body>
+<h1>⚡ 博饼联机可行性探针</h1>
+<small>本页只做网络测试，不收集任何数据。测完把整页截图发给阿澈即可。</small>
+<div id="final" class="wait">测试中…</div>
+<div id="list"></div>
+<script>
+var list = document.getElementById('list');
+var results = {};
+function item(id, name) {
+  var d = document.createElement('div');
+  d.className = 'wait'; d.id = id; d.textContent = '⏳ ' + name;
+  list.appendChild(d);
+  return d;
+}
+function done(id, ok, text) {
+  var d = document.getElementById(id);
+  d.className = ok ? 'ok' : 'fail';
+  d.textContent = (ok ? '✅ ' : '❌ ') + text;
+  results[id] = ok;
+  var all = Object.keys(results).length, passed = 0;
+  for (var k in results) if (results[k]) passed++;
+  var f = document.getElementById('final');
+  if (all >= 4) {
+    var verdict = passed === all
+      ? '🎉 全部通过：你的网络可以用 PeerJS 直连连机！'
+      : (results.t2 ? '⚠️ 部分通过：信令可用，打洞受限——同 WiFi 联机可用，跨网看运气'
+                    : '❌ 信令不通：PeerJS 公共信令在你的网络不可用');
+    f.className = passed >= 2 ? 'ok' : 'fail';
+    f.textContent = verdict;
+  }
+}
+
+/* 测试1：裸 WebSocket 到 PeerJS 公共信令云 */
+(function () {
+  var id = item('t1', '信令云握手（0.peerjs.com WebSocket）');
+  var t0 = Date.now();
+  var ws;
+  try { ws = new WebSocket('wss://0.peerjs.com/peerjs?key=peerjs'); }
+  catch (e) { return done(id, false, '信令云握手失败（构造异常 ' + e.message + '）'); }
+  var to = setTimeout(function () { done(id, false, '信令云握手失败（8 秒无响应 = 被拦/不可达）'); try { ws.close(); } catch (x) {} }, 8000);
+  ws.onopen = function () { clearTimeout(to); done(id, true, '信令云握手 OK（' + (Date.now() - t0) + 'ms）'); try { ws.close(); } catch (x) {} };
+  ws.onerror = function () { clearTimeout(to); done(id, false, '信令云握手失败（onerror）'); };
+})();
+
+/* 测试2：PeerJS 真实信令（new Peer → open） */
+(function () {
+  var id = item('t2', 'PeerJS 信令注册（new Peer → open）');
+  if (typeof Peer === 'undefined') { done(id, false, 'peerjs.min.js 加载失败'); return; }
+  var t0 = Date.now();
+  var peer = new Peer('bbnetprobe' + Math.floor(Math.random() * 90000), { debug: 0 });
+  var to = setTimeout(function () { done(id, false, 'PeerJS 信令注册失败（10 秒未 open）'); try { peer.destroy(); } catch (x) {} }, 10000);
+  peer.on('open', function () { clearTimeout(to); done(id, true, 'PeerJS 信令注册 OK（' + (Date.now() - t0) + 'ms）—— 这条是联机可行性的核心'); });
+  peer.on('error', function (e) { clearTimeout(to); done(id, false, 'PeerJS 信令错误: ' + e.type); });
+})();
+
+/* 测试3：本机双 peer DataChannel 回环（验证 WebRTC 数据面） */
+(function () {
+  var id = item('t3', 'WebRTC 数据通道回环');
+  var a = new Peer({ debug: 0 }), b = new Peer({ debug: 0 });
+  var opened = 0;
+  function maybeStart() {
+    if (opened < 2) return;
+    var conn = a.connect(b.id);
+    var to = setTimeout(function () { done(id, false, '数据通道建立超时'); try { a.destroy(); b.destroy(); } catch (x) {} }, 12000);
+    conn.on('open', function () {
+      conn.on('data', function (d) {
+        clearTimeout(to);
+        done(id, true, 'WebRTC 数据通道 OK（收到回显: ' + d + '）');
+        try { a.destroy(); b.destroy(); } catch (x) {}
+      });
+      conn.send('博饼');
+    });
+  }
+  a.on('open', function () { opened++; maybeStart(); });
+  b.on('open', function () { opened++; maybeStart(); });
+  a.on('error', function () {}); b.on('error', function () {});
+})();
+
+/* 测试4：STUN 打洞（决定跨网络能不能直连） */
+(function () {
+  var id = item('t4', 'STUN 打洞（跨网直连前提）');
+  var found = [];
+  var pcs = 0, finished = 0;
+  [['小米', 'stun:stun.miwifi.com:3478'], ['谷歌', 'stun:stun.l.google.com:19302']].forEach(function (s) {
+    var pc;
+    try { pc = new RTCPeerConnection({ iceServers: [{ urls: s[1] }] }); } catch (e) { finished++; check(); return; }
+    pcs++;
+    pc.createDataChannel('t');
+    var to = setTimeout(function () { fin(); }, 8000);
+    function fin() { if (to) { clearTimeout(to); to = null; finished++; check(); try { pc.close(); } catch (x) {} } }
+    pc.onicecandidate = function (e) {
+      if (!e.candidate) return fin();
+      if (/typ srflx/.test(e.candidate.candidate)) { found.push(s[0] + ':' + e.candidate.candidate.split(' ')[4]); fin(); }
+    };
+    pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(function () { fin(); });
+  });
+  function check() {
+    if (finished < 2) return;
+    done(id, found.length > 0, found.length ? 'STUN 打洞 OK（' + found.join('；') + '）' : '两个 STUN 都没拿到公网映射（跨网直连受限）');
+  }
+})();
+</script></body></html>
