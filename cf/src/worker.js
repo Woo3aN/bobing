@@ -142,6 +142,12 @@ export class RoomDO {
       const seat = m.s | 0;
       if (seat < 0 || seat >= this.rec.roster.length) return;
       if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
+      /* 防冒名：只能替**自己**掷（客户端本来就只发自己的座次）。
+         服务端不跑规则、判不了"轮到谁"，但"谁在替谁掷"是可以判的 —— 这道检查挡掉
+         一半的伪造路径，也让出 bug 的客户端不至于污染整条事件序列。 */
+      const pid = (ws.deserializeAttachment() || {}).pid;
+      if (this.rec.roster.findIndex(p => p.id === pid) !== seat) return;
+      if (this.rec.events.length >= 5000) return;      /* 兜底：别让异常客户端把记录撑爆 */
       this.rec.events.push({ s: seat, d: m.d.slice() });
       await this.save();
       this.broadcast();
@@ -158,6 +164,7 @@ export class RoomDO {
       if (!this.rec.off || !this.rec.off[seat]) return;      /* 该座次在线 → 拒绝 */
       const last = this.rec.events[this.rec.events.length - 1];
       if (last && last.skip && last.s === seat) return;      /* 已跳过 → 忽略重复请求 */
+      if (this.rec.events.length >= 5000) return;            /* 兜底上限，同 roll */
       this.rec.events.push({ s: seat, skip: true });
       await this.save();
       this.broadcast();

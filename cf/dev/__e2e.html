@@ -57,6 +57,25 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     const lobby = await readRoom();
     log('[4] 房间名册: ' + JSON.stringify(lobby.roster.map(p => p.name)));
 
+    /* [4.5] 大厅里掉线：面板必须给出提示（否则「开始游戏」点了石沉大海） */
+    f2.contentDocument.getElementById('btn-net').click();     /* 客人打开联机面板 */
+    await sleep(400);
+    const body2 = () => f2.contentDocument.getElementById('net-body').textContent;
+    if (body2().indexOf('房间已建好') < 0) fail('联机面板没有回到大厅：' + body2().slice(0, 60));
+    log('[4.5] 面板正确显示大厅（不是"创建/加入"菜单）✓');
+    await fetch('/__kick?code=' + code + '&pid=' + g2.net._raw().peerId());
+    let hint = '';
+    for (let k = 0; k < 80; k++) { await sleep(400); hint = body2(); if (/正在重连|连接已断开/.test(hint)) break; }
+    if (!/正在重连|连接已断开/.test(hint)) fail('大厅掉线后面板没有提示，面板内容：' + hint.slice(0, 80));
+    const startBtn = f2.contentDocument.getElementById('net-do-start');
+    log('[4.6] 大厅掉线提示出现 ✓（' + (startBtn ? '开始按钮=' + (startBtn.disabled ? '已禁用' : '仍可点') : '客人视角无开始按钮') + '）');
+    let back2 = '';
+    for (let k = 0; k < 120; k++) { await sleep(400); back2 = body2(); if (!/正在重连|连接已断开/.test(back2)) break; }
+    if (/正在重连|连接已断开/.test(back2)) fail('重连回来后面板提示没有消失');
+    log('[4.7] 自动重连回来，提示消失 ✓');
+    f2.contentDocument.getElementById('net-close-x').click();   /* 收起面板，后面照旧走接口 */
+    await sleep(200);
+
     /* 开局 */
     await new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('start 超时 20s')), 20000);

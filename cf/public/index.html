@@ -206,6 +206,9 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
   transition:transform .1s, box-shadow .1s, filter .2s}
 .btn-roll:active{transform:translateY(5px);box-shadow:0 3px 0 #7d0f14,0 6px 14px rgba(0,0,0,.5)}
 .btn-roll[disabled]{filter:grayscale(.6) brightness(.8);cursor:not-allowed}
+/* 通用禁用态：别的按钮（大厅的「开始游戏」、联机面板）也会被禁用，
+   没有这行的话禁用只是"点不动"，看起来和能点一模一样 */
+button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
 .btn-ghost{font-size:13px;padding:10px 16px;border-radius:999px;border:1px solid var(--panel-b);
   background:rgba(255,255,255,.06)}
 .btn-ghost:hover{border-color:var(--gold)}
@@ -3014,12 +3017,19 @@ var NET = (function () {
   var cur = null;                     /* 当前传输层 'local' | 'tcb' */
 
   /* 连接状态回显：断线时把掷骰按钮换成「重连中…」，别让玩家对着一个点了没反应的按钮干瞪眼
-     （掉线时 send 会静默丢弃，没有提示的话看起来就是"游戏卡死了"）。 */
+     （掉线时 send 会静默丢弃，没有提示的话看起来就是"游戏卡死了"）。
+     大厅里的「开始游戏」同理 —— 在大厅等人时锁屏掉线，按钮也是点了没反应。
+     统一在这里广播状态，curLink 去重（每条房间消息都会调 setLink('ok')，不能每次都通知 UI）。 */
+  var curLink = 'ok', linkCb = null;
   function setLink(v) {
-    if (!state || !state.online) return;
-    if (state.online.link === v) return;
-    state.online.link = v;
-    if (typeof updateRollButton === 'function') updateRollButton();
+    if (curLink !== v) {
+      curLink = v;
+      if (linkCb) linkCb(v);
+    }
+    if (state && state.online && state.online.link !== v) {
+      state.online.link = v;
+      if (typeof updateRollButton === 'function') updateRollButton();
+    }
   }
 
   /* ---------- 传输层 A2：WebSocket 房间服务（Cloudflare Worker + Durable Object） ----------
@@ -3064,6 +3074,7 @@ var NET = (function () {
         var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         if (m.t !== 'room' || !m.r) return;
         self.lastRec = m.r;
+        setLink('ok');                 /* 收到房间帧 = 连接是活的（curLink 去重，不会刷 UI） */
         if (!settled) {
           settled = true; clearTimeout(to); self.retry = 0;
           cb(null, m.r);
@@ -3209,6 +3220,12 @@ var NET = (function () {
       var r = lread(code); if (!r) { cb && cb('房间不存在'); return; }
       r.events.push(evt); lwrite(r); cb && cb(null, r);
     },
+    /* 再来一局（与 Worker 版同语义：清空事件回大厅，名单保留）。
+       缺了它，同机演示模式下房主点「再来一局」只会得到"当前模式不支持" */
+    reset: function (code, cb) {
+      var r = lread(code); if (!r) { cb && cb('房间不存在'); return; }
+      r.events = []; r.started = false; lwrite(r); cb && cb(null);
+    },
     leave: function (code, started, done) {
       var r = lread(code); if (!r) return;
       if (!started || done) {          /* 未开局 / 本局已打完：只把自己摘掉（语义与 Worker 版一致） */
@@ -3305,6 +3322,12 @@ var NET = (function () {
       }).catch(function (e) { cb('没有这个房间号'); });
     },
     start: function (code, cb) { this.docOf(code).update({ started: true }).then(function () { cb(null); }).catch(function (e) { cb((e && e.message) || e); }); },
+    /* 再来一局（与 Worker 版同语义） */
+    reset: function (code, cb) {
+      this.docOf(code).update({ events: [], started: false })
+        .then(function () { cb && cb(null); })
+        .catch(function (e) { cb && cb('重置失败: ' + ((e && e.message) || e)); });
+    },
     addEvent: function (code, evt, cb) {
       this.docOf(code).update({ events: this.cmd.push(evt) }).then(function () { cb && cb(null); }).catch(function (e) { cb && cb(((e && e.message) || e)); });
     },
@@ -3361,7 +3384,7 @@ var NET = (function () {
   };
 
   /* ---------- 游戏侧状态 ---------- */
-  var seat = -1, codeNow = null, startedSeen = false, lobbyCb = null, inLobby = false;
+  var seat = -1, codeNow = null, startedSeen = false, lobbyCb = null;
   var wantFast = false;
 
   /* 记住"我在哪个房间"：刷新页面后能一键回到房间（sessionStorage = 只在本标签页有效） */
@@ -3405,7 +3428,7 @@ var NET = (function () {
   /* 本地收摊（不发网络消息）：断开房间、清掉"回到房间"记忆、复位联机态 */
   function localLeave() {
     if (cur && cur.unwatch) cur.unwatch();
-    startedSeen = false; seat = -1; codeNow = null; inLobby = false;
+    startedSeen = false; seat = -1; codeNow = null;
     if (state) state.online = null;
     clearSession();
     var m = document.getElementById('net-modal'); if (m) m.classList.remove('show');
@@ -3453,7 +3476,8 @@ var NET = (function () {
     document.getElementById('view-table').style.display = '';
     newGame({ players: ps, mode: r.roster.length === 1 ? 'solo' : 'local', fast: wantFast });
     buildDice();
-    state.online = { seat: seat, code: r.code, kind: cur, off: r.off || [], offSig: (r.off || []).join(','), link: 'ok' };
+    state.online = { seat: seat, code: r.code, kind: cur && cur.name, off: r.off || [], offSig: (r.off || []).join(',') };
+    setLink('ok');
     var rb0 = document.getElementById('btn-restart');
     if (rb0) rb0.textContent = '退出房间';   /* 联机时它就是"退房"（中途退出 = 本局解散） */
     if (resync) {
@@ -3511,7 +3535,7 @@ var NET = (function () {
   /* ---------- 对外 API ---------- */
   return {
     peerId: function () { return PEER; },
-    kind: function () { return cur; },
+    kind: function () { return cur && cur.name; },   /* 返回**名字**（'ws'/'local'/'tcb'）：面板按它判断要不要显示"同机演示"提示 */
     seat: function () { return seat; },
     code: function () { return codeNow; },
     tcbReady: function () { return TCB.ready(); },
@@ -3551,7 +3575,7 @@ var NET = (function () {
       } else { Local.create(name, function (err, r) { self._afterCreate(r, cb); }); }
     },
     _afterCreate: function (r, cb) {
-      codeNow = r.code; seat = 0; inLobby = true;
+      codeNow = r.code; seat = 0;
       saveSession(r.code);
       /* 注意：这里不能重新 pick() —— 降级链已经把 cur 定成"实际成功的那个传输层" */
       cur.watch(r.code, onRoom);
@@ -3564,7 +3588,7 @@ var NET = (function () {
       var go = function () {
         cur.join(code, name, function (err, r) {
           if (err) { cb(err, null, cur.name); return; }
-          codeNow = code; inLobby = true;
+          codeNow = code;
           saveSession(code);
           cur.watch(code, onRoom);
           cb(null, r || cur.read(code), cur.name);
@@ -3574,7 +3598,7 @@ var NET = (function () {
         /* 加入失败 = 房间不存在/已开局（业务错误），不降级——降级会给出误导性提示 */
         WS.join(code, name, function (err, r) {
           if (err) { cb(err, null, 'ws'); return; }
-          codeNow = code; inLobby = true;
+          codeNow = code;
           saveSession(code);
           cur.watch(code, onRoom);
           cb(null, r || WS.read(code), 'ws');
@@ -3602,6 +3626,8 @@ var NET = (function () {
       else cb && cb('当前模式不支持');
     },
     savedRoom: function () { return readSession(); },
+    forgetRoom: function () { clearSession(); },   /* 房间已不存在/已散：别再显示「回到房间 XXXX」 */
+    onLink: function (cb) { linkCb = cb; },        /* 连接状态（ok/down/dead）→ 面板提示用 */
     isHost: function () { var r = cur && cur.read ? cur.read(codeNow) : null; return !!(r && r.host === PEER); },
     leave: function () {
       var wasStarted = startedSeen;
@@ -3632,6 +3658,8 @@ var NET = (function () {
 /* ---------- 联机面板 UI ---------- */
 var NETUI = (function () {
   var myName = '';
+  var linkState = 'ok';       /* 连接状态：ok / down（重连中）/ dead（已放弃） */
+  var lobbyRoom = null;       /* 最近一次大厅快照：连接状态变化时用它重渲染 */
   function el(id) { return document.getElementById(id); }
   function open() {
     var inp = el('net-name');
@@ -3673,6 +3701,7 @@ var NETUI = (function () {
   }
 
   function renderLobby(r, kindName) {
+    lobbyRoom = r;
     var isHost = r.roster.length && r.roster[0].id === NET.peerId();
     var off = r.off || [];
     var list = r.roster.map(function (p, i) {
@@ -3686,6 +3715,10 @@ var NETUI = (function () {
       '<button class="btn-ghost" id="net-copy" style="width:100%;margin:6px 0 12px">复制房间号</button>' +
       '<div class="net-roster">' + list + '</div>' +
       (kindName === 'local' ? '<p class="net-note">同机演示模式：另开一个本页标签页，用房间号加入。</p>' : '') +
+      (linkState === 'ok' ? '' :
+        '<p class="net-note" style="text-align:center;color:#ff9d8a">' +
+        (linkState === 'dead' ? '与房间服务的连接已断开 —— 请退出房间后重新加入'
+                              : '网络波动，正在重连…（这时点开始不会有反应）') + '</p>') +
       (isHost
         ? '<button class="btn-primary" id="net-do-start" style="width:100%;margin-top:12px">开始游戏（' + r.roster.length + ' 人）</button>'
         : '<p class="net-note" style="text-align:center">等待房主开始…</p>') +
@@ -3698,8 +3731,10 @@ var NETUI = (function () {
     if (isHost) el('net-do-start').onclick = function () {
       /* 服务端要求至少 2 人；先在这里挡住并说明原因，否则点了像没反应 */
       if (r.roster.length < 2) { toast('至少要有 2 个玩家才能开局'); return; }
+      if (linkState !== 'ok') { toast('还没连上房间服务，稍等一下'); return; }
       NET.start(function (err) { if (err) toast(err); });
     };
+    if (isHost && linkState !== 'ok') el('net-do-start').disabled = true;
     el('net-leave').onclick = function () { NET.leave(); close(); };
   }
 
@@ -3730,7 +3765,12 @@ var NETUI = (function () {
     if (maybeJump('join', code)) return;
     el('net-body').innerHTML = '<p class="net-note" style="text-align:center;padding:30px 0">正在加入…</p>';
     NET.join(code, myName, function (err, r, kindName) {
-      if (err) { renderMenu(err); return; }
+      if (err) {
+        /* 房间已经不存在/已散 → 清掉"回到房间 XXXX"记忆，否则这个按钮会一直挂在那儿，
+           点一次错一次（用户会以为是自己操作有问题） */
+        if (/没有这个房间号|这局已经散了/.test(err) && NET.forgetRoom) NET.forgetRoom();
+        renderMenu(err); return;
+      }
       renderLobby(r || NET._local.read(code) || { code: code, roster: [{ id: '', name: '?' }] }, kindName);
     });
   }
@@ -3748,6 +3788,15 @@ var NETUI = (function () {
       else doCreate();
     }, 300);
   })();
+
+  /* 连接状态变化：大厅面板要跟着变 —— 在大厅等人时锁屏掉线是最常见的场景，
+     不提示的话面板照旧显示「开始游戏」，点下去石沉大海 */
+  NET.onLink(function (v) {
+    linkState = v;
+    if (el('net-modal').classList.contains('show') && lobbyRoom && NET.code() &&
+        lobbyRoom.code === NET.code() && !lobbyRoom.closed && !lobbyRoom.started)
+      renderLobby(lobbyRoom, NET.kind());
+  });
 
   /* 房间快照变化：大厅刷新 / 开局 / 从牌桌回大厅（房主点了再来一局） */
   NET.onLobby(function (r, fromGame) {
@@ -3947,6 +3996,20 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
               ok('〔联机〕重复事件防护：快照重放不会重复计把数',
                 g3.state().rollCount === g1.state().rollCount,
                 g3.state().rollCount + ' vs ' + g1.state().rollCount);
+              /* 同机演示（Local 传输层）也要支持「再来一局」——
+                 缺 reset 时房主点了只会得到"当前模式不支持"，等于这个功能在半数场景下是坏的 */
+              var recA = g1.net._raw()._local.read(code);
+              g1.net._raw().rematch(function () {});
+              g1.net.tick(); g2.net.tick(); g3.net.tick();
+              var recB = g1.net._raw()._local.read(code);
+              ok('〔联机·Local〕再来一局：清空事件回大厅（名单保留）',
+                !!recB && recB.events.length === 0 && recB.started === false && recB.roster.length === 2,
+                'before events=' + (recA && recA.events.length) + ' → after events=' + (recB && recB.events.length) +
+                ' started=' + (recB && recB.started) + ' roster=' + (recB && recB.roster.length));
+              ok('〔联机·Local〕再来一局后三个客户端都回大厅（不再停在牌桌）',
+                !g1.net.state() && !g2.net.state() && !g3.net.state(),
+                (g1.net.state() ? 'g1在局内' : 'g1回大厅') + '/' + (g2.net.state() ? 'g2在局内' : 'g2回大厅') +
+                '/' + (g3.net.state() ? 'g3在局内' : 'g3回大厅'));
             }
           } catch (e) { window.__logErr('net f3: ' + e.stack); ok('〔联机〕f3 检查异常', false, e.message); }
           report();

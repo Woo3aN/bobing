@@ -123,6 +123,8 @@ server.on('upgrade', (req, socket, head) => {
         const seat = m.s | 0;
         if (seat < 0 || seat >= r.roster.length) return;
         if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
+        if (r.roster.findIndex(p => p.id === pid) !== seat) return;   /* 防冒名：只能替自己掷 */
+        if (r.events.length >= 5000) return;
         r.events.push({ s: seat, d: m.d.slice() });
         broadcast(code);
       } else if (m.t === 'skip') {
@@ -133,6 +135,7 @@ server.on('upgrade', (req, socket, head) => {
         if (!r.off || !r.off[seat]) return;
         const last = r.events[r.events.length - 1];
         if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */
+        if (r.events.length >= 5000) return;
         r.events.push({ s: seat, skip: true });
         broadcast(code);
       } else if (m.t === 'start') {

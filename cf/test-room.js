@@ -97,6 +97,13 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     lastRoom(host).events[0].s === 1 && lastRoom(host).events[0].d[0] === 1 &&
     lastRoom(host).events[1].s === 0 && lastRoom(host).events[1].d[0] === 6);
 
+  /* 防冒名：客人（seat 1）替房主（seat 0）掷 —— 必须被拒（否则任何人都能污染事件序列） */
+  const rcBefore = lastRoom(host).events.length;
+  send(guest, { t: 'roll', s: 0, d: [2, 2, 2, 2, 2, 2] });
+  await sleep(600);
+  ok('防冒名：替别人的座次掷骰被拒绝', lastRoom(host).events.length === rcBefore,
+    'events=' + lastRoom(host).events.length);
+
   send(host, { t: 'roll', s: 0, d: [7, 7, 7, 7, 7, 7] });
   send(host, { t: 'roll', s: 9, d: [1, 2, 3, 4, 5, 6] });
   send(host, { t: 'roll', s: 0, d: [1, 2, 3] });
