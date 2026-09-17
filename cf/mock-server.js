@@ -23,18 +23,20 @@ function broadcast(code) {
   const msg = JSON.stringify({ t: 'room', r: rec });
   wss.clients.forEach(c => { if (c.roomCode === code && c.readyState === 1) { try { c.send(msg); } catch (e) {} } });
 }
-function dropPlayer(ws, explicit) {
+function dropPlayer(ws, explicit, done) {
   const rec = rooms.get(ws.roomCode);
   if (!rec) return;
-  if (!rec.started) {
+  const leaveRoster = !rec.started || done;   /* 未开局 / 本局已打完 → 只把自己摘掉 */
+  if (leaveRoster) {
     const before = rec.roster.length;
     rec.roster = rec.roster.filter(p => p.id !== ws.pid);
     if (rec.roster.length !== before) {
       if (rec.roster.length === 0) { rooms.delete(rec.code); return; }   /* 空房间删除，不留垃圾 */
+      if (!rec.roster.some(p => p.id === rec.host)) rec.host = rec.roster[0].id;   /* 房主顺位 */
       broadcast(rec.code);
     }
   } else if (explicit) {
-    rec.closed = true;                       /* 已开局后主动退出 → 任何玩家退出都解散 */
+    rec.closed = true;                       /* 打到一半主动退出 → 任何玩家退出都解散 */
     broadcast(rec.code);
   } else {
     broadcast(rec.code);                     /* 掉线只更新在线状态 */
@@ -45,7 +47,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/ws') {
     const rec = rooms.get(url.searchParams.get('code'));
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify(rec
       ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length }
       : { exists: false }));
@@ -56,10 +58,14 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(rooms.get(url.searchParams.get('code')) || { exists: false }));
     return;
   }
-  if (url.pathname === '/__kick') {          /* 测试钩子：强制掐断（模拟掉线，不发 bye） */
+  if (url.pathname === '/__kick') {          /* 测试钩子：强制掐断（模拟掉线，不发 bye）
+                                                  带 &pid= 只掐指定玩家（测"某一人掉线"） */
     const c = url.searchParams.get('code');
+    const only = url.searchParams.get('pid');
     let n = 0;
-    wss.clients.forEach(cl => { if (cl.roomCode === c) { try { cl.terminate(); n++; } catch (e) {} } });
+    wss.clients.forEach(cl => {
+      if (cl.roomCode === c && (!only || cl.pid === only)) { try { cl.terminate(); n++; } catch (e) {} }
+    });
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('kicked ' + n);
     return;
@@ -125,6 +131,8 @@ server.on('upgrade', (req, socket, head) => {
         const seat = m.s | 0;
         if (seat < 0 || seat >= r.roster.length) return;
         if (!r.off || !r.off[seat]) return;
+        const last = r.events[r.events.length - 1];
+        if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */
         r.events.push({ s: seat, skip: true });
         broadcast(code);
       } else if (m.t === 'start') {
@@ -134,7 +142,7 @@ server.on('upgrade', (req, socket, head) => {
         if (pid !== r.host) return;
         r.events = []; r.started = false; broadcast(code);
       } else if (m.t === 'bye') {
-        dropPlayer(ws, true);
+        dropPlayer(ws, true, !!m.done);
         try { ws.close(); } catch (e) {}
       }
     });

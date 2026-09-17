@@ -2351,11 +2351,17 @@ function updateRollButton() {
   if (!b) return;
   if (state.phase === 'over') { b.disabled = true; b.textContent = '本局结束'; return; }
   if (state.online) {
+    /* 掉线时 send 会被静默丢弃 —— 必须换成明确文案，否则看起来就是"点了没反应" */
+    var lk = state.online.link;
+    if (lk === 'down') { b.disabled = true; b.textContent = '重连中…'; return; }
+    if (lk === 'dead') { b.disabled = true; b.textContent = '连接已断开 · 请退出重进'; return; }
     var mine = state.current === state.online.seat;
     var dead = !!(state.online.off && state.online.off[state.current]);
+    var pending = state.online.skipSeat === state.current && state.online.skipAt &&
+                  (Date.now() - state.online.skipAt < 4000);
     if (dead && !state.busy) {          /* 轮到的玩家掉线 → 变成「跳过」按钮，别人能接着玩 */
-      b.disabled = false;
-      b.textContent = '对方掉线 · 跳过这一把';
+      b.disabled = !!pending;
+      b.textContent = pending ? '已请求跳过…' : '对方掉线 · 跳过这一把';
       return;
     }
     b.disabled = !!state.busy || !mine;
@@ -2740,6 +2746,9 @@ function bindEvents() {
 
   document.getElementById('btn-start').addEventListener('click', function () {
     Sfx.wake();
+    /* 还在联机房间里（比如大厅等人等不住了）→ 先退房再开单机，
+       否则房主一开局就会被拽回牌桌，把正在进行的单机局顶掉 */
+    if (typeof NET !== 'undefined' && NET.code()) NET.leave();
     var ps = [];
     for (var i = 0; i < setupCfg.count; i++) {
       ps.push({
@@ -2761,7 +2770,14 @@ function bindEvents() {
     /* 掉线跳过：轮到的玩家掉线时，这个按钮变成「跳过这一把」（服务端校验掉线才允许） */
     if (state && state.online && state.phase !== 'over' &&
         state.online.off && state.online.off[state.current]) {
-      NET.sendSkip(state.current);
+      var s = state.current;
+      /* 两个人同时点跳过是正常时序：本地压住 4 秒，别把重复请求发出去
+         （服务端也会去重，这里只是别让两个人都以为"世界卡住了"） */
+      if (state.online.skipSeat === s && state.online.skipAt && (Date.now() - state.online.skipAt < 4000)) return;
+      state.online.skipSeat = s; state.online.skipAt = Date.now();
+      NET.sendSkip(s);
+      toast('已请求跳过，等其他人确认…');
+      updateRollButton();
       return;
     }
     doRoll(null, false);
@@ -2797,10 +2813,13 @@ function bindEvents() {
     }
   });
   document.getElementById('btn-restart').addEventListener('click', function () {
-    if (state && state.online) {
-      /* 联机局中途退出 = 本局解散，先确认一下，别手滑把大家的局干没了 */
-      if (state.phase !== 'over' && !window.confirm('退出会解散本局（其他人会收到提示），确定退出？')) return;
-      NET.leave();                          /* 联机局退场 = 离开房间 */
+    if (typeof NET !== 'undefined' && NET.code()) {
+      /* ⚠️ 判据是"在房间里"，不是"在牌桌上"：房主点完「再来一局」后大家回到大厅，
+         此时 state.online 已清空，但人还在房间里 —— 旧写法会让人以为退出了、其实还挂着，
+         房主一开局又被拽回牌桌。 */
+      var midGame = !!(state && state.online && state.phase !== 'over');
+      if (midGame && !window.confirm('退出会解散本局（其他人会收到提示），确定退出？')) return;
+      NET.leave();              /* 中途退 = 解散本局；已打完/大厅里 = 只把自己摘出名单 */
     }
     autoStop(true);                      /* 回设置页 = 这一局不博了，自动也停掉 */
     document.getElementById('view-table').style.display = 'none';
@@ -2994,6 +3013,15 @@ var NET = (function () {
   var pollTimer = null, subCode = null, lastSnap = '', onRoomCb = null;
   var cur = null;                     /* 当前传输层 'local' | 'tcb' */
 
+  /* 连接状态回显：断线时把掷骰按钮换成「重连中…」，别让玩家对着一个点了没反应的按钮干瞪眼
+     （掉线时 send 会静默丢弃，没有提示的话看起来就是"游戏卡死了"）。 */
+  function setLink(v) {
+    if (!state || !state.online) return;
+    if (state.online.link === v) return;
+    state.online.link = v;
+    if (typeof updateRollButton === 'function') updateRollButton();
+  }
+
   /* ---------- 传输层 A2：WebSocket 房间服务（Cloudflare Worker + Durable Object） ----------
      一个房间号 = 一个 Durable Object；WebSocket 常驻推送，**不需要轮询**（CloudBase 版是
      1.2s 轮询，受免费额度约束；这里是推送，一局约 50 个请求当量，等于无限）。
@@ -3002,7 +3030,7 @@ var NET = (function () {
      房间记录 shape 与 Local/TCB 完全一致 → onRoom(r) 回放逻辑零改动。 */
   var WS = {
     name: 'ws', sock: null, lastRec: null, lastSnap: '', onCb: null,
-    retry: 0, wantClose: false, codeNow: null, nameNow: null,
+    retry: 0, wantClose: false, codeNow: null, nameNow: null, pingTimer: null,
     ready: function () { return location.protocol === 'https:' || location.protocol === 'http:'; },
     ep: function (code, op, name) {
       return this.baseUrl() + '?code=' + code + '&op=' + op + '&name=' + encodeURIComponent(name) + '&pid=' + PEER;
@@ -3023,6 +3051,12 @@ var NET = (function () {
       var effTo = tov ? parseInt(tov[1], 10) : (timeoutMs || 8000);
       try { s = new WebSocket(self.ep(code, op, name)); } catch (e) { cb('房间服务地址无效'); return; }
       self.sock = s; self.wantClose = false;
+      /* 保活：服务器用 WebSocket Auto-Response 直接回 pong（不唤醒 DO、不计费）。
+         移动网络会掐掉长时间空闲的 TCP，进大厅等人时最容易中招。 */
+      if (self.pingTimer) clearInterval(self.pingTimer);
+      self.pingTimer = setInterval(function () {
+        try { if (s.readyState === 1) s.send('{"t":"ping"}'); } catch (e) {}
+      }, 45000);
       var to = setTimeout(function () {
         if (!settled) { settled = true; try { s.close(); } catch (e) {} cb('连接房间服务超时'); }
       }, effTo);
@@ -3030,12 +3064,22 @@ var NET = (function () {
         var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         if (m.t !== 'room' || !m.r) return;
         self.lastRec = m.r;
-        if (!settled) { settled = true; clearTimeout(to); self.retry = 0; cb(null, m.r); return; }
+        if (!settled) {
+          settled = true; clearTimeout(to); self.retry = 0;
+          cb(null, m.r);
+          /* 首帧也派发给已注册的 onRoom（重连走的是这条分支：cb 只判断 err）。
+             A/B 实测：当前服务端握手后还会再广播一次，所以这处并非"修了某个 bug"，
+             但保留它更自洽 —— 任何收到的 room 帧都一定送到 onRoom，不依赖服务端多发一次。 */
+          if (self.onCb) { self.lastSnap = ''; self.deliver(m.r); }
+          return;
+        }
         self.deliver(m.r);
       };
       s.onclose = function () {
         if (!settled) { settled = true; clearTimeout(to); cb('连不上房间服务'); return; }
-        if (!self.wantClose && self.lastRec && !self.lastRec.closed) self.reconnect();
+        if (self.wantClose || !self.lastRec || self.lastRec.closed) return;
+        setLink('down');
+        self.reconnect();
       };
       s.onerror = function () { /* onclose 兜底 */ };
     },
@@ -3050,6 +3094,7 @@ var NET = (function () {
       if (self.wantClose) return;
       if (self.retry >= 5) {
         /* 重试耗尽：明确告诉用户，别让他对着"等 XX 博…"干瞪眼 */
+        setLink('dead');
         toast('与房间服务断开，请点「退出房间」后重新加入');
         return;
       }
@@ -3057,7 +3102,8 @@ var NET = (function () {
       setTimeout(function () {
         if (self.wantClose || !self.codeNow) return;
         self.open(self.codeNow, 'join', self.nameNow, function (err) {
-          if (err) self.reconnect();
+          if (err) { self.reconnect(); return; }
+          setLink('ok');          /* 连回来了（漏掉的事件由首帧快照派发补齐） */
         });
       }, 3000);
     },
@@ -3104,11 +3150,13 @@ var NET = (function () {
       try { this.sock.send(JSON.stringify({ t: 'roll', s: evt.s, d: evt.d })); } catch (e) { cb && cb('发送失败'); return; }
       cb && cb(null);
     },
-    leave: function (code, started) {
+    leave: function (code, started, done) {
       this.wantClose = true;
       var s = this.sock;
-      try { s.send(JSON.stringify({ t: 'bye' })); } catch (e) {}
+      /* done=本局已打完：只把自己从名单摘掉，不解散房间（别人可能还在看结算/点再来一局） */
+      try { s.send(JSON.stringify({ t: 'bye', done: !!done })); } catch (e) {}
       setTimeout(function () { try { s && s.close(); } catch (e) {} }, 200);
+      if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null; }
       this.codeNow = null; this.onCb = null;
     },
     read: function (code, cb) {
@@ -3120,7 +3168,13 @@ var NET = (function () {
       this.lastSnap = '';
       if (this.lastRec) this.deliver(this.lastRec);   /* 首帧立即推：重连回放靠它触发 */
     },
-    unwatch: function () { this.onCb = null; },
+    unwatch: function () {
+      this.onCb = null;
+      /* 收摊就断连接：房间解散 / 主动退出后不该再把长连接挂着
+         （wantClose 已为 true = leave 走过来了，那边会延迟关闭以便把 bye 发出去） */
+      if (this.sock && !this.wantClose) { this.wantClose = true; try { this.sock.close(); } catch (e) {} }
+      if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null; }
+    },
     tick: function () {}
   };
 
@@ -3155,14 +3209,15 @@ var NET = (function () {
       var r = lread(code); if (!r) { cb && cb('房间不存在'); return; }
       r.events.push(evt); lwrite(r); cb && cb(null, r);
     },
-    leave: function (code, started) {
+    leave: function (code, started, done) {
       var r = lread(code); if (!r) return;
-      if (!started) {
+      if (!started || done) {          /* 未开局 / 本局已打完：只把自己摘掉（语义与 Worker 版一致） */
         r.roster = r.roster.filter(function (p) { return p.id !== PEER; });
         if (!r.roster.length) { localStorage.removeItem(lkey(code)); return; }
+        if (!r.roster.some(function (p) { return p.id === r.host; })) r.host = r.roster[0].id;
         lwrite(r);
       }
-      else { r.closed = true; lwrite(r); }   /* 开局后退场 = 解散，大家都回设置页 */
+      else { r.closed = true; lwrite(r); }   /* 中途退场 = 解散，大家都回设置页 */
     },
     read: function (code) { return lread(code); },
     watch: function (code, cb) {
@@ -3185,7 +3240,12 @@ var NET = (function () {
     if (now !== lastSnap) { lastSnap = now; onRoomCb(r); }
   }
   function watchStorage(e) {
-    if (e.key === lkey(subCode) && e.newValue) { lastSnap = e.newValue; onRoomCb(JSON.parse(e.newValue)); }
+    /* ⚠️ 别信 e.newValue！storage 事件是"每次写入都发一条"，而浏览器要到当前 JS 执行完才派发 ——
+       短时间内连续多次写入（探针一次跑 14 把、或某个标签页连掷）会排成一队，逐条带着
+       **当时那一刻的旧值**到达：先到的那几条记录里 rollCount 是 1、2、3…（比本端落后十几把）。
+       盲信它就等于把整局往回回滚（实测：探针里 14 把被拽回 2 把）。
+       正解：收到通知就重新读一遍当前值，再用 lastSnap 去重 —— 低延迟照旧，且永远是最新。 */
+    if (e.key === lkey(subCode) && e.newValue) watchTick();
   }
 
   /* ---------- 传输层 B：CloudBase（跨设备，新版平台 2026-09 接入） ----------
@@ -3248,9 +3308,9 @@ var NET = (function () {
     addEvent: function (code, evt, cb) {
       this.docOf(code).update({ events: this.cmd.push(evt) }).then(function () { cb && cb(null); }).catch(function (e) { cb && cb(((e && e.message) || e)); });
     },
-    leave: function (code, started) {
+    leave: function (code, started, done) {
       var self = this;
-      if (!started) { self.docOf(code).update({ roster: self.cmd.pull({ id: PEER }) }).catch(function () {}); }
+      if (!started || done) { self.docOf(code).update({ roster: self.cmd.pull({ id: PEER }) }).catch(function () {}); }
       else { self.docOf(code).update({ closed: true }).catch(function () {}); }
     },
     read: function (code, cb) {
@@ -3329,6 +3389,28 @@ var NET = (function () {
     seat = -1; codeNow = null; startedSeen = false;
   }
 
+  /* 在线状态落盘 + 按需重渲染掷骰按钮。
+     ⚠️ 掉线是"没有新事件的快照"，不主动重渲染的话「跳过这一把」永远不出现 ——
+     那正是这个功能要解决的死锁（轮到的玩家掉线，其余人按钮一直停在"等 XX 博…"）。 */
+  function applyOff(arr) {
+    if (!state || !state.online) return;
+    arr = arr || [];
+    var sig = arr.join(',');
+    if (state.online.offSig === sig) return;
+    state.online.offSig = sig;
+    state.online.off = arr;
+    if (typeof updateRollButton === 'function') updateRollButton();
+  }
+
+  /* 本地收摊（不发网络消息）：断开房间、清掉"回到房间"记忆、复位联机态 */
+  function localLeave() {
+    if (cur && cur.unwatch) cur.unwatch();
+    startedSeen = false; seat = -1; codeNow = null; inLobby = false;
+    if (state) state.online = null;
+    clearSession();
+    var m = document.getElementById('net-modal'); if (m) m.classList.remove('show');
+  }
+
   function onRoom(r) {
     if (!r) return;
     /* 过期快照防护：storage 事件/轮询在极端时序下会把【旧快照】迟到派发过来
@@ -3338,10 +3420,13 @@ var NET = (function () {
        那张 r.started=false / r.closed=true 的快照事件数必然更少，不能被误杀。 */
     if (state && state.online && r.started && !r.closed && r.events.length < state.rollCount) return;
     lastRoom = r;
-    if (state && state.online && r.off) state.online.off = r.off;   /* 在线状态给 UI（掉线跳过）用 */
-    if (r.closed) {                                   /* 房间解散（房主关房 / 开局后有人退出） */
-      if (state && state.online) { toast('房间已解散'); exitToSetup(); }
-      else if (lobbyCb) lobbyCb(r);
+    if (state && state.online) applyOff(r.off);      /* 在线状态给 UI（掉线跳过）用 */
+    if (r.closed) {                                   /* 房间解散（房主关房 / 中途有人退出） */
+      if (state && state.online) {
+        localLeave();                                 /* 收拾干净：断连接、清"回到房间"记忆 */
+        toast('房间已解散');
+        exitToSetup();
+      } else if (lobbyCb) lobbyCb(r);
       return;
     }
     if (!r.started) {
@@ -3360,7 +3445,7 @@ var NET = (function () {
     } else applyRemoteEvents(r);
   }
 
-  function beginGame(r, mySeat, resync) {
+  function beginGame(r, mySeat, resync, quiet) {
     seat = mySeat; codeNow = r.code;
     var ps = r.roster.map(function (p) { return { name: p.name }; });
     document.getElementById('view-setup').style.display = 'none';
@@ -3368,7 +3453,7 @@ var NET = (function () {
     document.getElementById('view-table').style.display = '';
     newGame({ players: ps, mode: r.roster.length === 1 ? 'solo' : 'local', fast: wantFast });
     buildDice();
-    state.online = { seat: seat, code: r.code, kind: cur, off: r.off || [] };
+    state.online = { seat: seat, code: r.code, kind: cur, off: r.off || [], offSig: (r.off || []).join(','), link: 'ok' };
     var rb0 = document.getElementById('btn-restart');
     if (rb0) rb0.textContent = '退出房间';   /* 联机时它就是"退房"（中途退出 = 本局解散） */
     if (resync) {
@@ -3377,9 +3462,15 @@ var NET = (function () {
         for (var i = 0; i < r.events.length; i++) {
           if (r.events[i].skip) doSkip(true); else doRoll(r.events[i].d, true);
         }
+      } catch (e) {
+        /* 整局重建失败 = 房间数据与本地规则对不上，只能退出（别留一个半截的牌桌）。
+           ⚠️ 必须记进 __errors：静默吞掉的话，线上只会看到"牌桌突然清空"，无法定位。 */
+        NET_APPLY = false;
+        if (window.__logErr) window.__logErr('联机整局回放失败: ' + ((e && e.stack) || e));
+        localLeave(); toast('同步失败，请重新加入'); exitToSetup(); return;
       }
       finally { NET_APPLY = false; }
-      toast('已重新加入房间 ' + r.code + '，同步了 ' + r.events.length + ' 把');
+      if (!quiet) toast('已重新加入房间 ' + r.code + '，同步了 ' + r.events.length + ' 把');
     } else {
       toast('联机开局！你是 ' + r.roster[seat].name + (seat === 0 ? '（房主）' : ''));
     }
@@ -3394,14 +3485,23 @@ var NET = (function () {
       var ev = r.events[state.rollCount];
       if (!ev) break;
       if (state.current !== ev.s) {
-        toast('同步出错了，请退出重进'); NET.leave(); return;
+        /* 座次对不上 = 本端与房间失步（重复跳过之类的竞态已由服务端去重）。
+           ⚠️ 直接按事件序列把整局重建，比"退出重进"体验好得多，**也不会连累别人**
+           （旧实现在这里调 NET.leave()，一个人的失步会把整局解散掉）。 */
+        toast('正在重新同步…');
+        beginGame(r, seat, true, true);
+        return;
       }
       /* ⚠️ 本端动画没落定时绝不能把事件丢掉 —— 回合制下对手手快是完全正常的时序。
          挂起：把快照存下来，重试定时器 300ms 后再试（本地计算，零数据库开销）。 */
       if (state.busy) { lastRoom = r; return; }
+      var before = state.rollCount;
       NET_APPLY = true;
       try { if (ev.skip) doSkip(true); else doRoll(ev.d, false); } finally { NET_APPLY = false; }
+      if (state.rollCount === before) break;          /* 事件没能推进本局（如已结束）→ 别空转 */
+      if (state.online) state.online.skipSeat = -1;   /* 事件已落地 → 清掉"跳过中"占位 */
     }
+    lastRoom = r;
   }
   setInterval(function () {
     if (state && state.online && lastRoom && state.rollCount < lastRoom.events.length)
@@ -3505,12 +3605,10 @@ var NET = (function () {
     isHost: function () { var r = cur && cur.read ? cur.read(codeNow) : null; return !!(r && r.host === PEER); },
     leave: function () {
       var wasStarted = startedSeen;
-      if (cur && codeNow) cur.leave(codeNow, wasStarted);
-      cur && cur.unwatch && cur.unwatch();
-      startedSeen = false; seat = -1; codeNow = null; inLobby = false;
-      if (state) state.online = null;
-      try { sessionStorage.removeItem('bbnet_room'); } catch (e) {}
-      var m = document.getElementById('net-modal'); if (m) m.classList.remove('show');
+      /* 本局已打完 → 只把自己摘出名单，不解散房间（别人可能还在看结算 / 等着再来一局） */
+      var wasDone = !!(state && state.online && state.phase === 'over');
+      if (cur && codeNow) cur.leave(codeNow, wasStarted, wasDone);
+      localLeave();
     },
     onLobby: function (cb) { lobbyCb = cb; },
     canRoll: function () {
@@ -3540,6 +3638,13 @@ var NETUI = (function () {
     if (inp && inp.value.trim()) myName = inp.value.trim();
     if (!myName) myName = '玩家' + Math.floor(10 + Math.random() * 90);
     el('net-modal').classList.add('show');
+    /* 已经在某个房间里（典型：刚点完「再来一局」回大厅）→ 直接显示大厅面板，
+       别退回"创建/加入"菜单，让人以为掉线了 */
+    var room = NET.code() ? NET.roster() : null;
+    if (room && room.code === NET.code() && !room.closed && !room.started) {
+      renderLobby(room, NET.kind());
+      return;
+    }
     renderMenu('');
   }
   function close() { el('net-modal').classList.remove('show'); }
@@ -3569,9 +3674,11 @@ var NETUI = (function () {
 
   function renderLobby(r, kindName) {
     var isHost = r.roster.length && r.roster[0].id === NET.peerId();
+    var off = r.off || [];
     var list = r.roster.map(function (p, i) {
       return '<span class="net-seat">' + (i + 1) + '. ' + esc(p.name) +
-        (p.id === NET.peerId() ? '（你' + (i === 0 ? '，房主' : '') + '）' : '') + '</span>';
+        (p.id === NET.peerId() ? '（你' + (i === 0 ? '，房主' : '') + '）' : '') +
+        (off[i] ? ' <span style="opacity:.6">· 掉线</span>' : '') + '</span>';
     }).join('');
     el('net-body').innerHTML =
       '<h3 style="margin:0 0 6px;color:var(--gold-l)">房间已建好</h3>' +
@@ -3589,6 +3696,8 @@ var NETUI = (function () {
       else toast('房间号：' + t);
     };
     if (isHost) el('net-do-start').onclick = function () {
+      /* 服务端要求至少 2 人；先在这里挡住并说明原因，否则点了像没反应 */
+      if (r.roster.length < 2) { toast('至少要有 2 个玩家才能开局'); return; }
       NET.start(function (err) { if (err) toast(err); });
     };
     el('net-leave').onclick = function () { NET.leave(); close(); };
@@ -3642,15 +3751,25 @@ var NETUI = (function () {
 
   /* 房间快照变化：大厅刷新 / 开局 / 从牌桌回大厅（房主点了再来一局） */
   NET.onLobby(function (r, fromGame) {
+    if (r && r.closed) {
+      /* 房间没了：把面板换成明确提示，别继续显示一个已经失效的名册 */
+      if (el('net-modal').classList.contains('show')) {
+        el('net-body').innerHTML =
+          '<h3 style="margin:0 0 8px;color:var(--gold-l)">房间已解散</h3>' +
+          '<p class="net-note" style="text-align:center">房主或其中一位玩家退出了，本局结束。<br>可以重新创建房间再来。</p>' +
+          '<button class="btn-ghost" id="net-close2" style="width:100%;margin-top:10px">知道了</button>';
+        el('net-close2').onclick = close;
+      }
+      return;
+    }
     if (fromGame) exitTableToLobby();                 /* 房主开了新局：牌桌收回，回大厅等开始 */
     var shown = el('net-modal').classList.contains('show');
     if (!r.started) {
       if (shown || fromGame) { el('net-modal').classList.add('show'); renderLobby(r, NET.kind()); }
       return;
     }
-    close();   /* 开局了就收面板；开局/事件应用由 NET.onLobby 内部处理 */
+    close();   /* 开局了就收面板；开局/事件应用由 NET.onRoom 内部处理 */
   });
-  function startedSeenGlobal() { return !!(typeof state !== 'undefined' && state && state.online); }
 
   /* 从牌桌退回设置页（结算页不动，用户自己关） */
   function exitTableToLobby() {

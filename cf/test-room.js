@@ -26,7 +26,7 @@ function httpGet(pathname) {
     const u = new URL(base + pathname);
     httpMod.get({ host: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname + u.search }, r => {
       let d = ''; r.on('data', c => d += c);
-      r.on('end', () => { try { resolve({ status: r.statusCode, json: JSON.parse(d) }); } catch (e) { resolve({ status: r.statusCode, json: null }); } });
+      r.on('end', () => { try { resolve({ status: r.statusCode, json: JSON.parse(d), headers: r.headers }); } catch (e) { resolve({ status: r.statusCode, json: null, headers: r.headers }); } });
     }).on('error', reject);
   });
 }
@@ -122,6 +122,11 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   ok('跳过掉线玩家：写入 skip 事件并广播给所有人',
     await waitFor(() => lastRoom(host).events.length === 3 && lastRoom(guest).events.length === 3 && lastRoom(host).events[2].skip === true),
     JSON.stringify(lastRoom(host).events[2]));
+  /* ⚠️ 两个人同时点「跳过这一把」是完全正常的时序：重复事件会让所有人回放到"座次对不上"
+     → 整局被判失步 → 一个人的手快把整局搞死。服务端必须幂等。 */
+  send(guest, { t: 'skip', s: 2 });
+  await sleep(600);
+  ok('重复跳过同一座次被去重（幂等）', lastRoom(host).events.length === 3, 'events=' + lastRoom(host).events.length);
 
   /* ===== 再来一局（reset） ===== */
   send(guest, { t: 'reset' });
@@ -132,6 +137,12 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     await waitFor(() => lastRoom(host).events.length === 0 && lastRoom(host).started === false),
     'roster=' + lastRoom(host).roster.length + ' events=' + lastRoom(host).events.length + ' started=' + lastRoom(host).started);
   ok('再来一局后原班人马（3 人）', lastRoom(host).roster.length === 3, 'roster=' + lastRoom(host).roster.map(p => p.name).join(','));
+
+  /* ===== 本局打完后退出：只摘掉自己，不连累还在看结算的人 ===== */
+  send(guest, { t: 'bye', done: true });
+  ok('打完后退出带 done：只把自己摘出名单，房间保留',
+    await waitFor(() => lastRoom(host).roster.length === 2 && lastRoom(host).closed === false),
+    'roster=' + lastRoom(host).roster.length + ' closed=' + lastRoom(host).closed);
 
   /* ===== 已开局后主动退出 = 解散 ===== */
   send(host, { t: 'start' });
@@ -144,11 +155,30 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   /* ===== 加入失败原因可诊断 ===== */
   const q1 = await httpGet('?code=' + code);
   ok('查询口：已解散房间返回 closed=true', q1.json && q1.json.exists === true && q1.json.closed === true, JSON.stringify(q1.json));
+  ok('查询口带 CORS 头（GitHub Pages 跨站才读得到失败原因）',
+    q1.headers && q1.headers['access-control-allow-origin'] === '*',
+    'acao=' + (q1.headers && q1.headers['access-control-allow-origin']));
   const q2 = await httpGet('?code=0000');
   ok('查询口：不存在的房间返回 exists=false', q2.json && q2.json.exists === false, JSON.stringify(q2.json));
   let blocked = false;
   try { await connect(code, 'join', '陌生人', 'pStranger'); } catch (e) { blocked = true; }
   ok('已解散房间不可加入', blocked);
+
+  /* ===== 大厅里房主退出 → 房主顺位 ===== */
+  const code3 = String(1000 + Math.floor(Math.random() * 9000));
+  const h3 = await connect(code3, 'create', '房主丙', 'pHost3');
+  const g3 = await connect(code3, 'join', '客人丙', 'pGuest3');
+  await waitFor(() => lastRoom(g3).roster.length === 2);
+  send(h3, { t: 'bye' });
+  ok('大厅里房主退出：房间保留，房主顺位给剩下的人（否则剩下的人点「开始」会被服务端拒绝）',
+    await waitFor(() => lastRoom(g3).roster.length === 1 && lastRoom(g3).host === 'pGuest3' && lastRoom(g3).closed === false),
+    'roster=' + lastRoom(g3).roster.length + ' host=' + lastRoom(g3).host + ' closed=' + lastRoom(g3).closed);
+  const g4 = await connect(code3, 'join', '客人丁', 'pGuest4');
+  await waitFor(() => lastRoom(g3).roster.length === 2);
+  send(g3, { t: 'start' });
+  ok('顺位后的新房主能正常开局', await waitFor(() => lastRoom(g3).started === true), 'started=' + lastRoom(g3).started);
+  send(g3, { t: 'bye' });
+  ok('顺位房主中途退出仍能解散本局', await waitFor(() => lastRoom(g4).closed === true), 'closed=' + lastRoom(g4).closed);
 
   /* ===== 房间隔离 ===== */
   const code2 = String(1000 + Math.floor(Math.random() * 9000));

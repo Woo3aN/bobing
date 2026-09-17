@@ -7,6 +7,11 @@ const out = document.getElementById('out');
 const log = m => { out.textContent += '\n' + m; console.log('[E2E] ' + m); };
 const sleep = ms => new Promise(r => { const t0 = Date.now(); setTimeout(() => { console.log('E2E sleep(' + ms + ') fired after ' + (Date.now()-t0) + 'ms'); r(); }, ms); });
 const fail = m => { log('=== 失败: ' + m + ' ==='); throw new Error(m); };
+async function waitFor(fn, ms) {
+  const lim = ms || 8000, t0 = Date.now();
+  while (Date.now() - t0 < lim) { if (fn()) return true; await sleep(150); }
+  return fn();
+}
 
 console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.now()), 2000);
 (async () => {
@@ -101,7 +106,7 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     log('[8] 已掐断双方连接，等待自动重连…');
     const wsReady = g => { const w = g.net._raw()._ws(); return !!(w.sock && w.sock.readyState === 1); };
     let re = 0;
-    for (let k = 0; k < 40; k++) {
+    for (let k = 0; k < 100; k++) {
       await sleep(500);
       re = (wsReady(g1) ? 1 : 0) + (wsReady(g2) ? 1 : 0);
       if (re === 2) break;
@@ -122,8 +127,53 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     if (g1.state().rollCount !== 4 || g2.state().rollCount !== 4) fail('重连后第 4 把未同步 rc=' + g1.state().rollCount + '/' + g2.state().rollCount);
     log('[10] 重连后第 4 把照常同步 ✓');
 
-    /* [11] 再来一局（reset）：房主清空房间 → 双方回大厅 → 再开一局 → 照常同步 */
-    N1.rematch(function (err) { if (err) log('[11] rematch 返回: ' + err); });
+    /* [11] 掉线跳过：先让轮次走到对方，再掐断他的连接 */
+    let curX = g1.state().current;
+    (curX === 0 ? g1 : g2).doRoll(null, false);
+    await sleep(400);
+    if (g1.state().busy) g1.skipAnim();
+    if (g2.state().busy) g2.skipAnim();
+    for (let k = 0; k < 25; k++) {
+      await sleep(600);
+      if (g1.state().busy) g1.skipAnim();
+      if (g2.state().busy) g2.skipAnim();
+      if (g1.state().rollCount === 5 && g2.state().rollCount === 5 && !g1.state().busy && !g2.state().busy) break;
+    }
+    if (g1.state().rollCount !== 5 || g2.state().rollCount !== 5) fail('第 5 把未同步 rc=' + g1.state().rollCount + '/' + g2.state().rollCount);
+    /* 轮次此时落在 seat 1（双人：奇偶交替） */
+    const deadSeat = g1.state().current;
+    if (deadSeat !== 1) fail('轮次预期落在 seat 1，实际 ' + deadSeat);
+    const deadPid = g2.net._raw().peerId();
+    await fetch('/__kick?code=' + code + '&pid=' + deadPid);   /* 只掐 g2（轮次方） */
+    log('[11] 已掐断轮次方（seat ' + deadSeat + '）的连接…');
+
+    /* [12] 关键回归：掉线是"没有新事件的快照"，按钮必须自己变成「跳过这一把」 */
+    const btn1 = f1.contentDocument.getElementById('btn-roll');
+    let btnTxt = '';
+    for (let k = 0; k < 20; k++) {
+      await sleep(500);
+      btnTxt = btn1.textContent;
+      if (btnTxt.indexOf('跳过') >= 0) break;
+    }
+    if (btnTxt.indexOf('跳过') < 0) fail('掉线后掷骰按钮没有变成「跳过这一把」，实际文案：' + btnTxt);
+    log('[12] 掉线后按钮自动变成「' + btnTxt + '」✓（无新事件也能触发重渲染）');
+
+    /* [13] 点按钮跳过 → 服务端写入 skip → 两端（含重连后的掉线方）一致 */
+    btn1.click();
+    const skipOk = await waitFor(() => g1.state().rollCount === 6, 15000);
+    if (!skipOk) fail('跳过没有生效 rc=' + g1.state().rollCount);
+    log('[13] 跳过生效，本端 rollCount=6 ✓');
+    let back = false;
+    for (let k = 0; k < 40; k++) {
+      await sleep(600);
+      if (g2.state()) { if (g2.state().busy) g2.skipAnim(); }
+      if (g2.state() && g1.state() && g2.state().rollCount === g1.state().rollCount && !g2.state().busy) { back = true; break; }
+    }
+    if (!back) fail('掉线方重连后没补齐跳过事件 rc=' + (g2.state() && g2.state().rollCount) + ' vs ' + g1.state().rollCount);
+    log('[14] 掉线方自动重连并补齐事件，两端 rollCount=' + g1.state().rollCount + ' ✓');
+
+    /* [15] 再来一局（reset）：房主清空房间 → 双方回大厅 → 再开一局 → 照常同步 */
+    N1.rematch(function (err) { if (err) log('[15] rematch 返回: ' + err); });
     let backLobby = 0;
     for (let k = 0; k < 40; k++) {
       await sleep(500);
@@ -131,7 +181,7 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
       if (backLobby === 2) break;
     }
     if (backLobby !== 2) fail('再来一局后没有回到大厅：' + backLobby + '/2');
-    log('[11] 双方回到大厅 ✓');
+    log('[15] 双方回到大厅 ✓');
     await sleep(500);
     N1._fast(true);
     await new Promise(res => N1.start(true, res));
@@ -143,7 +193,7 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     }
     if (again !== 2) fail('新一局没开起来：' + again + '/2');
     if (g1.state().rollCount !== 0 || g2.state().rollCount !== 0) fail('新一局事件没清零');
-    log('[12] 新一局已开始，双方事件清零 ✓');
+    log('[16] 新一局已开始，双方事件清零 ✓');
 
     /* 清理：解散房间 */
     N1.leave();

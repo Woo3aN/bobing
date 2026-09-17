@@ -36,6 +36,11 @@ export class RoomDO {
     this.ctx = ctx;
     this.env = env;
     this.rec = null;
+    /* 保活：客户端每 45 秒发 {"t":"ping"}，由运行时自动回 pong（**不唤醒 DO、不计请求**）。
+       移动网络/运营商 NAT 会掐掉长时间空闲的连接，进大厅等人时最容易中招。 */
+    try {
+      ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'));
+    } catch (e) { /* 运行时不支持就算了，不影响主流程 */ }
   }
 
   async load() {
@@ -49,11 +54,14 @@ export class RoomDO {
     const url = new URL(request.url);
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
       /* 非 WS 请求：给一个轻量查询口 —— 客户端加入失败时用它区分原因，
-         以及健康检查。只吐**不敏感**的元信息，不回名单。 */
+         以及健康检查。只吐**不敏感**的元信息，不回名单。
+         ⚠️ 必须带 CORS 头：GitHub Pages（跨站）上才能读到正文，
+         否则加入失败只会笼统地报"连不上房间服务"。 */
       const rec = await this.load();
-      return Response.json(rec
-        ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length }
-        : { exists: false });
+      return Response.json(
+        rec ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length }
+            : { exists: false },
+        { headers: { 'Access-Control-Allow-Origin': '*' } });
     }
     const op = url.searchParams.get('op') || 'join';
     const code = url.searchParams.get('code') || '';
@@ -105,6 +113,12 @@ export class RoomDO {
     }
     if (this.dead) for (const pid of this.dead) live.delete(pid);
     this.rec.off = this.rec.roster.map(p => !live.has(p.id));
+    /* 名单里已经没有的人不必再记着（否则反复进退房会把 dead 撑大） */
+    if (this.dead && this.dead.size) {
+      for (const pid of [...this.dead]) {
+        if (!this.rec.roster.some(p => p.id === pid)) this.dead.delete(pid);
+      }
+    }
   }
 
   broadcast() {
@@ -134,12 +148,16 @@ export class RoomDO {
     } else if (m.t === 'skip') {
       /* 掉线跳过：只允许跳过**当前已掉线**的座次（防止有人跳过在线玩家抢回合）。
          服务端不跑规则，无法判"轮到谁"，所以由客户端带上座次、服务端只校验在线状态；
-         事件本身对所有人可见，谁都能核对座次是否合法。 */
+         事件本身对所有人可见，谁都能核对座次是否合法。
+         ⚠️ 幂等：两个好心人同时点「跳过这一把」是完全正常的时序（一个座次只能跳一次）。
+         没有这道去重，第二条重复事件会让所有人回放到"座次对不上"→ 整局被判失步。 */
       if (!this.rec.started) return;
       const seat = m.s | 0;
       this.markOffline();
       if (seat < 0 || seat >= this.rec.roster.length) return;
       if (!this.rec.off || !this.rec.off[seat]) return;      /* 该座次在线 → 拒绝 */
+      const last = this.rec.events[this.rec.events.length - 1];
+      if (last && last.skip && last.s === seat) return;      /* 已跳过 → 忽略重复请求 */
       this.rec.events.push({ s: seat, skip: true });
       await this.save();
       this.broadcast();
@@ -159,28 +177,32 @@ export class RoomDO {
       await this.save();
       this.broadcast();
     } else if (m.t === 'bye') {
-      await this.dropPlayer(ws, true);      /* 主动退出（区别于掉线） */
+      await this.dropPlayer(ws, true, !!m.done);   /* 主动退出（区别于掉线） */
     }
   }
 
-  async webSocketClose(ws) {
+  async webSocketError(ws) {
+    /* 连接异常（非正常关闭）按"掉线"处理，别让房间误判成解散 */
     await this.load();
-    if (this.rec && !this.rec.closed) await this.dropPlayer(ws);
+    if (this.rec && !this.rec.closed) await this.dropPlayer(ws, false);
     try { ws.close(); } catch (e) {}
   }
 
   /* 退场语义：
      · 未开局 → 从名单移除；名单空 → 删除整个房间记录（不留垃圾）
-     · 已开局 + 主动退出（bye）→ **任何玩家退出都解散本局**：
+     · 已开局 + 主动退出（bye，本局还没打完）→ **任何玩家退出都解散本局**：
        否则轮到他时全场干等，比赛名存实亡（实测过的真实场景）
+     · 已开局 + 主动退出（bye，本局**已打完**）→ 只把自己从名单摘掉，房间留给别人看结果 /
+       点「再来一局」—— 打完一局就有人退，不该把还在看结算的人一起轰走
      · 已开局 + 掉线（socket 被动断开，没发 bye）→ 保留房间，广播 offline 标记，
        其他人可点「掉线跳过」继续；本人刷新/回线可自动重连 */
-  async dropPlayer(ws, explicit) {
+  async dropPlayer(ws, explicit, done) {
     if (!this.rec) return;
     const pid = (ws.deserializeAttachment() || {}).pid;
     this.dead = this.dead || new Set();
     if (pid) this.dead.add(pid);          /* 广播前先记账：见 markOffline 注释 */
-    if (!this.rec.started) {
+    const leaveRoster = !this.rec.started || done;
+    if (leaveRoster) {
       const before = this.rec.roster.length;
       this.rec.roster = this.rec.roster.filter(p => p.id !== pid);
       if (this.rec.roster.length !== before) {
@@ -189,6 +211,9 @@ export class RoomDO {
           await this.ctx.storage.delete('rec');
           return;
         }
+        /* 房主走了 → 把房主顺位给剩下第一个，否则新房子主点「开始」会被服务端拒绝
+           （客户端按 roster[0] 显示"开始游戏"按钮，两边必须一致） */
+        if (!this.rec.roster.some(p => p.id === this.rec.host)) this.rec.host = this.rec.roster[0].id;
         await this.save();
         this.broadcast();
       }
