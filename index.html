@@ -1582,8 +1582,15 @@ function applyRoll(pIdx, dice, grade) {
   function doSkip(silent) {
     if (!state || state.phase === 'over') return;
     var p = state.players[state.current];
-    pushSystemLog('⏭️ ' + p.name + ' 掉线，本把跳过');
-    if (!silent) toast(p.name + ' 掉线，跳过这一把');
+    /* 已彻底断线（代为托管满 2 分钟，重连已被拒）的人再跳过时**完全静默**：
+       他已经被移出本局，之后每轮默认跳过即可，不用反复刷提示（用户 2026-09-19 定）。 */
+    var rr = (typeof NET !== 'undefined' && NET.lastRoomSnap) ? NET.lastRoomSnap() : null;
+    var a = rr && rr.auto && rr.auto[state.current];
+    var gone = !!(a && a.at && (Date.now() - a.at >= OFFLINE_MS));
+    if (!gone) {
+      pushSystemLog('⏭️ ' + p.name + ' 掉线，本把跳过');
+      if (!silent) toast(p.name + ' 掉线，跳过这一把');
+    }
     afterRoll(true);
   }
 
@@ -3823,11 +3830,7 @@ var NET = (function () {
       var before = state.rollCount;
       NET_APPLY = true;
       try {
-        if (ev.skip) {
-          /* 跳过也要有"语句"（用户 2026-09-19）：一条系统日志说明这一把被跳过 */
-          if (!quiet) pushSystemLog('⏭ 跳过 <strong>' + escapeHtml(state.players[ev.s] ? state.players[ev.s].name : ('座位 ' + ev.s)) + '</strong> 这一把（掉线/挂机）');
-          doSkip(true);
-        }
+        if (ev.skip) doSkip(true);       /* 提示统一由 doSkip 出（一条），彻底断线者静默 */
         else doRoll(ev.d, quiet);        /* quiet：跳过动画（日志/音效由 REPLAY_QUIET 静默） */
       } finally { NET_APPLY = false; }
       if (state.rollCount === before) break;          /* 事件没能推进本局（如已结束）→ 别空转 */

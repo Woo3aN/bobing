@@ -198,9 +198,13 @@ server.on('upgrade', (req, socket, head) => {
         {   /* 与 Worker 同步：开始代博起超 2 分钟 = 彻底断线点名（kicked 标记，只发一次） */
           const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
           if (r.auto && r.auto[seat] && Date.now() - r.auto[seat].at >= OFFLINE_MS) {
-            r.leftSeq = (r.leftSeq || 0) + 1;
-            r.left = { seq: r.leftSeq, name: r.roster[seat].name, kicked: true };
-            /* ⚠️ auto 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
+            /* 与 Worker 同步：只点名一次，之后每轮跳过静默 */
+            r.kickNotified = r.kickNotified || {};
+            if (!r.kickNotified[seat]) {
+              r.kickNotified[seat] = true;
+              r.leftSeq = (r.leftSeq || 0) + 1;
+              r.left = { seq: r.leftSeq, name: r.roster[seat].name, kicked: true };
+            }
           }
         }
         broadcast(code);
@@ -222,7 +226,7 @@ server.on('upgrade', (req, socket, head) => {
       } else if (m.t === 'reset') {
         if (pid !== r.host) return;
         r.gen = (r.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"（与 Worker 一致） */
-        r.events = []; r.auto = {}; r.cancelled = {}; r.lastAct = r.roster.map(() => Date.now());
+        r.events = []; r.auto = {}; r.cancelled = {}; r.kickNotified = {}; r.lastAct = r.roster.map(() => Date.now());
         r.left = null; r.started = false; broadcast(code);
       } else if (m.t === 'bye') {
         dropPlayer(ws, true, !!m.done);

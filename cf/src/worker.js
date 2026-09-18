@@ -252,8 +252,13 @@ export class RoomDO {
         const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
         if (this.rec.auto && this.rec.auto[seat] &&
             Date.now() - this.rec.auto[seat].at >= OFFLINE_MS) {
-          this.rec.leftSeq = (this.rec.leftSeq || 0) + 1;
-          this.rec.left = { seq: this.rec.leftSeq, name: this.rec.roster[seat].name, kicked: true };
+          /* ⚠️ 只点名一次：之后每轮跳过都静默（用户 2026-09-19 定——重复刷"已被移出本局"很丑） */
+          this.rec.kickNotified = this.rec.kickNotified || {};
+          if (!this.rec.kickNotified[seat]) {
+            this.rec.kickNotified[seat] = true;
+            this.rec.leftSeq = (this.rec.leftSeq || 0) + 1;
+            this.rec.left = { seq: this.rec.leftSeq, name: this.rec.roster[seat].name, kicked: true };
+          }
           /* ⚠️ auto 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
         }
       }
@@ -287,7 +292,7 @@ export class RoomDO {
       this.rec.gen = (this.rec.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"，
                                                    过期快照防护只对同世代生效（防重开局被冻死在旧视图） */
       this.rec.events = [];
-      this.rec.auto = {}; this.rec.cancelled = {};   /* 被移出的座次也随新局复活（奖品按上局结算，下一局重新来） */
+      this.rec.auto = {}; this.rec.cancelled = {}; this.rec.kickNotified = {};   /* 新局：全部复活 */
       this.rec.lastAct = this.rec.roster.map(() => Date.now());
       this.rec.left = null;
       this.rec.started = false;
