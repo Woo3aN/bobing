@@ -2453,23 +2453,34 @@ function updateRollButton() {
     var lk = state.online.link;
     if (lk === 'down') { b.disabled = true; b.textContent = '重连中…'; return; }
     if (lk === 'dead') { b.disabled = true; b.textContent = '连接已断开 · 请退出重进'; return; }
+    /* ⚠️ 最高优先级：**自己被托管** → 主按钮永远是可点的取消入口。
+       判据是"我的座次在托管中"（auto[我] 存在），**与当前轮到谁无关** ——
+       代博一发生轮次就推进到下家了（代博 = 替他博完这一把），
+       若用 current===我 判断，本人的取消入口会在代博后立刻消失、只剩"等 XX 博…"，
+       用户就永远点不到取消（2026-09-19 实测两轮才定位到）。 */
+    var mySeat = state.online.seat;
+    var myAuto = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(mySeat) : 0;
+    if (myAuto > 0) {
+      b.disabled = false;
+      b.textContent = myAuto >= 5
+        ? '取消自动跳过 · 我回来了'
+        : '取消代博（' + myAuto + '/5）· 我回来了';
+      return;
+    }
     var mine = state.current === state.online.seat;
     var cnt = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(state.current) : 0;
     var beingAuto = cnt > 0;
     var dead = !!((state.online.off && state.online.off[state.current]) || beingAuto);
     var pending = state.online.skipSeat === state.current && state.online.skipAt &&
                   (Date.now() - state.online.skipAt < 4000);
-    if (dead || beingAuto) {   /* 轮到的玩家掉线/挂机 → 全自动处置；本人随时可取消 */
+    if (dead || beingAuto) {   /* 别人掉线/挂机 → 状态展示（自己的取消入口已在上面处理） */
       /* 直接掉线等 5 秒、无操作等 15 秒 → 自动代博 5 把（间隔 0.4 秒）→ 满后 0.2 秒即自动跳过。
-         ⚠️ 本人（在线）**被托管期间按钮永远是「取消代博/取消自动跳过」且可点**（用户 2026-09-19 定：
-         2 分钟托管期内随时能夺回控制权；点了就真正取消 + 立刻变回正常掷骰按钮）。
-         之前用 cancelAt 卡了一次（取消过就不再显示入口）→ 15 秒后重新托管时按钮变不可点展示，
-         用户"再点没反应、像没取消"（2026-09-19 实测）。
-         ⚠️ 也**不看 busy**：代博回放的动画期间取消入口必须常在。 */
+         ⚠️ 本人被托管的情况在上面 **已优先返回**（取消入口全覆盖），这里是其他人的视角。
+         ⚠️ 不看 busy：代博回放的动画期间状态也不能乱。 */
       var who = mine ? '连接不稳' : state.players[state.current].name;
-      if (mine && state.online.link === 'ok') {
-        b.disabled = false;
-        b.textContent = cnt >= 5 ? '取消自动跳过 · 我回来了' : '取消代博（' + cnt + '/5）· 我回来了';
+      b.disabled = !!mine ? false : true;
+      if (mine) {   /* 轮到我但我没被托管（刚取消/宽限期）→ 正常掷骰 */
+        b.textContent = state.busy ? '骰子飞着呢…' : '轮到你了 · 博！';
         return;
       }
       b.disabled = true;
@@ -2885,13 +2896,27 @@ function bindEvents() {
     if (!state) return;
     /* 本局已结束 → 这个按钮是「看结算」入口（回去才能点「再来一局」） */
     if (state.phase === 'over') { showResultModal(); return; }
-    if (state.busy) {
-      skipAnim();
-      /* 被托管的玩家本人：跳完当前动画继续走取消流程（否则动画期点取消只跳动画，要多点一次） */
-      var fm = state.online && state.current === state.online.seat &&
-        NET.autoCount && NET.autoCount(state.current) > 0 && !NET.cancelled(state.current);
-      if (!fm) return;
+    /* ⚠️ 最高优先级：**自己被托管** → 点按钮 = 取消托管（与当前轮到谁无关！
+       代博一发生轮次就推进到下家，用 current===我 判断会让取消入口消失 —— 2026-09-19 实测）。
+       取消后：若正轮到我 → 顺手替我博这一把；若轮次已在别人 → 只取消，等下次轮到我正常博。 */
+    if (state.online && state.online.link === 'ok' && NET.autoCount && NET.autoCount(state.online.seat) > 0) {
+      var mySeat0 = state.online.seat;
+      NET.sendCancel(mySeat0);
+      toast('已取消托管 · 轮到你时正常博！');
+      updateRollButton();          /* 立即变回正常按钮（本地 auto 已乐观删除） */
+      setTimeout(function () {
+        if (!state || !state.online || state.phase === 'over') return;
+        if (state.current !== mySeat0) { updateRollButton(); return; }   /* 轮次不在我这 → 只取消 */
+        if (typeof NET.lastRoomSnap === 'function') {
+          var rr = NET.lastRoomSnap();
+          if (rr && rr.events && state.rollCount !== rr.events.length) { updateRollButton(); return; }
+        }
+        if (state.busy) skipAnim();
+        doRoll(null, false);
+      }, 250);
+      return;
     }
+    if (state.busy) { skipAnim(); return; }   /* 动画中再点 = 跳过 */
     /* 掉线/挂机的全自动处置：其他人看到状态展示（点 = 兜底发 skip，服务端校验后接受）；
        被托管的玩家本人点按钮 = 取消托管（服务端删掉该座次的代博状态并广播，
        之后轮到他正常自己博；再 15 秒没动会重新进入托管）。 */
@@ -2899,38 +2924,8 @@ function bindEvents() {
         ((state.online.off && state.online.off[state.current]) ||
          (NET.autoCount && NET.autoCount(state.current) > 0))) {
       var sNow = state.current;
-      var mineNow = state.online.seat === sNow;
-      var beingAutoNow = NET.autoCount(sNow) > 0;
-      /* 本人（在线）点按钮 = 取消托管 + 立刻替你博这一把。
-         ⚠️ 不看"是否取消过"：被托管期间（2 分钟内）任何时候点都有效（用户 2026-09-19 定：
-         取消过之后又被重新托管时，按钮必须还是可点的「取消代博」，否则点了没反应）。 */
-      if (mineNow && state.online.link === 'ok') {
-        /* 取消托管 = 立即自己博这一把（用户 2026-09-19 定）：
-           点一下「取消代博/取消自动跳过」→ 取消托管 + **马上投骰**，轮次自然推进到下一家，
-           之后再轮到自己时按钮就是正常的「轮到你了 · 博！」；又发呆 15 秒才会重新托管。
-           ⚠️ 250ms 缓冲：等 cancel 往返完成、其他端停止代博，避免与自己这一掷撞车；
-           期间若代博抢先落地（轮次已推进）→ 这次不掷，下一轮正常博。 */
-        NET.sendCancel(sNow);
-        toast('已取消托管 · 这一把你自己博！');
-        updateRollButton();       /* 立即刷新：按钮马上从「取消代博」切回正常（不等广播） */
-        var mySeat = sNow;
-        setTimeout(function () {
-          if (!state || !state.online || state.phase === 'over') return;
-          if (state.current !== mySeat) { updateRollButton(); return; }   /* 这一把已被代博走 → 下一轮正常博 */
-          /* 守卫：本地还有未回放的事件（别人刚代博/跳过了）→ 别抢，等回放完再说 */
-          if (typeof NET.lastRoomSnap === 'function') {
-            var rr = NET.lastRoomSnap();
-            if (rr && rr.events && state.rollCount !== rr.events.length) {
-              toast('这一把刚好被代博了，下一轮你自己博');
-              updateRollButton();
-              return;
-            }
-          }
-          if (state.busy) skipAnim();
-          doRoll(null, false);
-        }, 250);
-        return;
-      }
+      /* 对方（在线、轮到他但掉线/挂机）点按钮 = 兜底请求跳过这一把。
+         ⚠️ 自己被托管的情况已在最前面 return（与 current 无关）。 */
       if (state.online.skipSeat === sNow && state.online.skipAt && (Date.now() - state.online.skipAt < 4000)) return;
       state.online.skipSeat = sNow; state.online.skipAt = Date.now();
       NET.sendSkip(sNow);
@@ -3348,6 +3343,10 @@ var NET = (function () {
     /* 掉线跳过：把「轮到的玩家掉线」这一把跳过去（服务端校验后广播给所有人） */
     skip: function (seat) {
       try { this.sock.send(JSON.stringify({ t: 'skip', s: seat })); } catch (e) {}
+    },
+    /* 取消托管（本人专用）：服务端删该座次代博状态并广播 */
+    cancel: function (seat) {
+      try { this.sock.send(JSON.stringify({ t: 'cancel', s: seat })); } catch (e) {}
     },
     /* 再来一局：房主清空事件回到大厅，原班人马接着开下一局 */
     reset: function (code, cb) {
@@ -3930,10 +3929,12 @@ var NET = (function () {
     sendRoll: function (s, dice, auto) { cur.addEvent(codeNow, { s: s, d: dice, a: auto ? 1 : undefined }, null); },
     sendSkip: function (seat) { if (cur && cur.skip) cur.skip(seat); },
     /* 取消代博/跳过（本人专用，2026-09-19）：发 cancel → 服务端删代博状态并广播 → 全端停止托管。
-       ⚠️ 同时乐观置位本地 cancelled（时间戳）：不等广播回来按钮就立即切到「轮到你了」，
-       否则假死场景 off 恒定不触发重渲染，点了像没反应（2026-09-19 用户实测）。 */
+       ⚠️ 必须走传输层 `cur.cancel(seat)`（与 sendSkip 同款）——早前写成 `this.sock.send(...)`，
+       NET 对象根本没有 sock → 异常被 catch 静默吞掉 → **消息从未发出**，只有本地乐观置位生效，
+       表现为"点了取消按钮变正常、一秒后又被广播打回取消状态"（2026-09-19 用户实测两轮）。
+       ⚠️ 同时乐观置位本地 cancelled + 删 auto：不等广播回来按钮就立即切回正常。 */
     sendCancel: function (seat) {
-      try { this.sock.send(JSON.stringify({ t: 'cancel', s: seat })); } catch (e) {}
+      if (cur && cur.cancel) cur.cancel(seat);
       if (lastRoom) {
         lastRoom.cancelled = lastRoom.cancelled || {};
         lastRoom.cancelled[seat] = Date.now();
