@@ -1600,7 +1600,8 @@ function applyRoll(pIdx, dice, grade) {
      · ?idlems=毫秒 可覆盖 15 秒（自测用）。 */
   var idleTimer = null, idleSeat = -1;
   var IDLE_MS = 15000, AUTO_ROLL_MAX = 5, OFFLINE_MS = 120000;
-  var DISC_DELAY = 5000, AUTO_GAP = 400;   /* 直接掉线后等 5 秒 / 代博间隔 0.4 秒（用户 2026-09-19 定） */
+  var DISC_DELAY = 5000, AUTO_GAP = 400, AUTO_SKIP_MS = 200;
+  /* 直接掉线等 5 秒 / 代博间隔 0.4 秒 / 满 5 把后自动跳过几乎不等待（用户 2026-09-19 定） */
   (function () {
     var m = location.search.match(/[?&]idlems=(\d+)/);
     if (m) IDLE_MS = parseInt(m[1], 10);
@@ -1617,11 +1618,14 @@ function applyRoll(pIdx, dice, grade) {
     if (!state || !state.online || state.phase === 'over') return;
     idleSeat = state.current;
     if (state.busy) return;                        /* busy：等落定（afterRoll）再计时 */
-    var cnt = needAuto(idleSeat) ? (NET.autoCount ? NET.autoCount(idleSeat) : 0) : 0;
+    var na = needAuto(idleSeat);
+    var cnt = na && NET.autoCount ? NET.autoCount(idleSeat) : 0;
     var delay;
-    if (!needAuto(idleSeat))       delay = IDLE_MS;   /* 在线：等 15 秒判定 */
-    else if (cnt > 0 && cnt < AUTO_ROLL_MAX) delay = AUTO_GAP;   /* 代博中：每把间隔 0.4 秒 */
-    else                           delay = DISC_DELAY;  /* 刚掉线（未满 5 把）：等 5 秒再开始；满 5 → 5 秒后跳 */
+    if (!na) delay = IDLE_MS;                            /* 在线：等 15 秒判定 */
+    else if (cnt >= AUTO_ROLL_MAX) delay = AUTO_SKIP_MS;  /* 满 5 把：自动跳过几乎不等待（用户 2026-09-19：
+                                                             跳过应和代博一样快甚至更快） */
+    else if (cnt > 0) delay = AUTO_GAP;                   /* 代博中：每把间隔 0.4 秒 */
+    else delay = DISC_DELAY;                              /* 刚掉线（还没开始代博）：等 5 秒 */
     idleTimer = setTimeout(idleFire, delay);
   }
   function idleFire() {
@@ -2907,8 +2911,20 @@ function bindEvents() {
       var beingAutoNow = NET.autoCount(sNow) > 0 &&
         !(NET.cancelled(sNow) && Date.now() - NET.cancelled(sNow) < 15000);
       if (mineNow && state.online.link === 'ok' && beingAutoNow) {
+        /* 取消托管 = 立即自己博这一把（用户 2026-09-19 定）：
+           点一下「取消代博/取消自动跳过」→ 取消托管 + **马上投骰**，轮次自然推进到下一家，
+           之后再轮到自己时按钮就是正常的「轮到你了 · 博！」；又发呆 15 秒才会重新托管。
+           ⚠️ 250ms 缓冲：等 cancel 往返完成、其他端停止代博，避免与自己这一掷撞车；
+           期间若代博抢先落地（轮次已推进）→ 这次不掷，下一轮正常博。 */
         NET.sendCancel(sNow);
-        toast('已取消托管，轮到你时正常博即可（再发呆 15 秒会重新托管）');
+        toast('已取消托管 · 这一把你自己博！');
+        var mySeat = sNow;
+        setTimeout(function () {
+          if (!state || !state.online || state.phase === 'over') return;
+          if (state.current !== mySeat) return;
+          if (state.busy) skipAnim();
+          doRoll(null, false);
+        }, 250);
         return;
       }
       if (state.online.skipSeat === sNow && state.online.skipAt && (Date.now() - state.online.skipAt < 4000)) return;
@@ -3804,7 +3820,11 @@ var NET = (function () {
       var before = state.rollCount;
       NET_APPLY = true;
       try {
-        if (ev.skip) doSkip(true);
+        if (ev.skip) {
+          /* 跳过也要有"语句"（用户 2026-09-19）：一条系统日志说明这一把被跳过 */
+          if (!quiet) pushSystemLog('⏭ 跳过 <strong>' + escapeHtml(state.players[ev.s] ? state.players[ev.s].name : ('座位 ' + ev.s)) + '</strong> 这一把（掉线/挂机）');
+          doSkip(true);
+        }
         else doRoll(ev.d, quiet);        /* quiet：跳过动画（日志/音效由 REPLAY_QUIET 静默） */
       } finally { NET_APPLY = false; }
       if (state.rollCount === before) break;          /* 事件没能推进本局（如已结束）→ 别空转 */
