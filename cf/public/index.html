@@ -2455,28 +2455,21 @@ function updateRollButton() {
     if (lk === 'dead') { b.disabled = true; b.textContent = '连接已断开 · 请退出重进'; return; }
     var mine = state.current === state.online.seat;
     var cnt = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(state.current) : 0;
-    /* 被托管 = 服务端代博状态存在且本人未取消（取消后有 15 秒宽限，再发呆会重新托管） */
-    var cancelAt = typeof NET !== 'undefined' && NET.cancelled ? NET.cancelled(state.current) : 0;
-    var beingAuto = cnt > 0 && !(cancelAt && Date.now() - cancelAt < IDLE_MS);
+    var beingAuto = cnt > 0;
     var dead = !!((state.online.off && state.online.off[state.current]) || beingAuto);
     var pending = state.online.skipSeat === state.current && state.online.skipAt &&
                   (Date.now() - state.online.skipAt < 4000);
-    if (dead || beingAuto) {   /* 轮到的玩家掉线/挂机 → 全自动处置；本人可点「取消代博」。
-                                  ⚠️ 不看 busy：代博回放的动画期间（每把 2-4 秒）取消入口必须常在
-                                  （2026-09-19 用户实测：busy 吞掉按钮导致"有时候看不到取消"）。 */
-      /* 直接掉线等 5 秒、无操作等 15 秒 → 自动代博 5 把（间隔 0.4 秒）→ 满后自动跳过（2026-09-19 定）。
-         被代博的玩家本人（还在线）主按钮 = 取消托管；取消后 15 秒内正常博，再发呆会重新托管。 */
+    if (dead || beingAuto) {   /* 轮到的玩家掉线/挂机 → 全自动处置；本人随时可取消 */
+      /* 直接掉线等 5 秒、无操作等 15 秒 → 自动代博 5 把（间隔 0.4 秒）→ 满后 0.2 秒即自动跳过。
+         ⚠️ 本人（在线）**被托管期间按钮永远是「取消代博/取消自动跳过」且可点**（用户 2026-09-19 定：
+         2 分钟托管期内随时能夺回控制权；点了就真正取消 + 立刻变回正常掷骰按钮）。
+         之前用 cancelAt 卡了一次（取消过就不再显示入口）→ 15 秒后重新托管时按钮变不可点展示，
+         用户"再点没反应、像没取消"（2026-09-19 实测）。
+         ⚠️ 也**不看 busy**：代博回放的动画期间取消入口必须常在。 */
       var who = mine ? '连接不稳' : state.players[state.current].name;
-      if (mine && state.online.link === 'ok' && !cancelAt) {
-        /* 本人是被托管的一方且还在线（未取消过）：主按钮 = 取消代博入口 */
+      if (mine && state.online.link === 'ok') {
         b.disabled = false;
         b.textContent = cnt >= 5 ? '取消自动跳过 · 我回来了' : '取消代博（' + cnt + '/5）· 我回来了';
-        return;
-      }
-      if (mine && cancelAt && Date.now() - cancelAt < IDLE_MS) {
-        /* 已取消的宽限期：正常自己博 */
-        b.disabled = !!state.busy;
-        b.textContent = state.busy ? '骰子飞着呢…' : '轮到你了 · 博！';
         return;
       }
       b.disabled = true;
@@ -2904,13 +2897,14 @@ function bindEvents() {
        之后轮到他正常自己博；再 15 秒没动会重新进入托管）。 */
     if (state.online &&
         ((state.online.off && state.online.off[state.current]) ||
-         (NET.autoCount && NET.autoCount(state.current) > 0 &&
-          !(NET.cancelled(state.current) && Date.now() - NET.cancelled(state.current) < 15000)))) {
+         (NET.autoCount && NET.autoCount(state.current) > 0))) {
       var sNow = state.current;
       var mineNow = state.online.seat === sNow;
-      var beingAutoNow = NET.autoCount(sNow) > 0 &&
-        !(NET.cancelled(sNow) && Date.now() - NET.cancelled(sNow) < 15000);
-      if (mineNow && state.online.link === 'ok' && beingAutoNow) {
+      var beingAutoNow = NET.autoCount(sNow) > 0;
+      /* 本人（在线）点按钮 = 取消托管 + 立刻替你博这一把。
+         ⚠️ 不看"是否取消过"：被托管期间（2 分钟内）任何时候点都有效（用户 2026-09-19 定：
+         取消过之后又被重新托管时，按钮必须还是可点的「取消代博」，否则点了没反应）。 */
+      if (mineNow && state.online.link === 'ok') {
         /* 取消托管 = 立即自己博这一把（用户 2026-09-19 定）：
            点一下「取消代博/取消自动跳过」→ 取消托管 + **马上投骰**，轮次自然推进到下一家，
            之后再轮到自己时按钮就是正常的「轮到你了 · 博！」；又发呆 15 秒才会重新托管。
