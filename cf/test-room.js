@@ -226,7 +226,38 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   send(h3, { t: 'skip', s: 1 });
   const skipOK = await waitFor(() => lastRoom(h3).events.length === 11, 5000);
   ok('假死代博满 5 把后跳过被接受（不被 lastAct 卡死）', skipOK, 'events=' + lastRoom(h3).events.length);
+  /* 已彻底断线（mock OFFLINE_MS=2000）→ 本人点「取消托管」也必须无效：
+     否则"人还在页面但超时"的玩家一点取消就复活（2026-09-19 用户实测发现）。
+     先等过 2 秒窗口（距首届代博起算），再试取消。 */
+  await sleep(2500);
+  send(g3c, { t: 'cancel', s: 1 });   /* 注意：g3c 的连接还活着（假死场景） */
+  await sleep(500);
+  ok('被移出后取消托管无效（auto 不删，人不能复活）',
+    !!(lastRoom(h3).auto && lastRoom(h3).auto[1]), 'auto=' + JSON.stringify(lastRoom(h3).auto));
   g3c.ws.terminate();
+
+  /* ===== 全员托管超时 → 房间直接解散（用户 2026-09-19 定）=====
+     3 人局：乙丙掉线、甲替他们代博；甲自己也被托管 → 全员 auto.at 过期 →
+     alarm 兜底检查（mock OFFLINE_MS=2000 + 2s）→ closed=true。 */
+  const code4 = String(1000 + Math.floor(Math.random() * 9000));
+  const h4 = await connect(code4, 'create', '甲', 'sA');
+  const g4b = await connect(code4, 'join', '乙', 'sB');
+  const g4c = await connect(code4, 'join', '丙', 'sC');
+  await sleep(300);
+  send(h4, { t: 'start' });
+  await sleep(400);
+  g4b.ws.terminate(); g4c.ws.terminate();
+  await waitFor(() => lastRoom(h4).off[1] === true && lastRoom(h4).off[2] === true);
+  /* 三个座次各建立一次托管（交替座次避免幂等）：s1 代博乙 → s0 甲自己 → s2 代博丙 */
+  send(h4, { t: 'roll', s: 1, d: [1, 2, 3, 4, 5, 6], a: 1 });
+  send(h4, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6], a: 1 });
+  send(h4, { t: 'roll', s: 2, d: [3, 4, 5, 6, 6, 6], a: 1 });
+  await waitFor(() => lastRoom(h4).events.length === 3);
+  await sleep(1000);
+  ok('全员托管已建立（三个座次 auto.at 齐全）',
+    Object.keys(lastRoom(h4).auto || {}).length === 3, JSON.stringify(lastRoom(h4).auto));
+  const gone = await waitFor(() => lastRoom(h4).closed === true, 12000);
+  ok('全员超时未回 → 房间自动解散', gone, 'closed=' + lastRoom(h4).closed);
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }

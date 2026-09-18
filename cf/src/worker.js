@@ -67,6 +67,34 @@ export class RoomDO {
   }
   async save() { await this.ctx.storage.put('rec', this.rec); }
 
+  /* 定时检查：所有人都托管满 2 分钟（全员被移出）→ 房间直接解散（用户 2026-09-19 定）。
+     ⚠️ 必须有 alarm 兜底：全员离线时没有任何消息能触发服务端代码，只能靠定时器。
+     设置点：某座次首次代博时 setAlarm(now + OFFLINE_MS + 2s)。 */
+  async alarm() {
+    await this.load();
+    if (!this.rec || this.rec.closed) return;
+    const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
+    const roster = (this.rec.roster || []);
+    if (!roster.length) {            /* 名单空了：连记录一起清掉（不留垃圾） */
+      this.rec = null;
+      await this.ctx.storage.delete('rec');
+      return;
+    }
+    let allGone = true;
+    for (let i = 0; i < roster.length; i++) {
+      const a = this.rec.auto && this.rec.auto[i];
+      if (!a || !a.at || Date.now() - a.at < OFFLINE_MS) { allGone = false; break; }
+    }
+    if (allGone) {
+      this.rec.closed = true;        /* 全员掉线 → 解散（客户端收到 closed 即回设置页并提示） */
+      await this.save();
+      this.broadcast();
+      return;
+    }
+    /* 还没全踢 → 再等一轮，保证最终会检查到 */
+    try { await this.ctx.storage.setAlarm(Date.now() + OFFLINE_MS); } catch (e) {}
+  }
+
   /* ---------- WebSocket 接入 ---------- */
   async fetch(request) {
     const url = new URL(request.url);
@@ -215,7 +243,14 @@ export class RoomDO {
       if (m.a) {
         this.rec.auto = this.rec.auto || {};
         const st = this.rec.auto[seat];
-        if (!st) this.rec.auto[seat] = { cnt: 1, at: Date.now() };   /* 首把 = 2 分钟判定的起点 */
+        if (!st) {
+          this.rec.auto[seat] = { cnt: 1, at: Date.now() };   /* 首把 = 2 分钟判定的起点 */
+          /* 兜底：托管窗口过后检查"是否全员被移出 → 解散房间"（全员离线时没有消息能触发） */
+          try {
+            const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
+            await this.ctx.storage.setAlarm(Date.now() + OFFLINE_MS + 2000);
+          } catch (e) { /* alarm 不可用就算了，不影响主流程 */ }
+        }
         else if (st.cnt >= 5) return;                                /* 满 5：只能跳过 */
         else st.cnt++;
       }
@@ -278,6 +313,14 @@ export class RoomDO {
       const seat = m.s | 0;
       const pid = (ws.deserializeAttachment() || {}).pid;
       if (pid && this.rec.roster.findIndex(p => p.id === pid) !== seat) return;   /* 只能取消自己的 */
+      /* ⚠️ 已彻底断线（托管满 2 分钟）→ 取消无效：他已被真正移出本局。
+         否则"人还在页面但已超时"的玩家一点取消就复活（socket 活着，cancel 照样能进来）——
+         这就违背了"2 分钟没回来 = 移出"的规则（2026-09-19 用户实测发现）。 */
+      {
+        const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
+        const st = this.rec.auto && this.rec.auto[seat];
+        if (st && st.at && Date.now() - st.at >= OFFLINE_MS) return;
+      }
       if (this.rec.auto) delete this.rec.auto[seat];
       this.rec.cancelled = this.rec.cancelled || {};
       this.rec.cancelled[seat] = Date.now();   /* 时间戳：15 秒宽限期内正常博，超时未动重新托管 */
@@ -293,6 +336,7 @@ export class RoomDO {
                                                    过期快照防护只对同世代生效（防重开局被冻死在旧视图） */
       this.rec.events = [];
       this.rec.auto = {}; this.rec.cancelled = {}; this.rec.kickNotified = {};   /* 新局：全部复活 */
+      try { await this.ctx.storage.deleteAlarm(); } catch (e) {}
       this.rec.lastAct = this.rec.roster.map(() => Date.now());
       this.rec.left = null;
       this.rec.started = false;

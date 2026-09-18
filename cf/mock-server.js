@@ -11,6 +11,27 @@ const ROOT = 'C:/Users/24431/Desktop/博饼/cf/public';
 const RoomDO = { IDLE_PROXY_MS: Number(process.env.IDLE_PROXY_MS) || 15000 };   /* 与 Worker 对齐（测试可覆盖） */
 const rooms = new Map();   /* code -> rec */
 
+/* 与 Worker 的 alarm() 对齐：全员托管超时 → 解散房间（全员离线时没人发消息，只能定时检查）。
+   ⚠️ 定时器绝不能挂在 rec 上：rec 要 JSON.stringify 广播出去，Timeout 对象会循环引用直接崩 */
+const goneTimers = new Map();
+function armAllGoneCheck(rec, delayMs) {
+  const key = rec.code;
+  if (goneTimers.has(key)) clearTimeout(goneTimers.get(key));
+  goneTimers.set(key, setTimeout(function () {
+    goneTimers.delete(key);
+    if (!rec || rec.closed) return;
+    const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
+    if (!rec.roster.length) { rooms.delete(rec.code); return; }
+    let allGone = true;
+    for (let i = 0; i < rec.roster.length; i++) {
+      const a = rec.auto && rec.auto[i];
+      if (!a || !a.at || Date.now() - a.at < OFFLINE_MS) { allGone = false; break; }
+    }
+    if (allGone) { rec.closed = true; broadcast(rec.code); return; }
+    armAllGoneCheck(rec, OFFLINE_MS);   /* 还没全踢 → 再等一轮 */
+  }, delayMs || ((Number(process.env.OFFLINE_MS) || 120000) + 2000)));
+}
+
 function marks(rec) {
   const live = new Set();
   wss.clients.forEach(c => { if (c.roomCode === rec.code && c.readyState === 1 && c.pid) live.add(c.pid); });
@@ -168,7 +189,10 @@ server.on('upgrade', (req, socket, head) => {
           r.auto = r.auto || {};
           const st = r.auto[seat];
           if (m.a) {
-            if (!st) r.auto[seat] = { cnt: 1, at: Date.now() };
+            if (!st) {
+              r.auto[seat] = { cnt: 1, at: Date.now() };
+              armAllGoneCheck(r);   /* 与 Worker 同步：兜底检查"全员被移出 → 解散" */
+            }
             else if (st.cnt >= 5) return;
             else st.cnt++;
           }
@@ -212,6 +236,11 @@ server.on('upgrade', (req, socket, head) => {
         /* 与 Worker 同步：本人取消托管 → 删代博状态，15 秒内正常博，再发呆重新托管 */
         const seat = m.s | 0;
         if (pid && r.roster.findIndex(p => p.id === pid) !== seat) return;
+        {   /* 与 Worker 同步：已彻底断线（托管满 2 分钟）→ 取消无效，已被真正移出 */
+          const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
+          const st = r.auto && r.auto[seat];
+          if (st && st.at && Date.now() - st.at >= OFFLINE_MS) return;
+        }
         if (r.auto) delete r.auto[seat];
         r.cancelled = r.cancelled || {};
         r.cancelled[seat] = Date.now();
@@ -227,6 +256,7 @@ server.on('upgrade', (req, socket, head) => {
         if (pid !== r.host) return;
         r.gen = (r.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"（与 Worker 一致） */
         r.events = []; r.auto = {}; r.cancelled = {}; r.kickNotified = {}; r.lastAct = r.roster.map(() => Date.now());
+        if (goneTimers.has(code)) { clearTimeout(goneTimers.get(code)); goneTimers.delete(code); }
         r.left = null; r.started = false; broadcast(code);
       } else if (m.t === 'bye') {
         dropPlayer(ws, true, !!m.done);

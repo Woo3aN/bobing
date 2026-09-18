@@ -1612,6 +1612,11 @@ function applyRoll(pIdx, dice, grade) {
   (function () {
     var m = location.search.match(/[?&]idlems=(\d+)/);
     if (m) IDLE_MS = parseInt(m[1], 10);
+    var m2 = location.search.match(/[?&]offlinems=(\d+)/);
+    if (m2) OFFLINE_MS = parseInt(m2[1], 10);   /* 彻底断线判定（自测用：与 mock 的 OFFLINE_MS 对齐） */
+    /* 自测钩子：临时改「彻底断线」时限。⚠️ 必须与本作用域的 OFFLINE_MS 同层，
+       挂到 window.__game 上够不着这个变量（它在游戏主逻辑 IIFE 内）——踩过。 */
+    window.__setOfflineMs = function (ms) { OFFLINE_MS = parseInt(ms, 10); return OFFLINE_MS; };
   })();
   function disarmIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
   /* 是否"已判定断线"：socket 已断（off），或已进入代博流程且本人未取消托管 */
@@ -2467,6 +2472,15 @@ function updateRollButton() {
        用户就永远点不到取消（2026-09-19 实测两轮才定位到）。 */
     var mySeat = state.online.seat;
     var myAuto = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(mySeat) : 0;
+    var myAt = typeof NET !== 'undefined' && NET.autoAt ? NET.autoAt(mySeat) : 0;
+    /* ⚠️ 托管满 2 分钟 = 已彻底断线、被真正移出本局：连本人也不能再点取消（服务端也会拒绝）。
+       否则"人还在页面但 2 分钟没动"的玩家一点取消就复活（2026-09-19 用户实测发现）。 */
+    var myGone = !!(myAuto > 0 && myAt && Date.now() - myAt >= OFFLINE_MS);
+    if (myGone) {
+      b.disabled = true;
+      b.textContent = '你已掉线太久 · 本局已被移出（下一局可参与）';
+      return;
+    }
     if (myAuto > 0) {
       b.disabled = false;
       b.textContent = myAuto >= 5
@@ -2908,6 +2922,11 @@ function bindEvents() {
        取消后：若正轮到我 → 顺手替我博这一把；若轮次已在别人 → 只取消，等下次轮到我正常博。 */
     if (state.online && state.online.link === 'ok' && NET.autoCount && NET.autoCount(state.online.seat) > 0) {
       var mySeat0 = state.online.seat;
+      /* 已彻底断线（托管满 2 分钟）→ 不能取消：已被真正移出本局（服务端同样会拒绝） */
+      if (NET.autoAt && NET.autoAt(mySeat0) && Date.now() - NET.autoAt(mySeat0) >= OFFLINE_MS) {
+        toast('你已掉线太久，本局已被移出（本局结束后可参与下一局）');
+        return;
+      }
       NET.sendCancel(mySeat0);
       toast('已取消托管 · 轮到你时正常博！');
       updateRollButton();          /* 立即变回正常按钮（本地 auto 已乐观删除） */
@@ -3139,7 +3158,9 @@ window.__game = {
     _adoptPeer: function (code, idx) { NET._adoptPeer(code, idx); },   /* 自检：模拟老成员重连 */
     _fast: function (v) { NET._fast(v); },                             /* 自检：跳过动画 */
     tick: function () { NET._tick(); },
-    _raw: function () { return NET; }                                  /* 测试钩子：TCB 异步回调路径的 e2e 用 */
+    _raw: function () { return NET; }
+    /* 注：「彻底断线」时限的自测钩子见顶层 `window.__setOfflineMs`
+       （挂在 __game 上够不着游戏主逻辑 IIFE 内的 OFFLINE_MS —— 踩过） */
   }
 };
 

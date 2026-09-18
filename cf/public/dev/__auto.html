@@ -100,6 +100,35 @@ function mkFrame() {
     const txt6 = btn();
     if (/取消自动跳过|取消代博/.test(txt6)) fail('取消后按钮仍是取消入口：' + txt6);
     log('[6] 跳过阶段点取消 → 托管清零 ✓ 按钮变回「' + txt6 + '」✓');
+
+    /* [7] 超过彻底断线窗口后：本人也不再能取消（服务端拒绝），按钮显示"已被移出本局"
+       （2026-09-19 用户实测发现：人还在页面也不能复活）。
+       用测试钩子把客户端时限调到 2.5 秒（与 mock 的 OFFLINE_MS=2000 对齐），
+       不能走 URL 参数——那会在 [2]-[6] 阶段就生效、把正常托管流程吃掉。 */
+    if (g1.contentWindow) { }                                  /* 占位：保持结构清晰 */
+    [a1.f, a2.f].forEach(function (fr) {
+      if (fr.contentWindow && fr.contentWindow.__setOfflineMs) fr.contentWindow.__setOfflineMs(2500);
+    });
+    NA.sendCancel(seat);                 /* 先取消干净，进入"没人动"状态 */
+    await sleep(300);
+    let txt7 = '';
+    for (let k = 0; k < 40; k++) {       /* 等托管 + 超过窗口 */
+      await sleep(700);
+      if (gOther.state().busy) gOther.skipAnim();
+      if (gSelf.state().busy) gSelf.skipAnim();
+      txt7 = btn();
+      if (k % 5 === 0) log('[7d] t=' + (k * 0.7).toFixed(1) + 's cnt=' + NA.autoCount(seat) +
+        ' at=' + NA.autoAt(seat) + ' 距今=' + (NA.autoAt(seat) ? ((Date.now() - NA.autoAt(seat)) / 1000).toFixed(1) + 's' : '-') +
+        ' 按钮=' + txt7);
+      if (/已被移出/.test(txt7)) break;
+    }
+    if (!/已被移出/.test(txt7)) fail('超时后本人按钮没有变成"已被移出"，实际：' + txt7);
+    log('[7] 超过彻底断线窗口 → 本人按钮 =「' + txt7 + '」✓（不能复活）');
+    const cntPre = NA.autoCount(seat);
+    fSelf.contentDocument.getElementById('btn-roll').click();   /* 再点也没用 */
+    await sleep(800);
+    if (NA.autoCount(seat) !== cntPre) fail('被移出后点击仍改变了托管状态 cnt=' + NA.autoCount(seat) + ' (was ' + cntPre + ')');
+    log('[8] 被移出后点击不再生效（托管状态不变）✓');
     log('=== 托管/取消按钮验证通过 ===');
   } catch (e) { log('异常: ' + (e && e.message)); }
 })();
