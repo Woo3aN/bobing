@@ -119,26 +119,78 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   ok('掉线重连：能重新加入且拿到完整快照', lastRoom(re).events.length === 2 && lastRoom(re).started === true);
   ok('回线：离线标记自动清除', await waitFor(() => lastRoom(host).off[2] === false), 'off=' + JSON.stringify(lastRoom(host).off));
 
-  /* ===== 掉线跳过 ===== */
+  /* ===== 身份丢失按名字认领（iOS/安卓杀页面后 sessionStorage 连 PEER 一起丢，2026-09-18） ===== */
+  re.ws.terminate();
+  await waitFor(() => lastRoom(host).off[2] === true);
+  let claimErr = null, claimed = null;
+  try { claimed = await connect(code, 'join', '客人乙', 'pClaim'); } catch (e) { claimErr = e.message; }
+  ok('认领：同名 + 原座次离线 → 新 pid 被接受（不再 403）', !!claimed, claimErr || '');
+  ok('认领：座次不变（顶替 pid，名单不增长）',
+    !!claimed && lastRoom(claimed).roster.length === 3 && lastRoom(claimed).roster[2].id === 'pClaim',
+    JSON.stringify(claimed && lastRoom(claimed).roster.map(p => p.id)));
+  ok('认领：离线标记自动清除', await waitFor(() => lastRoom(host).off[2] === false),
+    'off=' + JSON.stringify(lastRoom(host).off));
+  let denyErr = null;
+  try { await connect(code, 'join', '路人丙', 'pStranger'); } catch (e) { denyErr = e.message; }
+  ok('防冒名：不同名的陌生人仍被拒（403）', /403/.test(denyErr || ''), denyErr || '');
+  let denyErr2 = null;
+  try { await connect(code, 'join', '客人乙', 'pCopycat'); } catch (e) { denyErr2 = e.message; }
+  ok('防冒名：同名但座次在线 → 拒绝（不顶掉正在玩的人）', /403/.test(denyErr2 || ''), denyErr2 || '');
+
+  /* ===== 代博 / 自动跳过 / 彻底断线（2026-09-18：15 秒判定 → 代博 5 把 → 2 分钟没回移出） =====
+     mock 用 OFFLINE_MS=2000 启动（真实部署是 120000），2.5 秒即触发"彻底断线"。 */
   send(host, { t: 'skip', s: 0 });
   await sleep(400);
   ok('跳过在线玩家被拒绝（防抢回合）', lastRoom(host).events.length === 2, 'events=' + lastRoom(host).events.length);
-  re.ws.terminate();
+  claimed.ws.terminate();
   await waitFor(() => lastRoom(host).off[2] === true);
-  send(host, { t: 'skip', s: 2 });
-  ok('跳过掉线玩家：写入 skip 事件并广播给所有人',
-    await waitFor(() => lastRoom(host).events.length === 3 && lastRoom(guest).events.length === 3 && lastRoom(host).events[2].skip === true),
+  /* 客户端全自动代博：轮到掉线座次 → 任一在线端发 a 标记的 roll（真实骰子）。
+     真实轮次：代博乙(s2) → 房主(s0) → 客人(s1) → 又轮到乙 → 代博……事件不连续同座次。 */
+  send(guest, { t: 'roll', s: 2, d: [1, 2, 3, 4, 5, 6], a: 1 });
+  await waitFor(() => lastRoom(guest).events.length === 3);
+  send(host, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6] });
+  await waitFor(() => lastRoom(guest).events.length === 4);
+  send(guest, { t: 'roll', s: 1, d: [3, 4, 5, 6, 6, 6] });
+  await waitFor(() => lastRoom(guest).events.length === 5);
+  ok('代博：替掉线座次掷骰被接受（a 标记）',
+    lastRoom(host).events[2].a === 1 && lastRoom(host).events[3].a === undefined,
     JSON.stringify(lastRoom(host).events[2]));
+  /* 并发去重：两个端同时触发代博 → 两条同座次事件紧挨着 → 只有第一条被接受 */
+  send(guest, { t: 'roll', s: 2, d: [6, 6, 6, 6, 6, 6], a: 1 });
+  send(host, { t: 'roll', s: 2, d: [5, 5, 5, 5, 5, 5], a: 1 });
+  await waitFor(() => lastRoom(guest).events.length === 6);
+  await sleep(500);
+  ok('代博并发去重：同座次连续事件被幂等丢弃',
+    lastRoom(host).events.length === 6 && lastRoom(host).events[5].d[0] === 6,
+    'events=' + lastRoom(host).events.length);
+  /* 彻底断线（开始代博起 2 分钟没回来 → 跳过点名 kicked + 无法重连）。
+     ⚠️ 这几条只在 mock（OFFLINE_MS=2000 启动）验证：线上是真实 120 秒，无法快速等待。 */
+  const IS_MOCK = /127\.0\.0\.1|localhost/.test(WS_URL);
+  if (IS_MOCK) await sleep(3000);   /* 确保 autoAt[2] 距今超过 mock 的 2 秒阈值 */
+  send(host, { t: 'skip', s: 2 });
+  await waitFor(() => lastRoom(guest).events.length === 7);
+  if (IS_MOCK) {
+    ok('彻底断线：超时后跳过并点名（left 带 kicked）',
+      lastRoom(host).left && lastRoom(host).left.kicked === true && lastRoom(host).left.name === '客人乙',
+      JSON.stringify(lastRoom(host).left));
+    let kickErr1 = null, kickErr2 = null;
+    try { await connect(code, 'join', '客人乙', 'pClaim'); } catch (e) { kickErr1 = e.message; }
+    try { await connect(code, 'join', '客人乙', 'pThird'); } catch (e) { kickErr2 = e.message; }
+    ok('移出后：按名字认领被拒（403）', /403/.test(kickErr1 || ''), kickErr1 || '');
+    ok('移出后：原 pid 重连被拒（403）', /403/.test(kickErr2 || ''), kickErr2 || '');
+  } else {
+    console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
+  }
   /* ⚠️ 两个人同时点「跳过这一把」是完全正常的时序：重复事件会让所有人回放到"座次对不上"
      → 整局被判失步 → 一个人的手快把整局搞死。服务端必须幂等。 */
   send(guest, { t: 'skip', s: 2 });
   await sleep(600);
-  ok('重复跳过同一座次被去重（幂等）', lastRoom(host).events.length === 3, 'events=' + lastRoom(host).events.length);
+  ok('重复跳过同一座次被去重（幂等）', lastRoom(host).events.length === 7, 'events=' + lastRoom(host).events.length);
 
   /* ===== 再来一局（reset） ===== */
   send(guest, { t: 'reset' });
   await sleep(400);
-  ok('非房主 reset 被拒绝', lastRoom(host).events.length === 3 && lastRoom(host).started === true);
+  ok('非房主 reset 被拒绝', lastRoom(host).events.length === 7 && lastRoom(host).started === true);
   send(host, { t: 'reset' });
   ok('房主再来一局：清空事件回大厅，名单保留',
     await waitFor(() => lastRoom(host).events.length === 0 && lastRoom(host).started === false),
@@ -154,15 +206,16 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     lastRoom(host).left && lastRoom(host).left.name === '客人甲' && lastRoom(host).left.done === true,
     JSON.stringify(lastRoom(host).left));
 
-  /* ===== 已开局后主动退出 = 解散 ===== */
+  /* ===== 已开局后主动退出 = 解散 =====
+     （乙已被移出、甲已退名单；用房主 pid 再开一条连接模拟"在线成员重连后退出"） */
   send(host, { t: 'start' });
   await waitFor(() => lastRoom(host).started === true);
-  const late = await connect(code, 'join', '客人乙', 'pThird');
+  const late = await connect(code, 'join', '房主', 'pHost');
   send(late, { t: 'bye' });
   ok('开局后任何人主动退出 → 本局解散（避免全场干等）',
     await waitFor(() => lastRoom(host).closed === true), 'closed=' + lastRoom(host).closed);
   ok('中途退出同样带「谁走了」（解散提示里要点名）',
-    lastRoom(host).left && lastRoom(host).left.name === '客人乙' && lastRoom(host).left.done === false,
+    lastRoom(host).left && lastRoom(host).left.name === '房主' && lastRoom(host).left.done === false,
     JSON.stringify(lastRoom(host).left));
 
   /* ===== 加入失败原因可诊断 ===== */

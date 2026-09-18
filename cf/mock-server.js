@@ -109,14 +109,32 @@ server.on('upgrade', (req, socket, head) => {
     }
   } else {
     if (!rec || rec.closed) return deny('No room', 404);
-    const mine = rec.roster.some(p => p.id === pid);
-    if (rec.started && !mine) return deny('Started', 403);
-    if (!mine) rec.roster.push({ id: pid, name });
+    /* 与 Worker 同步：开始代博起 2 分钟没回来 = 彻底断线，不再放行重连/认领 */
+    const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
+    const kicked = (i) => rec.autoAt && rec.autoAt[i] && Date.now() - rec.autoAt[i] >= OFFLINE_MS;
+    const mineIdx = rec.roster.findIndex(p => p.id === pid);
+    if (mineIdx >= 0 && kicked(mineIdx))
+      return deny('Kicked', 403);
+    const mine = mineIdx >= 0;
+    if (!mine && rec.started) {
+      /* 与 Worker 同步：页面被杀后 PEER 丢 → 按名字认领离线座次（在线同名/不同名/已彻底断线拒绝） */
+      marks(rec);
+      const idx = rec.roster.findIndex((p, i) => p.name === name && rec.off && rec.off[i] && !kicked(i));
+      if (idx < 0) return deny('Started', 403);
+      rec.roster[idx].id = pid;
+      if (rec.autoAt) delete rec.autoAt[idx];
+    } else if (!mine) {
+      rec.roster.push({ id: pid, name });
+    }
   }
 
   wss.handleUpgrade(req, socket, head, ws => {
     ws.roomCode = code; ws.pid = pid;
     marks(rec);
+    {   /* 回线 = 恢复正常：清掉该座次的代博计时（与 Worker 同步） */
+      const backIdx = rec.roster.findIndex(p => p.id === pid);
+      if (backIdx >= 0 && rec.autoAt) delete rec.autoAt[backIdx];
+    }
     ws.send(JSON.stringify({ t: 'room', r: rec }));
     broadcast(code);
     ws.on('message', data => {
@@ -128,20 +146,42 @@ server.on('upgrade', (req, socket, head) => {
         const seat = m.s | 0;
         if (seat < 0 || seat >= r.roster.length) return;
         if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
-        if (pid && r.roster.findIndex(p => p.id === pid) !== seat) return;   /* 防冒名：只能替自己掷（拿不到身份则放行） */
+        if (pid) {
+          const ss = r.roster.findIndex(p => p.id === pid);
+          if (ss !== seat && !(r.off && r.off[seat])) return;   /* 防冒名：只能替自己掷，或替掉线座次代博 */
+        }
         if (r.events.length >= 5000) return;
-        r.events.push({ s: seat, d: m.d.slice() });
+        const lastEv = r.events[r.events.length - 1];
+        if (lastEv && lastEv.s === seat) return;   /* 与 Worker 同步：同座次连续事件幂等（多端并发代博去重） */
+        {   /* 与 Worker 同步：代博把数上限（满 5 只能跳） */
+          let autoCnt = 0;
+          for (const e of r.events) if (e.s === seat && e.a) autoCnt++;
+          if (m.a && autoCnt >= 5) return;
+        }
+        if (m.a) {   /* 与 Worker 同步：首次代博时刻 = 2 分钟"彻底断线"判定起点 */
+          r.autoAt = r.autoAt || {};
+          if (!r.autoAt[seat]) r.autoAt[seat] = Date.now();
+        }
+        r.events.push({ s: seat, d: m.d.slice(), a: m.a ? 1 : undefined });   /* a=1 代博（仅展示用） */
         broadcast(code);
       } else if (m.t === 'skip') {
         if (!r.started) return;
         marks(r);
         const seat = m.s | 0;
         if (seat < 0 || seat >= r.roster.length) return;
-        if (!r.off || !r.off[seat]) return;
+        if (!r.off || !r.off[seat]) return;   /* 与 Worker 同步：off 即可跳（自动化节奏由客户端管） */
         const last = r.events[r.events.length - 1];
         if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */
         if (r.events.length >= 5000) return;
         r.events.push({ s: seat, skip: true });
+        {   /* 与 Worker 同步：开始代博起超 2 分钟 = 彻底断线点名（kicked 标记，只发一次） */
+          const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
+          if (r.autoAt && r.autoAt[seat] && Date.now() - r.autoAt[seat] >= OFFLINE_MS) {
+            r.leftSeq = (r.leftSeq || 0) + 1;
+            r.left = { seq: r.leftSeq, name: r.roster[seat].name, kicked: true };
+            /* ⚠️ autoAt 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
+          }
+        }
         broadcast(code);
       } else if (m.t === 'start') {
         if (pid !== r.host || r.roster.length < 2) return;
@@ -149,7 +189,7 @@ server.on('upgrade', (req, socket, head) => {
       } else if (m.t === 'reset') {
         if (pid !== r.host) return;
         r.gen = (r.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"（与 Worker 一致） */
-        r.events = []; r.started = false; broadcast(code);
+        r.events = []; r.autoAt = {}; r.left = null; r.started = false; broadcast(code);
       } else if (m.t === 'bye') {
         dropPlayer(ws, true, !!m.done);
         try { ws.close(); } catch (e) {}

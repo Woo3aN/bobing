@@ -20,7 +20,7 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     function mkFrame(id) {
       const f = document.createElement('iframe');
       const loaded = new Promise(r => { f.onload = r; });   /* 先挂监听再设 src，防 load 竞态 */
-      f.src = '/index.html?wstimeout=600000&ws=' + encodeURIComponent(location.origin.replace(/^http/, 'ws') + '/ws');
+      f.src = '/index.html?wstimeout=600000&idlems=3000&ws=' + encodeURIComponent(location.origin.replace(/^http/, 'ws') + '/ws');
       f.style.cssText = 'width:430px;height:620px;border:0;visibility:hidden;position:absolute';
       document.body.appendChild(f);
       return { f: f, loaded: loaded };
@@ -163,25 +163,31 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     const deadSeat = g1.state().current;
     if (deadSeat !== 1) fail('轮次预期落在 seat 1，实际 ' + deadSeat);
     const deadPid = g2.net._raw().peerId();
+    /* 先禁用 g2 的自动重连：模拟"页面被杀的长掉线"（否则 3 秒就重连回来，代博窗口太窄） */
+    N2._ws().wantClose = true;
     await fetch('/__kick?code=' + code + '&pid=' + deadPid);   /* 只掐 g2（轮次方） */
-    log('[11] 已掐断轮次方（seat ' + deadSeat + '）的连接…');
+    log('[11] 已掐断轮次方（seat ' + deadSeat + '）的连接（禁用其自动重连）…');
 
-    /* [12] 关键回归：掉线是"没有新事件的快照"，按钮必须自己变成「跳过这一把」 */
+    /* [12] 关键回归：掉线是"没有新事件的快照"，按钮必须自己变成「代博中」（全自动处置） */
     const btn1 = f1.contentDocument.getElementById('btn-roll');
     let btnTxt = '';
     for (let k = 0; k < 20; k++) {
       await sleep(500);
       btnTxt = btn1.textContent;
-      if (btnTxt.indexOf('跳过') >= 0) break;
+      if (btnTxt.indexOf('代博中') >= 0) break;
     }
-    if (btnTxt.indexOf('跳过') < 0) fail('掉线后掷骰按钮没有变成「跳过这一把」，实际文案：' + btnTxt);
+    if (btnTxt.indexOf('代博中') < 0) fail('掉线后掷骰按钮没有变成「代博中」，实际文案：' + btnTxt);
     log('[12] 掉线后按钮自动变成「' + btnTxt + '」✓（无新事件也能触发重渲染）');
 
-    /* [13] 点按钮跳过 → 服务端写入 skip → 两端（含重连后的掉线方）一致 */
-    btn1.click();
+    /* [13] 全自动代博：idlems=3000 → 3 秒后任一在线端代博（发 a 标记事件）→ 两端回放推进 */
     const skipOk = await waitFor(() => g1.state().rollCount === 6, 15000);
-    if (!skipOk) fail('跳过没有生效 rc=' + g1.state().rollCount);
-    log('[13] 跳过生效，本端 rollCount=6 ✓');
+    if (!skipOk) fail('自动代博没有生效 rc=' + g1.state().rollCount);
+    const cntAfter = N1.autoCount ? N1.autoCount(deadSeat) : -1;
+    if (cntAfter < 1) fail('代博事件没有 a 标记 autoCount=' + cntAfter);
+    log('[13] 自动代博生效，本端 rollCount=6，代博计数=' + cntAfter + ' ✓');
+    /* [14] 掉线方"回来"：恢复重连 → 静默回放补齐 → 两端一致 */
+    N2._ws().wantClose = false;
+    N2._ws().reconnect();
     let back = false;
     for (let k = 0; k < 40; k++) {
       await sleep(600);

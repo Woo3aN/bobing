@@ -1442,19 +1442,20 @@ function randomDice() {
   return d;
 }
 
-/* 真实掷一次（带规则结算）。diceOrNull 为 null 则随机；silent 为 true 时跳过动画 */
-function doRoll(diceOrNull, silent) {
+/* 真实掷一次（带规则结算）。diceOrNull 为 null 则随机；silent 为 true 时跳过动画；
+   auto 为 true = 替掉线座次代博（事件带 a 标记，log 里注明） */
+function doRoll(diceOrNull, silent, auto) {
   if (!state) return null;
   if (state.phase === 'over') return null;
   if (state.busy && !silent) return null;
   /* 联机回合守卫：只有轮到自己才能掷。远端事件回放走 NET_APPLY 放行；
-     静默路径（rollForced/自检）不拦 —— 探针要能确定性驱动当前玩家。 */
+     静默路径（rollForced/代博/自检）不拦 —— 探针要能确定性驱动当前玩家。 */
   if (state.online && !silent && !NET_APPLY && state.online.seat !== state.current) return null;
   var dice = diceOrNull || randomDice();
   /* 联机：这一把成为事实 → 广播事件（整条链路里唯一的"写"）。
-     ⚠️ 条件里没有 !silent：联机时 rollForced 也是一次真实掷骰，同样要广播；
-     重连回放（NET_APPLY=true）绝不重发。 */
-  if (state.online && !NET_APPLY) NET.sendRoll(state.online.seat, dice);
+     发送座次 = state.current（正常博时 == 自己的座次；代博时 == 掉线者的座次，服务端
+     校验"目标座次已掉线"才放行）。重连回放（NET_APPLY=true）绝不重发。 */
+  if (state.online && !NET_APPLY) NET.sendRoll(state.current, dice, auto);
   state.dice = dice.slice();
   var grade = evaluate(dice);
   if (state.dist) state.dist[grade.key] = (state.dist[grade.key] || 0) + 1;   /* 本局等级分布 */
@@ -1572,13 +1573,71 @@ function applyRoll(pIdx, dice, grade) {
 /* 掷完后推进流程：换人 / 收官轮 / 结束 */
   /* 掉线跳过：轮到的玩家掉线时，其余人可跳过他那把。
      必须走 afterRoll 同一套推进逻辑（rollCount++/回合/收官轮判定），
-     否则各端的回合数就对不上了。服务端只允许跳过**已掉线**的座次。 */
+     否则各端的回合数就对不上了。服务端只允许跳过**已掉线**的座次。
+     2026-09-18 起：跳过必须在【代博满 5 把】之后才允许（代博期间局在正常走，
+     跳过反而把人家的把次跳没了）—— 由服务端按事件里的代博标记（a）统一校验。 */
   function doSkip(silent) {
     if (!state || state.phase === 'over') return;
     var p = state.players[state.current];
     pushSystemLog('⏭️ ' + p.name + ' 掉线，本把跳过');
     if (!silent) toast(p.name + ' 掉线，跳过这一把');
     afterRoll(true);
+  }
+
+  /* ---------- 代博 / 自动跳过（用户 2026-09-18 定，全自动）----------
+     轮到某座次 15 秒没动静（典型：切出去看微信，socket 假死或还在重连）→
+     判定为断线，立即替 ta 代博（真实掷骰，最多 5 把）；满 5 把还没回来就改自动跳过。
+     从开始代博起 2 分钟内回来 → 一切恢复正常接着博；超过 2 分钟 → 彻底断线：
+     服务端拒绝其重连/认领，每轮到自动跳过，游戏照常走完。
+     · 已判定断线（socket 断，或已经开始代博）后每轮到**直接处置、不再等 15 秒**。
+     · 只对已判定断线的座次动手 —— 在线发呆第一把内绝不代博（ta 随时能自己回来）。
+     · **每个在线端**都计时、都可以发起（房主掉线自动化照常运转）：
+       发起端只发事件**不本地结算**，等事件广播回来经 applyRemoteEvents 统一回放 ——
+       多端同时触发也只有一条被服务端接受，所有人从同一份序列回放，零失步。
+     · 服务端对 roll/skip 都有「同座次连续事件」幂等，重复发送无害。
+     · ?idlems=毫秒 可覆盖 15 秒（自测用：虚拟时钟下 15 秒一瞬间就过）。 */
+  var idleTimer = null, idleSeat = -1;
+  var IDLE_MS = 15000, AUTO_ROLL_MAX = 5, OFFLINE_MS = 120000;   /* 15 秒初判 / 5 把代博 / 2 分钟彻底断线 */
+  (function () {
+    var m = location.search.match(/[?&]idlems=(\d+)/);
+    if (m) IDLE_MS = parseInt(m[1], 10);
+  })();
+  function disarmIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+  /* 是否"已判定断线"：socket 已断（off），或已经进入代博流程（该座次有 a 标记事件）——
+     用户 2026-09-18 定：15 秒只做第一次判定，判定后每轮到直接处置，不再等。 */
+  function needAuto(s) {
+    return (state.online.off && state.online.off[s] === true) ||
+           (typeof NET !== 'undefined' && NET.autoCount && NET.autoCount(s) > 0);
+  }
+  function armIdle() {
+    disarmIdle();
+    if (!state || !state.online || state.phase === 'over') return;
+    idleSeat = state.current;
+    if (state.busy) return;                        /* busy：等落定（afterRoll）再计时 */
+    /* 已判定断线 → 轮到就直接代博/跳过（解耦到 0ms 定时器，防在事件回放中途重入）；
+       还在线 → 等 15 秒判定。 */
+    idleTimer = setTimeout(idleFire, needAuto(idleSeat) ? 0 : IDLE_MS);
+  }
+  function idleFire() {
+    idleTimer = null;
+    if (!state || !state.online || state.phase === 'over') return;
+    if (state.busy || state.current !== idleSeat) return;
+    if (state.online.skipSeat === idleSeat && state.online.skipAt &&
+        Date.now() - state.online.skipAt < 4000) return;                  /* 已在跳过占位中 */
+    var cnt = NET.autoCount(idleSeat);
+    var autoAt = typeof NET !== 'undefined' && NET.autoAt ? NET.autoAt(idleSeat) : 0;
+    var expired = autoAt > 0 && Date.now() - autoAt >= OFFLINE_MS;        /* 开始代博起 2 分钟 */
+    if (expired || cnt >= AUTO_ROLL_MAX) {
+      /* 彻底断线（2 分钟）或满 5 把：自动跳过（发事件 + 占位，等广播推进） */
+      state.online.skipSeat = idleSeat; state.online.skipAt = Date.now();
+      NET.sendSkip(idleSeat);
+      updateRollButton();
+    } else {
+      /* 代博：只发事件（a 标记），不本地结算 —— 广播回来后所有端（含发起端）统一回放。
+         首次代博 = 15 秒判定时刻（服务端记 autoAt，2 分钟倒计时从这里起算） */
+      NET.sendRoll(idleSeat, randomDice(), true);
+    }
+    armIdle();
   }
 
 function afterRoll(silent) {
@@ -1615,6 +1674,7 @@ function afterRoll(silent) {
     }
   }
   renderAll();
+  armIdle();     /* 轮次推进完 → 给当前座次重新起 45 秒代博/自动跳过计时（联机才有，单机直接返回） */
 }
 
 function enterFinalRound() {
@@ -2376,11 +2436,14 @@ function updateRollButton() {
     var dead = !!(state.online.off && state.online.off[state.current]);
     var pending = state.online.skipSeat === state.current && state.online.skipAt &&
                   (Date.now() - state.online.skipAt < 4000);
-    if (dead && !state.busy) {          /* 轮到的玩家掉线 → 变成「跳过」按钮，别人能接着玩 */
-      b.disabled = !!pending;
-      /* 掉线的偏偏是自己（服务端视角的连接异常）→ 文案要说人话，别喊"对方掉线" */
-      b.textContent = mine ? '连接不稳 · 跳过我这把'
-        : (pending ? '已请求跳过…' : '对方掉线 · 跳过这一把');
+    if (dead && !state.busy) {          /* 轮到的玩家掉线 → 全自动处置，按钮只做展示 */
+      /* 代博（用户 2026-09-18 定，全自动）：前 5 把代博，满 5 把自动跳过 ——
+         每个在线端都能发起（服务端幂等去重），房主掉线自动化照常运转，无需手动按钮。 */
+      var cnt = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(state.current) : 0;
+      b.disabled = true;
+      b.textContent = cnt < 5
+        ? (mine ? '连接不稳' : state.players[state.current].name + ' 掉线') + ' · 代博中（' + cnt + '/5）'
+        : (pending ? '已请求跳过…' : (mine ? '连接不稳' : state.players[state.current].name + ' 一直没回') + ' · 自动跳过中…');
       return;
     }
     b.disabled = !!state.busy || !mine;
@@ -2791,16 +2854,12 @@ function bindEvents() {
     /* 本局已结束 → 这个按钮是「看结算」入口（回去才能点「再来一局」） */
     if (state.phase === 'over') { showResultModal(); return; }
     if (state.busy) { skipAnim(); return; }              /* 动画中再点 = 跳过 */
-    /* 掉线跳过：轮到的玩家掉线时，这个按钮变成「跳过这一把」（服务端校验掉线才允许） */
+    /* 掉线座次：全自动处置（代博 5 把 → 自动跳过），按钮只是展示。点了给个说明。
+       （服务端仍保留 skip 事件校验：代博满 5 把才接受 —— 老客户端/协议测试走这条） */
     if (state.online && state.online.off && state.online.off[state.current]) {
-      var s = state.current;
-      /* 两个人同时点跳过是正常时序：本地压住 4 秒，别把重复请求发出去
-         （服务端也会去重，这里只是别让两个人都以为"世界卡住了"） */
-      if (state.online.skipSeat === s && state.online.skipAt && (Date.now() - state.online.skipAt < 4000)) return;
-      state.online.skipSeat = s; state.online.skipAt = Date.now();
-      NET.sendSkip(s);
-      toast('已请求跳过，等其他人确认…');
-      updateRollButton();
+      var cntS = NET.autoCount ? NET.autoCount(state.current) : 0;
+      toast(cntS < 5 ? '正在替 ta 代博（' + cntS + '/5），满 5 把会自动跳过'
+                     : '马上会自动跳过这一把，不用点');
       return;
     }
     doRoll(null, false);
@@ -3213,7 +3272,7 @@ var NET = (function () {
       cb && cb(null);
     },
     addEvent: function (code, evt, cb) {
-      try { this.sock.send(JSON.stringify({ t: 'roll', s: evt.s, d: evt.d })); } catch (e) { cb && cb('发送失败'); return; }
+      try { this.sock.send(JSON.stringify({ t: 'roll', s: evt.s, d: evt.d, a: evt.a })); } catch (e) { cb && cb('发送失败'); return; }
       cb && cb(null);
     },
     leave: function (code, started, done) {
@@ -3261,8 +3320,16 @@ var NET = (function () {
       if (!r || r.closed) { cb('没有这个房间号'); return; }
       var mine = null;
       for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) mine = r.roster[i];
-      if (r.started && !mine) { cb('这局已经开始了'); return; }
-      if (!mine) { r.roster.push({ id: PEER, name: name }); lwrite(r); }
+      if (r.started && !mine) {
+        /* 与 WS 层同步：页面被杀后 PEER 丢 → 按名字认领同名座次回房。
+           Local 是同机演示，记录里没有可靠的在线标记（off 是 WS 服务端维护的），
+           所以这里放宽为「同名即认领」——本机演示场景没有真正的冒名风险。 */
+        var idx = -1;
+        for (var j = 0; j < r.roster.length; j++)
+          if (r.roster[j].name === name) { idx = j; break; }
+        if (idx < 0) { cb('这局已经开始了'); return; }
+        r.roster[idx].id = PEER; lwrite(r);
+      } else if (!mine) { r.roster.push({ id: PEER, name: name }); lwrite(r); }
       cb(null, r);
     },
     start: function (code, cb) {
@@ -3377,7 +3444,17 @@ var NET = (function () {
         if (!r || r.closed) { cb('没有这个房间号'); return; }
         var mine = null;
         for (var i = 0; i < r.roster.length; i++) if (r.roster[i].id === PEER) mine = r.roster[i];
-        if (r.started && !mine) { cb('这局已经开始了'); return; }
+        if (r.started && !mine) {
+          /* 与 WS 层同步：按名字认领同名座次（TCB 记录无可靠在线标记，放宽为同名即认领） */
+          var idx = -1;
+          for (var j = 0; j < r.roster.length; j++)
+            if (r.roster[j].name === name) { idx = j; break; }
+          if (idx < 0) { cb('这局已经开始了'); return; }
+          r.roster[idx].id = PEER;
+          self.docOf(code).update({ roster: r.roster }).then(function () { cb(null, null); })
+            .catch(function (e) { cb('加入失败: ' + ((e && e.message) || e)); });
+          return;
+        }
         if (!mine) {
           self.docOf(code).update({ roster: self.cmd.addToSet({ id: PEER, name: name }) }).then(function () {
             cb(null, null);   /* roster 以轮询回调为准 */
@@ -3485,6 +3562,7 @@ var NET = (function () {
 
   function exitToSetup() {
     gameAborted = true;    /* 牌桌被收掉：在飞的最后一博落地时别再弹结算/记战绩 */
+    disarmIdle();          /* 离开牌桌：代博/自动跳过计时器必须停 */
     /* 收掉可能开着的弹层（房间解散时结算层若还开着，会盖在设置页上） */
     if (typeof closeModal === 'function') {
       closeModal('modal-result');
@@ -3526,7 +3604,7 @@ var NET = (function () {
   var seenLeftSeq = 0, leftArmed = false;
   function takeLeaver(r) {
     if (!leftArmed) { leftArmed = true; seenLeftSeq = (r.left && r.left.seq) || 0; return null; }
-    if (r.left && r.left.seq !== seenLeftSeq) { seenLeftSeq = r.left.seq; return r.left.name || '有人'; }
+    if (r.left && r.left.seq !== seenLeftSeq) { seenLeftSeq = r.left.seq; return r.left; }
     return null;
   }
 
@@ -3547,18 +3625,20 @@ var NET = (function () {
     }
     lastRoom = r;
     if (state && state.online) applyOff(r.off);      /* 在线状态给 UI（掉线跳过）用 */
-    var leaver = takeLeaver(r);                       /* 主动退出的人（掉线不算） */
+    var leaver = takeLeaver(r);                       /* 主动退出 / 超时被移出的人（takeLeaver 返回 left 对象） */
+    var leaverName = leaver ? (leaver.name || '有人') : null;
+    var leaverKicked = !!(leaver && leaver.kicked);
     if (r.closed) {                                   /* 房间解散（房主关房 / 中途有人退出） */
       if (state && state.online) {
         localLeave();                                 /* 收拾干净：断连接、清"回到房间"记忆 */
-        toast(leaver ? (leaver + ' 退出了房间，本局解散') : '房间已解散');
+        toast(leaver ? (leaverName + (leaverKicked ? ' 掉线太久被移出，本局解散' : ' 退出了房间，本局解散')) : '房间已解散');
         exitToSetup();
       } else if (lobbyCb) lobbyCb(r);
       return;
     }
     /* 房间还在但人少了 = 本局已打完时有人退出（大厅里退出也走这里）→ 必须说一声，
        否则其他人完全看不出人少了（用户报的问题） */
-    if (leaver) toast(leaver + ' 离开了房间');
+    if (leaver) toast(leaverKicked ? (leaverName + ' 掉线太久，已被移出本局') : (leaverName + ' 离开了房间'));
     if (!r.started) {
       var fromGame = startedSeen;                     /* 房主点了「再来一局」：从牌桌回大厅 */
       startedSeen = false; seat = -1;
@@ -3612,6 +3692,7 @@ var NET = (function () {
       toast('联机开局！你是 ' + r.roster[seat].name + (seat === 0 ? '（房主）' : ''));
     }
     renderAll();
+    armIdle();     /* 开局/重连重建完成 → 给当前座次起代博计时 */
   }
 
   var lastRoom = null;                /* 最近一次房间快照：busy 期间挂起的事件靠它重试 */
@@ -3634,7 +3715,13 @@ var NET = (function () {
       if (state.busy) { lastRoom = r; return; }
       var before = state.rollCount;
       NET_APPLY = true;
-      try { if (ev.skip) doSkip(true); else doRoll(ev.d, false); } finally { NET_APPLY = false; }
+      try {
+        if (ev.skip) doSkip(true);
+        else {
+          if (ev.a) pushSystemLog('⏳ 这一把由大家替 ' + state.players[ev.s].name + ' 代博');
+          doRoll(ev.d, false);
+        }
+      } finally { NET_APPLY = false; }
       if (state.rollCount === before) break;          /* 事件没能推进本局（如已结束）→ 别空转 */
       if (state.online) state.online.skipSeat = -1;   /* 事件已落地 → 清掉"跳过中"占位 */
     }
@@ -3728,8 +3815,21 @@ var NET = (function () {
       cur.start(codeNow, function (err) { cb && cb(err); });
     },
     roster: function () { return cur ? cur.read(codeNow) : null; },
-    sendRoll: function (s, dice) { cur.addEvent(codeNow, { s: s, d: dice }, null); },
+    sendRoll: function (s, dice, auto) { cur.addEvent(codeNow, { s: s, d: dice, a: auto ? 1 : undefined }, null); },
     sendSkip: function (seat) { if (cur && cur.skip) cur.skip(seat); },
+    /* 某座次已被代博的把数（事件里 a 标记总数）——「代博满 5 把改自动跳过」的判据，
+       全端从同一份事件序列推导，与服务端校验一致 */
+    autoCount: function (s) {
+      if (!lastRoom || !lastRoom.events) return 0;
+      var n = 0;
+      for (var i = 0; i < lastRoom.events.length; i++)
+        if (lastRoom.events[i].s === s && lastRoom.events[i].a) n++;
+      return n;
+    },
+    /* 某座次首次被代博的时刻（0 = 还没开始）—— 2 分钟"彻底断线"判定的起点 */
+    autoAt: function (s) {
+      return (lastRoom && lastRoom.autoAt && lastRoom.autoAt[s]) || 0;
+    },
     /* 再来一局（联机）：房主清空事件回到大厅，原班人马接着开下一局 */
     rematch: function (cb) {
       var r = cur && cur.read ? cur.read(codeNow) : null;
@@ -3779,7 +3879,10 @@ var NET = (function () {
 
 /* ---------- 联机面板 UI ---------- */
 var NETUI = (function () {
+  /* 玩家名跨会话记住（localStorage）：断线「按名字认领」重连靠它（2026-09-18）——
+     页面被杀后 PEER 身份丢了，服务端靠「同名 + 原座次离线」认人，名字必须与原先一致 */
   var myName = '';
+  try { myName = localStorage.getItem('bbnet_name') || ''; } catch (e) {}
   var linkState = 'ok';       /* 连接状态：ok / down（重连中）/ dead（已放弃） */
   var lobbyRoom = null;       /* 最近一次大厅快照：连接状态变化时用它重渲染 */
   function el(id) { return document.getElementById(id); }
@@ -3872,12 +3975,14 @@ var NETUI = (function () {
     return true;
   }
 
+  function saveName() { try { localStorage.setItem('bbnet_name', myName); } catch (e) {} }
   function doCreate() {
     myName = el('net-name').value.trim() || myName;
     if (maybeJump('create')) return;
     el('net-body').innerHTML = '<p class="net-note" style="text-align:center;padding:30px 0">正在创建房间…</p>';
     NET.create(myName, function (err, r, kindName) {
       if (err) { renderMenu(err); return; }
+      saveName();
       renderLobby(r, kindName);
     });
   }
@@ -3889,10 +3994,12 @@ var NETUI = (function () {
     NET.join(code, myName, function (err, r, kindName) {
       if (err) {
         /* 房间已经不存在/已散 → 清掉"回到房间 XXXX"记忆，否则这个按钮会一直挂在那儿，
-           点一次错一次（用户会以为是自己操作有问题） */
+           点一次错一次（用户会以为是自己操作有问题）。
+           「这局已经开始了」不清 —— 房间还在，等认领条件满足（改回原名）还能回。 */
         if (/没有这个房间号|这局已经散了/.test(err) && NET.forgetRoom) NET.forgetRoom();
         renderMenu(err); return;
       }
+      saveName();
       renderLobby(r || NET._local.read(code) || { code: code, roster: [{ id: '', name: '?' }] }, kindName);
     });
   }
