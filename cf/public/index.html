@@ -2918,10 +2918,20 @@ function bindEvents() {
            期间若代博抢先落地（轮次已推进）→ 这次不掷，下一轮正常博。 */
         NET.sendCancel(sNow);
         toast('已取消托管 · 这一把你自己博！');
+        updateRollButton();       /* 立即刷新：按钮马上从「取消代博」切回正常（不等广播） */
         var mySeat = sNow;
         setTimeout(function () {
           if (!state || !state.online || state.phase === 'over') return;
-          if (state.current !== mySeat) return;
+          if (state.current !== mySeat) { updateRollButton(); return; }   /* 这一把已被代博走 → 下一轮正常博 */
+          /* 守卫：本地还有未回放的事件（别人刚代博/跳过了）→ 别抢，等回放完再说 */
+          if (typeof NET.lastRoomSnap === 'function') {
+            var rr = NET.lastRoomSnap();
+            if (rr && rr.events && state.rollCount !== rr.events.length) {
+              toast('这一把刚好被代博了，下一轮你自己博');
+              updateRollButton();
+              return;
+            }
+          }
           if (state.busy) skipAnim();
           doRoll(null, false);
         }, 250);
@@ -3942,6 +3952,8 @@ var NET = (function () {
     autoCount: function (s) {
       return (lastRoom && lastRoom.auto && lastRoom.auto[s] && lastRoom.auto[s].cnt) || 0;
     },
+    /* 最近一次房间快照（未回放事件的积压量判断用） */
+    lastRoomSnap: function () { return lastRoom; },
     /* 某座次首次被代博的时刻（0 = 还没开始）—— 2 分钟"彻底断线"判定的起点 */
     autoAt: function (s) {
       return (lastRoom && lastRoom.auto && lastRoom.auto[s] && lastRoom.auto[s].at) || 0;

@@ -8,7 +8,7 @@ const path = require('path');
 const { WebSocketServer } = require('C:/Users/24431/.workbuddy/binaries/node/workspace/node_modules/ws');
 
 const ROOT = 'C:/Users/24431/Desktop/博饼/cf/public';
-const RoomDO = { IDLE_PROXY_MS: 15000 };   /* 与 Worker 对齐：15 秒无操作判定 */
+const RoomDO = { IDLE_PROXY_MS: Number(process.env.IDLE_PROXY_MS) || 15000 };   /* 与 Worker 对齐（测试可覆盖） */
 const rooms = new Map();   /* code -> rec */
 
 function marks(rec) {
@@ -175,7 +175,7 @@ server.on('upgrade', (req, socket, head) => {
         }
         r.events.push({ s: seat, d: m.d.slice(), a: m.a ? 1 : undefined });   /* a=1 代博（仅展示用） */
         r.lastAct = r.lastAct || {};
-        r.lastAct[seat] = Date.now();
+        if (!m.a) r.lastAct[seat] = Date.now();   /* 与 Worker 同步：代博不算玩家活动 */
         if (!m.a && r.cancelled) delete r.cancelled[seat];   /* 本人正常掷骰 = 取消托管自然完成 */
         broadcast(code);
       } else if (m.t === 'skip') {
@@ -186,7 +186,8 @@ server.on('upgrade', (req, socket, head) => {
         {   /* 与 Worker 同步：off 或 15 秒无操作才可跳 */
           const la = r.lastAct ? r.lastAct[seat] : undefined;
           const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
-          if (!r.off || (!r.off[seat] && !idleOK)) return;
+          const st5 = r.auto && r.auto[seat] && r.auto[seat].cnt >= 5;
+          if (!r.off || (!r.off[seat] && !idleOK && !st5)) return;   /* 与 Worker 同步：满 5 把直接可跳 */
         }
         const last = r.events[r.events.length - 1];
         if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */

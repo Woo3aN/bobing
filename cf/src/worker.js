@@ -221,7 +221,7 @@ export class RoomDO {
       }
       this.rec.events.push({ s: seat, d: m.d.slice(), a: m.a ? 1 : undefined });   /* a=1 代博（仅展示用） */
       this.rec.lastAct = this.rec.lastAct || {};
-      this.rec.lastAct[seat] = Date.now();   /* 该座次最近操作时间：15 秒无操作 = 其他人可代博/跳过 */
+      if (!m.a) this.rec.lastAct[seat] = Date.now();   /* 只记**玩家本人**操作；代博不算（否则跳不过去） */
       if (!m.a && this.rec.cancelled) delete this.rec.cancelled[seat];   /* 本人正常掷骰 = 取消托管自然完成 */
       await this.save();
       this.broadcast();
@@ -238,7 +238,8 @@ export class RoomDO {
       if (seat < 0 || seat >= this.rec.roster.length) return;
       const la = this.rec.lastAct ? this.rec.lastAct[seat] : undefined;
       const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
-      if (!this.rec.off || (!this.rec.off[seat] && !idleOK)) return;
+      const st5 = this.rec.auto && this.rec.auto[seat] && this.rec.auto[seat].cnt >= 5;
+      if (!this.rec.off || (!this.rec.off[seat] && !idleOK && !st5)) return;   /* 满 5 把 → 直接可跳 */
       const last = this.rec.events[this.rec.events.length - 1];
       if (last && last.skip && last.s === seat) return;      /* 已跳过 → 忽略重复请求 */
       if (this.rec.events.length >= 5000) return;            /* 兜底上限，同 roll */

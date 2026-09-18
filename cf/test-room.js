@@ -202,6 +202,31 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   let lateErr = null;
   try { await connect(code2, 'join', '丙', 'qG2'); } catch (e) { lateErr = e.message; }
   ok('〔2 分钟后〕重连被拒（403）', /403/.test(lateErr || ''), lateErr || '');
+
+  /* ===== 假死场景（socket 在线、人不动）跳过不能被 lastAct 卡住 =====
+     用户 2026-09-19 实测 bug：代博期间每次掷骰刷新了 lastAct → 满 5 把要跳过时
+     服务端按"15 秒内动过"拒跳 → 永久卡在「已请求跳过」。修法：代博不刷 lastAct
+     + 满 5 把直接可跳（cnt>=5）。这里用真实 15 秒等待复现"无操作"条件。 */
+  const code3 = String(1000 + Math.floor(Math.random() * 9000));
+  const h3 = await connect(code3, 'create', '房主', 'rH');
+  const g3c = await connect(code3, 'join', '丁', 'rG');   /* 丁在线但一直不动 */
+  await sleep(300);
+  send(h3, { t: 'start' });
+  await sleep(400);
+  /* 丁的 lastAct 停在 start 时刻；等过 15 秒判定窗口 */
+  await sleep(15500);
+  for (let i = 0; i < 5; i++) {
+    send(h3, { t: 'roll', s: 1, d: [1, 2, 3, 4, 5, 6], a: 1 });
+    send(h3, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6] });
+  }
+  await waitFor(() => lastRoom(h3).events.length === 10);
+  ok('假死代博：座次在线也能替其代博 5 把',
+    lastRoom(h3).events.length === 10 && lastRoom(h3).auto && lastRoom(h3).auto[1] && lastRoom(h3).auto[1].cnt === 5,
+    'events=' + lastRoom(h3).events.length + ' auto=' + JSON.stringify(lastRoom(h3).auto));
+  send(h3, { t: 'skip', s: 1 });
+  const skipOK = await waitFor(() => lastRoom(h3).events.length === 11, 5000);
+  ok('假死代博满 5 把后跳过被接受（不被 lastAct 卡死）', skipOK, 'events=' + lastRoom(h3).events.length);
+  g3c.ws.terminate();
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }
