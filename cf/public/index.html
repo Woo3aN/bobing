@@ -808,7 +808,7 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
       <li data-page-node-id="XdOzlMGtAcDjcO6zDAZtBh">两方完全同级同点：不算夺，先博到的人保留。</li>
     </ul>
     <h4 data-page-node-id="YIVd0qKBo9j3gtcZXCcHaC">收官轮</h4>
-    <p data-page-node-id="5BNab1pqhtDrtJmhFMoi2E">全部奖项都有主（含状元）之后，还有<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">最后一轮（收官轮）</b>：从<b>博出最后一个奖项那个人的下一位</b>开始，每人再各博一次；博到状元级仍按「最后博出为准」互换，其他科名只作展示；转完一整圈即结算。若非状元的 <span id="rules-nonzy">62</span> 份发完时状元还没有主，就继续正常博弈，直到有人博出状元。</p>
+    <p data-page-node-id="5BNab1pqhtDrtJmhFMoi2E">当<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">最后一个奖项有了主</b>——无论是非状元的 <span id="rules-nonzy">62</span> 份里最后一份被博走，还是只剩状元没出时有人博出状元——牌局都<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">不就此结束</b>：从<b>博出它那个人的下一位</b>开始<b data-page-node-id="kHVrAFktBeCCAh5ShZH0R6">最后一轮（收官轮）</b>，每人再各博一次。收官轮里博到状元级仍按「最后博出为准」互换，其他科名只作展示；转回得奖者本人即结算。收官轮转完若状元还没有主，就再补一轮收官轮，直到博出为止。</p>
     <h4 data-page-node-id="J4igrP9OLHzkv2hkAXxhHp">各地口径</h4>
     <p data-page-node-id="COE95vN4MRV47GKhpcnx5x">古法有「六抔红 &gt; 五红 &gt; 五子 &gt; 插金花」的排法，厦门现行玩法公认<b data-page-node-id="3Bu2KkGHKmWsmHifAA55kj">状元插金花最大</b>，本游戏按后者执行。关于“五子登科”内部比大小，各地亦有分别，本桌按“比带点”执行。</p>
   </div>
@@ -956,22 +956,23 @@ function evaluate(dice) {
   function sixOf(ex) { for (var f = 1; f <= 6; f++) { if (ex.indexOf(f) < 0 && c[f] === 6) return f; } return 0; }
   function fiveOf(ex) { for (var f = 1; f <= 6; f++) { if (ex.indexOf(f) < 0 && c[f] === 5) return f; } return 0; }
   function fourOf(ex) { for (var f = 1; f <= 6; f++) { if (ex.indexOf(f) < 0 && c[f] === 4) return f; } return 0; }
-  function G(key, kicker, label) {
+  function G(key, kicker, label, short) {
     var g = Object.create(GRADE[key]);
     g.kicker = kicker || 0;
     g.label = label || g.name;
+    g.short = short || g.name;   /* 简称：夺状元描述用（用户 2026-09-18 定：「以五子带三夺走了 XX 的状元带四」） */
     return g;
   }
   // ---- 状元级，由高到低 ----
-  if (k4 === 4 && c[1] === 2) return G('jinHua', 0, '四粒红四带两粒红一');
-  if (k4 === 6) return G('liuPouHong', 0, '六粒红四·满堂通红');
-  if (c[1] === 6) return G('bianDiJin', 0, '六粒红一');
+  if (k4 === 4 && c[1] === 2) return G('jinHua', 0, '四粒红四带两粒红一', '状元插金花');
+  if (k4 === 6) return G('liuPouHong', 0, '六粒红四·满堂通红', '六抔红');
+  if (c[1] === 6) return G('bianDiJin', 0, '六粒红一', '遍地锦');
   var f6 = sixOf([1, 4]);
-  if (f6) return G('heiLiuBo', f6, '六粒' + cn(f6) + '·六六大顺');
-  if (k4 === 5) { var kk = sum - 20; return G('wuHong', kk, '五粒红四带' + cn(kk)); }
+  if (f6) return G('heiLiuBo', f6, '六粒' + cn(f6) + '·六六大顺', '黑六勃');
+  if (k4 === 5) { var kk = sum - 20; return G('wuHong', kk, '五粒红四带' + cn(kk), '五红带' + cn(kk)); }
   var f5 = fiveOf([4]);
-  if (f5) { var k5 = sum - 5 * f5; return G('wuZi', k5, '五粒' + cn(f5) + '带' + cn(k5)); }
-  if (k4 === 4) { var kd = sum - 16; return G('siDianHong', kd, '状元带' + cn(kd)); }
+  if (f5) { var k5 = sum - 5 * f5; return G('wuZi', k5, '五粒' + cn(f5) + '带' + cn(k5), '五子带' + cn(k5)); }
+  if (k4 === 4) { var kd = sum - 16; return G('siDianHong', kd, '状元带' + cn(kd), '状元带' + cn(kd)); }
   // ---- 非状元 ----
   if (isSeq) return G('duiTang', 0, '一二三四五六各一点');
   if (k4 === 3) return G('sanHong', 0, '三粒红四');
@@ -1506,10 +1507,11 @@ function applyRoll(pIdx, dice, grade) {
        就从所有人的「最后状元」里重算归属（严格大于才换人，平局保留原主）。 */
     var prevHolder = state.zyHolder === null ? null : state.players[state.zyHolder];
     var prevLabel = state.zyGrade ? state.zyGrade.label : null;
+    var prevShort = state.zyGrade ? state.zyGrade.short : null;
     var wasHolder = prevHolder !== null && prevHolder.id === p.id;   /* ⚠️ prevHolder 是对象，别拿它直接比 p.id */
     var selfUp = wasHolder && state.zyGrade ? compareGrade(grade, state.zyGrade) : 0;
-    p.zyLast = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label, dice: dice.slice(),
-      seq: state.rollCount + 1 };   /* 平手裁决用：同级平手时先博者保留 */
+    p.zyLast = { tier: grade.tier, kicker: grade.kicker, name: grade.name, label: grade.label, short: grade.short,
+      dice: dice.slice(), seq: state.rollCount + 1 };   /* 平手裁决用：同级平手时先博者保留 */
     var bestP = null, bestG = null;
     for (var zi = 0; zi < state.players.length; zi++) {
       var pl = state.players[zi];
@@ -1520,7 +1522,7 @@ function applyRoll(pIdx, dice, grade) {
     }
     var isHolder = !!bestP && bestP.id === p.id;
     state.zyHolder = bestP ? bestP.id : null;
-    state.zyGrade = bestG ? { tier: bestG.tier, kicker: bestG.kicker, name: bestG.name, label: bestG.label } : null;
+    state.zyGrade = bestG ? { tier: bestG.tier, kicker: bestG.kicker, name: bestG.name, label: bestG.label, short: bestG.short } : null;
     state.zyDice = bestP ? bestP.zyLast.dice : null;
     for (zi = 0; zi < state.players.length; zi++)
       state.players[zi].cakes.zhuangyuan = (bestP && state.players[zi].id === bestP.id) ? 1 : 0;
@@ -1538,7 +1540,7 @@ function applyRoll(pIdx, dice, grade) {
     } else if (isHolder) {
       state.zyStealCount++;
       entry.action = '夺状元';
-      entry.msg = '以「' + grade.label + '」夺走了 ' + prevHolder.name + ' 的状元！';
+      entry.msg = '以「' + grade.short + '」夺走了 ' + prevHolder.name + ' 的「' + (prevShort || '状元') + '」！';
     } else if (wasHolder) {
       entry.action = '失状元';
       entry.msg = '又博出' + grade.name + '（' + grade.label + '），自己的状元降级 —— ' +
@@ -3083,6 +3085,11 @@ var NET = (function () {
     open: function (code, op, name, cb, timeoutMs) {
       var self = this, settled = false, s;
       self.aborted = false;    /* 本轮连接已作废（超时）：迟到的 onclose 不许再叠一层 reconnect */
+      /* 旧 socket 先收摊：wake() 立即重连可能与 reconnect() 的 3 秒定时器撞车，
+         不关旧的会双开连接，旧连接迟到的 onclose 还会再叠一层重连。 */
+      if (self.sock) {
+        try { self.sock.onclose = null; self.sock.onmessage = null; self.sock.close(); } catch (e) {}
+      }
       var tov = location.search.match(/[?&]wstimeout=(\d+)/);
       var effTo = tov ? parseInt(tov[1], 10) : (timeoutMs || 8000);
       try { s = new WebSocket(self.ep(code, op, name)); } catch (e) { cb('房间服务地址无效'); return; }
@@ -3145,6 +3152,26 @@ var NET = (function () {
           setLink('ok');          /* 连回来了（漏掉的事件由首帧快照派发补齐） */
         });
       }, 3000);
+    },
+    /* 切回前台唤醒（用户 2026-09-18 实测：切出去看个微信，回来还是掉线，两边不同步）：
+       iOS/安卓切后台几秒就把 WebSocket 掐了 —— 回来后 3 秒定时器重连太慢，
+       后台期间定时器被冻结还可能把 5 次重试耗尽直接进 dead。
+       回前台 = 用户主动回来了，给满血重试：retry 清零 + 立即重连，不等定时器。
+       漏掉的事件由重连首帧全量快照补齐，两端自然重新同步。 */
+    wake: function () {
+      var self = this;
+      if (self.wantClose || !self.codeNow || !self.lastRec || self.lastRec.closed) return;
+      var st = self.sock ? self.sock.readyState : 3;
+      if (st === 0 || st === 1) {
+        /* 连接还在/正在握手：交给既有链路（ping 保活 / open 超时兜底），别叠加 */
+        if (self.retry) self.retry = 0;
+        return;
+      }
+      self.retry = 0;
+      self.open(self.codeNow, 'join', self.nameNow, function (err) {
+        if (err) { self.reconnect(); return; }
+        setLink('ok');
+      });
     },
     create: function (name, cb) {
       var self = this, tries = 0;
@@ -3424,10 +3451,26 @@ var NET = (function () {
   var seat = -1, codeNow = null, startedSeen = false, lobbyCb = null;
   var wantFast = false;
 
-  /* 记住"我在哪个房间"：刷新页面后能一键回到房间（sessionStorage = 只在本标签页有效） */
-  function saveSession(code) { try { sessionStorage.setItem('bbnet_room', code); } catch (e) {} }
-  function readSession() { try { return sessionStorage.getItem('bbnet_room') || ''; } catch (e) { return ''; } }
-  function clearSession() { try { sessionStorage.removeItem('bbnet_room'); } catch (e) {} }
+  /* 记住"我在哪个房间"：刷新页面后能一键回到房间。
+     双保险（用户 2026-09-18：iOS 上 sessionStorage 不可靠——微信等 WebView 切后台被杀后
+     重建页面就丢了，安卓在、iOS 不在）：sessionStorage（本标签页精确）+ URL hash（#r=1234，
+     刷新/WebView 重建/复制链接都还在，丢了 sessionStorage 时兜底）。 */
+  function saveSession(code) {
+    try { sessionStorage.setItem('bbnet_room', code); } catch (e) {}
+    try { history.replaceState(null, '', '#r=' + code); } catch (e) {}
+  }
+  function readSession() {
+    try { var s = sessionStorage.getItem('bbnet_room'); if (s) return s; } catch (e) {}
+    var m = (location.hash || '').match(/[#&]r=(\d{4})/);
+    return m ? m[1] : '';
+  }
+  function clearSession() {
+    try { sessionStorage.removeItem('bbnet_room'); } catch (e) {}
+    try {
+      if (/(^|[&#])r=\d{4}/.test(location.hash || ''))
+        history.replaceState(null, '', location.pathname + location.search);
+    } catch (e) {}
+  }
 
   function pick() {
     /* 探针必须确定性（同步 tick 驱动，不碰网络）；file:// 的 null 源被网关 CORS
@@ -3723,6 +3766,15 @@ var NET = (function () {
     _tcb: TCB,
     _ws: function () { return WS; }                                     /* 测试钩子：断线重连状态可观测 */
   };
+  /* 切回前台立即唤醒连接（仅 WS 传输层）：iOS/安卓切后台（看微信）几秒就把 WebSocket 掐了，
+     回前台后不等 3 秒定时器，立即重连 + 全量快照补齐（见 WS.wake）。
+     TCB 轮询的 setInterval 会在回前台后自行恢复、按快照 diff 补齐，无需处理。 */
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) return;
+      if (cur === WS) WS.wake();
+    });
+  }
 })();
 
 /* ---------- 联机面板 UI ---------- */
@@ -4259,9 +4311,14 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     window.__game.rollForced([4, 4, 4, 4, 5, 6]);            /* B：四点红带 11 > 9 */
     ok('B 博四点红带11 → 夺走 A 的状元', st.zyHolder === 1 && st.players[1].cakes.zhuangyuan === 1,
       'zyHolder=' + st.zyHolder);
+    /* 夺状元描述（用户 2026-09-18 定）：双方都带具体状元名称（状元带几/五子带几/插金花…） */
+    ok('夺状元描述 = 以「新名称」夺走了 前主 的「旧名称」',
+      st.log[0].msg === '以「状元带十一」夺走了 A 的「状元带九」！', st.log[0].msg);
     ok('被夺的 A 明细里状元被清空', st.players[0].cakes.zhuangyuan === 0, st.players[0].cakes.zhuangyuan);
     window.__game.rollForced([4, 4, 4, 4, 1, 1]);            /* C：插金花 → 最大 */
     ok('C 博插金花 → 夺走状元', st.zyHolder === 2 && st.players[2].cakes.zhuangyuan === 1, 'zyHolder=' + st.zyHolder);
+    ok('插金花夺状元描述同样带双方名称',
+      st.log[0].msg === '以「状元插金花」夺走了 B 的「状元带十一」！', st.log[0].msg);
     ok('B 的状元被清空', st.players[1].cakes.zhuangyuan === 0, st.players[1].cakes.zhuangyuan);
     window.__game.rollForced([4, 4, 4, 4, 1, 2]);            /* D：四点红带3 → 小于插金花 */
     ok('更小的状元不能夺', st.zyHolder === 2 && st.players[3].cakes.zhuangyuan === 0, 'zyHolder=' + st.zyHolder);
@@ -4275,6 +4332,8 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     window.__game.rollForced([1, 2, 3, 5, 6, 6]);            /* B：无红四，空手 */
     ok('〔最后为准〕A 持五红带6', st3.zyHolder === 0 && st3.zyGrade.kicker === 6,
       'zyHolder=' + st3.zyHolder + ' kicker=' + (st3.zyGrade && st3.zyGrade.kicker));
+    ok('〔最后为准〕zyGrade 带简称（五红带六）', st3.zyGrade && st3.zyGrade.short === '五红带六',
+      'short=' + (st3.zyGrade && st3.zyGrade.short));
     window.__game.rollForced([4, 4, 4, 4, 4, 3]);            /* A：再博五红带3 → 自己降级 */
     ok('〔最后为准〕持有者自己博出更小的状元 → 降级（zyGrade 跟着变）',
       st3.zyHolder === 0 && st3.zyGrade.kicker === 3,

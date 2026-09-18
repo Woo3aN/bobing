@@ -14,6 +14,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # 临时 user-data-dir 放项目内的 .workbuddy/ 下：Git Bash 的 /tmp 往往不可写，
 # 而项目目录一定可写（本机踩过：TMPDIR=/tmp → mkdir 权限拒绝 → 13 组全"解析失败"）
 UD="${BOBING_PROBE_UD:-$ROOT/.workbuddy/probe-ud}"
+# ⚠️ UD 也必须转成 C:/ 风格再传 Chrome：$ROOT 是 MSYS 风格（/c/...），bash 的 mkdir 认、
+# Chrome 不认（弹「无法创建数据目录」且 user-data-dir 建不起来）。URLROOT 同理（下一行）。
+if command -v cygpath >/dev/null 2>&1; then UD="$(cygpath -m "$UD")"; fi
 mkdir -p "$UD" || { echo "无法创建 $UD"; exit 1; }
 # Windows 版 Chrome 要 `file:///C:/...`（MSYS 风格的 /c/... 它不认）→ 用 cygpath 转
 if command -v cygpath >/dev/null 2>&1; then URLROOT="$(cygpath -m "$ROOT")"; else URLROOT="$ROOT"; fi
