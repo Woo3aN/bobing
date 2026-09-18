@@ -179,13 +179,16 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     if (btnTxt.indexOf('代博中') < 0) fail('掉线后掷骰按钮没有变成「代博中」，实际文案：' + btnTxt);
     log('[12] 掉线后按钮自动变成「' + btnTxt + '」✓（无新事件也能触发重渲染）');
 
-    /* [13] 全自动代博：idlems=3000 → 3 秒后任一在线端代博（发 a 标记事件）→ 两端回放推进 */
-    const skipOk = await waitFor(() => g1.state().rollCount === 6, 15000);
-    if (!skipOk) fail('自动代博没有生效 rc=' + g1.state().rollCount);
-    const cntAfter = N1.autoCount ? N1.autoCount(deadSeat) : -1;
+    /* [13] 全自动代博：idlems=3000 → 3 秒后任一在线端代博（发 a 标记事件）→ 两端回放推进。
+       ⚠️ 断言只看「rc 推进 + a 标记」：虚拟时钟会把 2 分钟彻底断线判定瞬间吹过、
+       进入"每轮自动跳过"的合法循环（rc 快速上涨），真实手机不会这样。 */
+    const rc0 = g1.state().rollCount;
+    const autoOk = await waitFor(() => g1.state().rollCount > rc0 || N1.autoCount(deadSeat) >= 1, 10000);
+    if (!autoOk) fail('自动代博没有生效 rc=' + g1.state().rollCount + ' (base ' + rc0 + ')');
+    const cntAfter = N1.autoCount(deadSeat);
     if (cntAfter < 1) fail('代博事件没有 a 标记 autoCount=' + cntAfter);
-    log('[13] 自动代博生效，本端 rollCount=6，代博计数=' + cntAfter + ' ✓');
-    /* [14] 掉线方"回来"：恢复重连 → 静默回放补齐 → 两端一致 */
+    log('[13] 自动代博生效 rc=' + g1.state().rollCount + '（base ' + rc0 + '），代博计数=' + cntAfter + ' ✓');
+    /* [14] 掉线方"回来"：恢复重连 → 静默回放补齐 → 两端一致（长掉线态不留到虚拟 2 分钟后） */
     N2._ws().wantClose = false;
     N2._ws().reconnect();
     let back = false;
@@ -194,7 +197,7 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
       if (g2.state()) { if (g2.state().busy) g2.skipAnim(); }
       if (g2.state() && g1.state() && g2.state().rollCount === g1.state().rollCount && !g2.state().busy) { back = true; break; }
     }
-    if (!back) fail('掉线方重连后没补齐跳过事件 rc=' + (g2.state() && g2.state().rollCount) + ' vs ' + g1.state().rollCount);
+    if (!back) fail('掉线方重连后没补齐事件 rc=' + (g2.state() && g2.state().rollCount) + ' vs ' + g1.state().rollCount);
     log('[14] 掉线方自动重连并补齐事件，两端 rollCount=' + g1.state().rollCount + ' ✓');
 
     /* [15] 再来一局（reset）：房主清空房间 → 双方回大厅 → 再开一局 → 照常同步 */

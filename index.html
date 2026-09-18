@@ -1481,8 +1481,11 @@ function doRoll(diceOrNull, silent, auto) {
   return res;
 }
 
-/* 落定后才播的奖项音效（'fanfare' 状元级 / 'award' 得饼 / 'empty' 空手） */
+/* 落定后才播的奖项音效（'fanfare' 状元级 / 'award' 得饼 / 'empty' 空手）
+   REPLAY_QUIET：重连整局重建时置 true —— 静默回放（不响铃、不刷日志），只呈现最终状态 */
+var REPLAY_QUIET = false;
 function playSoundFor(res) {
+  if (REPLAY_QUIET) return;
   if (!res || !res.sound) return;
   if (res.sound === 'fanfare') Sfx.fanfare();
   else if (res.sound === 'award') Sfx.award(res.tier);
@@ -1693,6 +1696,7 @@ function nextFinalRound() {
 }
 
 function pushSystemLog(html) {
+  if (REPLAY_QUIET) return;    /* 整局重建回放：不逐把刷日志，结束后只给一条汇总 */
   state.log.unshift({ sys: true, html: html });
 }
 
@@ -2854,12 +2858,15 @@ function bindEvents() {
     /* 本局已结束 → 这个按钮是「看结算」入口（回去才能点「再来一局」） */
     if (state.phase === 'over') { showResultModal(); return; }
     if (state.busy) { skipAnim(); return; }              /* 动画中再点 = 跳过 */
-    /* 掉线座次：全自动处置（代博 5 把 → 自动跳过），按钮只是展示。点了给个说明。
-       （服务端仍保留 skip 事件校验：代博满 5 把才接受 —— 老客户端/协议测试走这条） */
+    /* 掉线座次：全自动处置（15 秒判定 → 代博 5 把 → 自动跳过）。按钮平时只是展示；
+       点击作为兜底：直接发 skip 事件（服务端校验 off 才接受，幂等），自动化正常时它也会被幂等吸收 */
     if (state.online && state.online.off && state.online.off[state.current]) {
-      var cntS = NET.autoCount ? NET.autoCount(state.current) : 0;
-      toast(cntS < 5 ? '正在替 ta 代博（' + cntS + '/5），满 5 把会自动跳过'
-                     : '马上会自动跳过这一把，不用点');
+      var sNow = state.current;
+      if (state.online.skipSeat === sNow && state.online.skipAt && (Date.now() - state.online.skipAt < 4000)) return;
+      state.online.skipSeat = sNow; state.online.skipAt = Date.now();
+      NET.sendSkip(sNow);
+      toast('已请求跳过这一把…');
+      updateRollButton();
       return;
     }
     doRoll(null, false);
@@ -3675,6 +3682,7 @@ var NET = (function () {
     if (rb0) rb0.textContent = '退出房间';   /* 联机时它就是"退房"（中途退出 = 本局解散） */
     if (resync) {
       NET_APPLY = true;
+      REPLAY_QUIET = true;   /* 静默回放：不逐把刷日志/响音效，只定位到最新状态（用户 2026-09-19 定） */
       try {
         for (var i = 0; i < r.events.length; i++) {
           if (r.events[i].skip) doSkip(true); else doRoll(r.events[i].d, true);
@@ -3683,10 +3691,14 @@ var NET = (function () {
         /* 整局重建失败 = 房间数据与本地规则对不上，只能退出（别留一个半截的牌桌）。
            ⚠️ 必须记进 __errors：静默吞掉的话，线上只会看到"牌桌突然清空"，无法定位。 */
         NET_APPLY = false;
+        REPLAY_QUIET = false;
         if (window.__logErr) window.__logErr('联机整局回放失败: ' + ((e && e.stack) || e));
         localLeave(); toast('同步失败，请重新加入'); exitToSetup(); return;
       }
-      finally { NET_APPLY = false; }
+      finally { NET_APPLY = false; REPLAY_QUIET = false; }
+      /* 只呈现"你在哪"：清掉回放期间可能漏进的系统行，补一条汇总（applyRoll 的结果日志被静默了） */
+      if (r.events.length > 0)
+        pushSystemLog('⏩ 已同步到第 ' + r.events.length + ' 把 —— 错过的 ' + r.events.length + ' 把已自动处理完毕');
       if (!quiet) toast('已重新加入房间 ' + r.code + '，同步了 ' + r.events.length + ' 把');
     } else {
       toast('联机开局！你是 ' + r.roster[seat].name + (seat === 0 ? '（房主）' : ''));
@@ -4215,11 +4227,16 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
             var s1 = g1.state(), s3 = g3.state();
             var on3b = g3.net.state();
             if (on3 && on3b) {
+              /* 重连回放已静默化（2026-09-19）：g3 的 log 只有一条「⏩ 已同步到第 N 把」汇总，
+                 不再与在场玩家逐条一致 —— 状态（pool/rollCount/phase/current）仍必须完全一致 */
               var same = s1.rollCount === s3.rollCount && s1.phase === s3.phase &&
                 JSON.stringify(s1.pool) === JSON.stringify(s3.pool) &&
-                s1.log.length === s3.log.length && s1.current === s3.current;
-              ok('〔联机〕重连后静默回放：状态与在场玩家完全一致（同步了 ' + s3.rollCount + ' 把）', same,
-                'rollCount ' + s1.rollCount + '/' + s3.rollCount + ' log ' + s1.log.length + '/' + s3.log.length +
+                s1.current === s3.current &&
+                s3.log.length >= 1 && s3.log[0].sys === true &&
+                String(s3.log[0].html).indexOf('已同步到第') >= 0;
+              ok('〔联机〕重连静默回放：状态一致 + 只留一条同步汇总（同步了 ' + s3.rollCount + ' 把）', same,
+                'rollCount ' + s1.rollCount + '/' + s3.rollCount + ' current ' + s1.current + '/' + s3.current +
+                ' log0=' + (s3.log[0] && String(s3.log[0].html).slice(0, 30)) +
                 ' jerr=' + jerr3 + ' seat=' + (s3.online ? s3.online.seat : 'none'));
               g3.net.tick(); g3.net.tick();
               ok('〔联机〕重复事件防护：快照重放不会重复计把数',
