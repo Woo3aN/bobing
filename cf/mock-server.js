@@ -8,12 +8,15 @@ const path = require('path');
 const { WebSocketServer } = require('C:/Users/24431/.workbuddy/binaries/node/workspace/node_modules/ws');
 
 const ROOT = 'C:/Users/24431/Desktop/博饼/cf/public';
+const RoomDO = { IDLE_PROXY_MS: 15000 };   /* 与 Worker 对齐：15 秒无操作判定 */
 const rooms = new Map();   /* code -> rec */
 
 function marks(rec) {
   const live = new Set();
   wss.clients.forEach(c => { if (c.roomCode === rec.code && c.readyState === 1 && c.pid) live.add(c.pid); });
   rec.off = rec.roster.map(p => !live.has(p.id));
+  if (rec.cancelled) for (let i = 0; i < rec.off.length; i++)
+    if (rec.off[i]) delete rec.cancelled[i];   /* 与 Worker 同步：又掉线 → 重新自动托管 */
   return rec;
 }
 function broadcast(code) {
@@ -54,7 +57,10 @@ const server = http.createServer((req, res) => {
     const rec = rooms.get(url.searchParams.get('code'));
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify(rec
-      ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length }
+      ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length,
+          roster: rec.roster.map(p => ({ id: p.id, name: p.name })), off: rec.off || [],
+          auto: rec.auto || {}, cancelled: rec.cancelled || {},
+          offlineMs: Number(process.env.OFFLINE_MS) || 120000 }
       : { exists: false }));
     return;
   }
@@ -111,7 +117,7 @@ server.on('upgrade', (req, socket, head) => {
     if (!rec || rec.closed) return deny('No room', 404);
     /* 与 Worker 同步：开始代博起 2 分钟没回来 = 彻底断线，不再放行重连/认领 */
     const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
-    const kicked = (i) => rec.autoAt && rec.autoAt[i] && Date.now() - rec.autoAt[i] >= OFFLINE_MS;
+    const kicked = (i) => !!(rec.auto && rec.auto[i] && Date.now() - rec.auto[i].at >= OFFLINE_MS);
     const mineIdx = rec.roster.findIndex(p => p.id === pid);
     if (mineIdx >= 0 && kicked(mineIdx))
       return deny('Kicked', 403);
@@ -122,7 +128,7 @@ server.on('upgrade', (req, socket, head) => {
       const idx = rec.roster.findIndex((p, i) => p.name === name && rec.off && rec.off[i] && !kicked(i));
       if (idx < 0) return deny('Started', 403);
       rec.roster[idx].id = pid;
-      if (rec.autoAt) delete rec.autoAt[idx];
+      if (rec.auto) delete rec.auto[idx];
     } else if (!mine) {
       rec.roster.push({ id: pid, name });
     }
@@ -133,7 +139,7 @@ server.on('upgrade', (req, socket, head) => {
     marks(rec);
     {   /* 回线 = 恢复正常：清掉该座次的代博计时（与 Worker 同步） */
       const backIdx = rec.roster.findIndex(p => p.id === pid);
-      if (backIdx >= 0 && rec.autoAt) delete rec.autoAt[backIdx];
+      if (backIdx >= 0 && rec.auto) delete rec.auto[backIdx];
     }
     ws.send(JSON.stringify({ t: 'room', r: rec }));
     broadcast(code);
@@ -148,48 +154,75 @@ server.on('upgrade', (req, socket, head) => {
         if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
         if (pid) {
           const ss = r.roster.findIndex(p => p.id === pid);
-          if (ss !== seat && !(r.off && r.off[seat])) return;   /* 防冒名：只能替自己掷，或替掉线座次代博 */
+          if (ss !== seat) {
+            const offOK = r.off && r.off[seat];
+            const la = r.lastAct ? r.lastAct[seat] : undefined;
+            const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;   /* 15 秒无操作 */
+            if (!offOK && !idleOK) return;   /* 防冒名：只能替自己掷，或替掉线/挂机座次代博 */
+          }
         }
         if (r.events.length >= 5000) return;
         const lastEv = r.events[r.events.length - 1];
         if (lastEv && lastEv.s === seat) return;   /* 与 Worker 同步：同座次连续事件幂等（多端并发代博去重） */
-        {   /* 与 Worker 同步：代博把数上限（满 5 只能跳） */
-          let autoCnt = 0;
-          for (const e of r.events) if (e.s === seat && e.a) autoCnt++;
-          if (m.a && autoCnt >= 5) return;
-        }
-        if (m.a) {   /* 与 Worker 同步：首次代博时刻 = 2 分钟"彻底断线"判定起点 */
-          r.autoAt = r.autoAt || {};
-          if (!r.autoAt[seat]) r.autoAt[seat] = Date.now();
+        {   /* 与 Worker 同步：代博状态机（满 5 只能跳） */
+          r.auto = r.auto || {};
+          const st = r.auto[seat];
+          if (m.a) {
+            if (!st) r.auto[seat] = { cnt: 1, at: Date.now() };
+            else if (st.cnt >= 5) return;
+            else st.cnt++;
+          }
         }
         r.events.push({ s: seat, d: m.d.slice(), a: m.a ? 1 : undefined });   /* a=1 代博（仅展示用） */
+        r.lastAct = r.lastAct || {};
+        r.lastAct[seat] = Date.now();
+        if (!m.a && r.cancelled) delete r.cancelled[seat];   /* 本人正常掷骰 = 取消托管自然完成 */
         broadcast(code);
       } else if (m.t === 'skip') {
         if (!r.started) return;
         marks(r);
         const seat = m.s | 0;
         if (seat < 0 || seat >= r.roster.length) return;
-        if (!r.off || !r.off[seat]) return;   /* 与 Worker 同步：off 即可跳（自动化节奏由客户端管） */
+        {   /* 与 Worker 同步：off 或 15 秒无操作才可跳 */
+          const la = r.lastAct ? r.lastAct[seat] : undefined;
+          const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
+          if (!r.off || (!r.off[seat] && !idleOK)) return;
+        }
         const last = r.events[r.events.length - 1];
         if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */
         if (r.events.length >= 5000) return;
         r.events.push({ s: seat, skip: true });
+        r.lastAct = r.lastAct || {};
+        r.lastAct[seat] = Date.now();
         {   /* 与 Worker 同步：开始代博起超 2 分钟 = 彻底断线点名（kicked 标记，只发一次） */
           const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
-          if (r.autoAt && r.autoAt[seat] && Date.now() - r.autoAt[seat] >= OFFLINE_MS) {
+          if (r.auto && r.auto[seat] && Date.now() - r.auto[seat].at >= OFFLINE_MS) {
             r.leftSeq = (r.leftSeq || 0) + 1;
             r.left = { seq: r.leftSeq, name: r.roster[seat].name, kicked: true };
-            /* ⚠️ autoAt 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
+            /* ⚠️ auto 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
           }
         }
         broadcast(code);
+      } else if (m.t === 'cancel') {
+        /* 与 Worker 同步：本人取消托管 → 删代博状态，15 秒内正常博，再发呆重新托管 */
+        const seat = m.s | 0;
+        if (pid && r.roster.findIndex(p => p.id === pid) !== seat) return;
+        if (r.auto) delete r.auto[seat];
+        r.cancelled = r.cancelled || {};
+        r.cancelled[seat] = Date.now();
+        r.lastAct = r.lastAct || {};
+        r.lastAct[seat] = Date.now();
+        broadcast(code);
       } else if (m.t === 'start') {
         if (pid !== r.host || r.roster.length < 2) return;
-        r.started = true; broadcast(code);
+        r.started = true;
+        r.lastAct = r.roster.map(() => Date.now());   /* 开局重置：15 秒判定从这里起算 */
+        broadcast(code);
       } else if (m.t === 'reset') {
         if (pid !== r.host) return;
         r.gen = (r.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"（与 Worker 一致） */
-        r.events = []; r.autoAt = {}; r.left = null; r.started = false; broadcast(code);
+        r.events = []; r.auto = {}; r.cancelled = {}; r.lastAct = r.roster.map(() => Date.now());
+        r.left = null; r.started = false; broadcast(code);
       } else if (m.t === 'bye') {
         dropPlayer(ws, true, !!m.done);
         try { ws.close(); } catch (e) {}

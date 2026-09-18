@@ -9,6 +9,9 @@
  *   · Hibernation API：空闲时 DO 不计时长（免费额度关键）
  *   · 服务器只做"房间记录 + 事件追加"，不跑规则（规则在客户端，跟 CloudBase 版一致）
  *
+ * 常量：IDLE_PROXY_MS = 15 秒无操作判定（与客户端 IDLE_MS 对齐；切后台的人 socket 常挂着，
+ *       off=false 但人不在 —— 其他玩家可替 15 秒没动的座次代博/跳过，2026-09-19 用户实测定）
+ *
  * 路由：
  *   GET /ws?code=1234&op=create|join&name=X&pid=Y   （WebSocket 升级）
  *   GET /*                                          → 静态资源（游戏页面）
@@ -29,27 +32,35 @@ export default {
     if (env.ASSETS) {
       /* 游戏挂在 /bobing，根路径留给将来的主页（2026-09-17 用户定） */
       if (url.pathname === '/' ) return Response.redirect(url.origin + '/bobing', 302);
-      if (url.pathname === '/bobing' || url.pathname === '/bobing/') {
-        return env.ASSETS.fetch(new Request(new URL('/index.html', url)));
+      const isHtml = url.pathname === '/bobing' || url.pathname === '/bobing/' ||
+        url.pathname === '/index.html' || url.pathname.endsWith('.html');
+      const resp = await env.ASSETS.fetch(
+        url.pathname === '/bobing' || url.pathname === '/bobing/'
+          ? new Request(new URL('/index.html', url)) : request);
+      if (isHtml && resp.status === 200) {
+        /* ⚠️ 必须 no-store：WebView（微信 X5 等）会顽固缓存旧版 HTML，
+           用户实测到旧功能还以为代码没生效（2026-09-19）。只对 HTML 禁缓存，静态图片等照旧。 */
+        const h = new Headers(resp.headers);
+        h.set('Cache-Control', 'no-store, must-revalidate');
+        return new Response(resp.body, { status: resp.status, headers: h });
       }
-      return env.ASSETS.fetch(request);
+      return resp;
     }
     return new Response('not found', { status: 404 });
   }
 };
 
 export class RoomDO {
+  static IDLE_PROXY_MS = 15000;   /* 15 秒无操作 = 其他人可替该座次代博/跳过（与客户端 IDLE_MS 对齐） */
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
-    this.rec = null;
-    /* 保活：客户端每 45 秒发 {"t":"ping"}，由运行时自动回 pong（**不唤醒 DO、不计请求**）。
+    this.rec = null;    /* 保活：客户端每 45 秒发 {"t":"ping"}，由运行时自动回 pong（**不唤醒 DO、不计请求**）。
        移动网络/运营商 NAT 会掐掉长时间空闲的连接，进大厅等人时最容易中招。 */
     try {
       ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'));
     } catch (e) { /* 运行时不支持就算了，不影响主流程 */ }
   }
-
   async load() {
     if (!this.rec) this.rec = (await this.ctx.storage.get('rec')) || null;
     return this.rec;
@@ -61,13 +72,18 @@ export class RoomDO {
     const url = new URL(request.url);
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
       /* 非 WS 请求：给一个轻量查询口 —— 客户端加入失败时用它区分原因，
-         以及健康检查。只吐**不敏感**的元信息，不回名单。
-         ⚠️ 必须带 CORS 头：GitHub Pages（跨站）上才能读到正文，
-         否则加入失败只会笼统地报"连不上房间服务"。 */
+         以及健康检查。2026-09-19 起带回 roster/off/auto（均不敏感）：
+         客户端据此区分「这局已经开始了」和「你已掉线太久被移出本局」。 */
       const rec = await this.load();
+      const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
       return Response.json(
-        rec ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length }
-            : { exists: false },
+        rec ? {
+          exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length,
+          roster: rec.roster.map(p => ({ id: p.id, name: p.name })),
+          off: rec.off || [],
+          auto: rec.auto || {},
+          offlineMs: OFFLINE_MS
+        } : { exists: false },
         { headers: { 'Access-Control-Allow-Origin': '*' } });
     }
     const op = url.searchParams.get('op') || 'join';
@@ -88,11 +104,11 @@ export class RoomDO {
       /* 房间还在且 pid 是房主 → 刷新重连：直接沿用 */
     } else {
       if (!rec || rec.closed) return new Response('没有这个房间号', { status: 404 });
-      /* 彻底断线（用户 2026-09-18 定）：开始代博（autoAt）起 2 分钟没回来 → 无论 pid
+      /* 彻底断线（用户 2026-09-18 定）：开始代博（auto[i].at）起 2 分钟没回来 → 无论 pid
          重连还是按名字认领都不再放行。座次与已博到的奖品保留（结算按之前博的算），
          之后每轮到自动跳过，游戏照常走完；「再来一局」清空后可正常参与下一局。 */
       const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
-      const kicked = (i) => rec.autoAt && rec.autoAt[i] && Date.now() - rec.autoAt[i] >= OFFLINE_MS;
+      const kicked = (i) => !!(rec.auto && rec.auto[i] && Date.now() - rec.auto[i].at >= OFFLINE_MS);
       const mineIdx = rec.roster.findIndex(p => p.id === pid);
       if (mineIdx >= 0 && kicked(mineIdx))
         return new Response('掉线超过两分钟，已被移出本局', { status: 403 });
@@ -106,7 +122,7 @@ export class RoomDO {
         const idx = rec.roster.findIndex((p, i) => p.name === name && this.rec.off && this.rec.off[i] && !kicked(i));
         if (idx < 0) return new Response('这局已经开始了', { status: 403 });
         this.rec.roster[idx].id = pid;
-        if (this.rec.autoAt) delete this.rec.autoAt[idx];
+        if (this.rec.auto) delete this.rec.auto[idx];
         await this.save();
       } else if (!mine) {
         this.rec.roster.push({ id: pid, name });
@@ -121,7 +137,7 @@ export class RoomDO {
     if (this.dead) this.dead.delete(pid);   /* 回线：从"刚关闭"名单里摘掉 */
     {   /* 回线 = 恢复正常：清掉该座次的代博计时（2 分钟判定作废，2026-09-18 用户定） */
       const backIdx = this.rec.roster.findIndex(p => p.id === pid);
-      if (backIdx >= 0 && this.rec.autoAt) delete this.rec.autoAt[backIdx];
+      if (backIdx >= 0 && this.rec.auto) delete this.rec.auto[backIdx];
     }
     this.markOffline();
     server.send(JSON.stringify({ t: 'room', r: this.rec }));
@@ -142,6 +158,8 @@ export class RoomDO {
     }
     if (this.dead) for (const pid of this.dead) live.delete(pid);
     this.rec.off = this.rec.roster.map(p => !live.has(p.id));
+    if (this.rec.cancelled) for (let i = 0; i < this.rec.off.length; i++)
+      if (this.rec.off[i]) delete this.rec.cancelled[i];   /* 又掉线了 → 重新自动托管 */
     /* 名单里已经没有的人不必再记着（否则反复进退房会把 dead 撑大） */
     if (this.dead && this.dead.size) {
       for (const pid of [...this.dead]) {
@@ -171,39 +189,45 @@ export class RoomDO {
       const seat = m.s | 0;
       if (seat < 0 || seat >= this.rec.roster.length) return;
       if (!Array.isArray(m.d) || m.d.length !== 6 || m.d.some(v => !(v >= 1 && v <= 6))) return;
-      /* 防冒名：只能替**自己**掷，或替**当前已掉线**的座次代博（2026-09-18 用户定：
-         掉线的人先由别人自动代博 5 把，超时仍未回才自动跳过 —— 别让全场干等）。
-         服务端不跑规则、判不了"轮到谁"，但"谁在替谁掷"和"那个座次在不在线"是可以判的。
+      /* 防冒名：只能替**自己**掷，或替「已掉线 / 15 秒无操作」的座次代博（2026-09-19 用户实测定：
+         切后台的人 socket 往往没断（TCP 挂着），服务端视角 off=false —— 若只认 off，
+         其他玩家的代博全被拒、只有掉线者自己的端能发起，而他的计时器在后台是冻结的。
+         所以加一条「该座次 15 秒无任何操作」也允许代博/跳过 —— 正是"15 秒判定"的服务端对应物。
          ⚠️ 拿不到发送者身份时**放行**（fail-open）：这只是第二道防线，
-         为了它把合法掷骰丢掉（运行时瞬时给不出 attachment）才是真事故。
-         注意带上 pid 的判断必须在 roster 里找得到人才生效。 */
+         为了它把合法掷骰丢掉（运行时瞬时给不出 attachment）才是真事故。 */
       const pid = (ws.deserializeAttachment() || {}).pid;
       if (pid) {
         const senderSeat = this.rec.roster.findIndex(p => p.id === pid);
-        if (senderSeat !== seat && !(this.rec.off && this.rec.off[seat])) return;
+        if (senderSeat !== seat) {
+          const offOK = this.rec.off && this.rec.off[seat];
+          const la = this.rec.lastAct ? this.rec.lastAct[seat] : undefined;
+          const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
+          if (!offOK && !idleOK) return;
+        }
       }
       if (this.rec.events.length >= 5000) return;      /* 兜底：别让异常客户端把记录撑爆 */
       /* 幂等：同一座次不会连续出现两条事件（最少 2 人轮换）——代博/跳过时多个在线端
          同时触发是完全正常的时序，只有第一条被接受，其余丢弃，全员回放零失步。 */
       const lastEv = this.rec.events[this.rec.events.length - 1];
       if (lastEv && lastEv.s === seat) return;
-      /* 代博把数上限：满 5 把 = 处置方式改为跳过，不能再代（与客户端 idleFire 同一判据） */
-      {
-        let autoCnt = 0;
-        for (const e of this.rec.events) if (e.s === seat && e.a) autoCnt++;
-        if (m.a && autoCnt >= 5) return;
-      }
-      if (m.a) {   /* 首次代博时刻 = 2 分钟"彻底断线"判定的起点（2026-09-18 用户定） */
-        this.rec.autoAt = this.rec.autoAt || {};
-        if (!this.rec.autoAt[seat]) this.rec.autoAt[seat] = Date.now();
+      /* 代博状态机（服务端集中）：auto[seat] = { cnt: 本轮代博把数, at: 首把时刻 }。
+         满 5 把 = 处置方式改为跳过；回线/取消/reset 时整段删除。 */
+      if (m.a) {
+        this.rec.auto = this.rec.auto || {};
+        const st = this.rec.auto[seat];
+        if (!st) this.rec.auto[seat] = { cnt: 1, at: Date.now() };   /* 首把 = 2 分钟判定的起点 */
+        else if (st.cnt >= 5) return;                                /* 满 5：只能跳过 */
+        else st.cnt++;
       }
       this.rec.events.push({ s: seat, d: m.d.slice(), a: m.a ? 1 : undefined });   /* a=1 代博（仅展示用） */
+      this.rec.lastAct = this.rec.lastAct || {};
+      this.rec.lastAct[seat] = Date.now();   /* 该座次最近操作时间：15 秒无操作 = 其他人可代博/跳过 */
+      if (!m.a && this.rec.cancelled) delete this.rec.cancelled[seat];   /* 本人正常掷骰 = 取消托管自然完成 */
       await this.save();
       this.broadcast();
     } else if (m.t === 'skip') {
-      /* 掉线跳过：只允许跳过**当前已掉线**的座次（防止有人跳过在线玩家抢回合）。
-         服务端不跑规则，无法判"轮到谁"，所以由客户端带上座次、服务端只校验在线状态；
-         事件本身对所有人可见，谁都能核对座次是否合法。
+      /* 掉线跳过：只允许跳过「已掉线 / 15 秒无操作」的座次（防抢回合）。
+         15 秒无操作（假死：socket 没断但人不在）与 off 等价 —— 见 roll 校验的注释。
          自动化节奏由客户端管（15 秒判定 → 代博 5 把 → 满 5 或超 2 分钟自动跳过），
          服务端只做底线校验。
          ⚠️ 幂等：两个好心人同时点「跳过这一把」是完全正常的时序（一个座次只能跳一次）。
@@ -212,20 +236,24 @@ export class RoomDO {
       const seat = m.s | 0;
       this.markOffline();
       if (seat < 0 || seat >= this.rec.roster.length) return;
-      if (!this.rec.off || !this.rec.off[seat]) return;      /* 该座次在线 → 拒绝 */
+      const la = this.rec.lastAct ? this.rec.lastAct[seat] : undefined;
+      const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
+      if (!this.rec.off || (!this.rec.off[seat] && !idleOK)) return;
       const last = this.rec.events[this.rec.events.length - 1];
       if (last && last.skip && last.s === seat) return;      /* 已跳过 → 忽略重复请求 */
       if (this.rec.events.length >= 5000) return;            /* 兜底上限，同 roll */
       this.rec.events.push({ s: seat, skip: true });
+      this.rec.lastAct = this.rec.lastAct || {};
+      this.rec.lastAct[seat] = Date.now();
       /* 彻底断线点名：开始代博起超 2 分钟（用户 2026-09-18 定）→ left 带 kicked，
          其他人看到「XX 掉线太久，已被移出本局」；此后该座次的重连/认领一律被拒。 */
       {
         const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
-        if (this.rec.autoAt && this.rec.autoAt[seat] &&
-            Date.now() - this.rec.autoAt[seat] >= OFFLINE_MS) {
+        if (this.rec.auto && this.rec.auto[seat] &&
+            Date.now() - this.rec.auto[seat].at >= OFFLINE_MS) {
           this.rec.leftSeq = (this.rec.leftSeq || 0) + 1;
           this.rec.left = { seq: this.rec.leftSeq, name: this.rec.roster[seat].name, kicked: true };
-          /* ⚠️ autoAt 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
+          /* ⚠️ auto 不删：它持续作为"拒绝重连"的依据，直到本人回线（accept 时清）或 reset */
         }
       }
       await this.save();
@@ -235,6 +263,20 @@ export class RoomDO {
       if (pid !== this.rec.host) return;          /* 只有房主能开局 */
       if (this.rec.roster.length < 2) return;     /* 至少两人 */
       this.rec.started = true;
+      this.rec.lastAct = this.rec.roster.map(() => Date.now());   /* 开局重置活动时间：15 秒判定从这里起算 */
+      await this.save();
+      this.broadcast();
+    } else if (m.t === 'cancel') {
+      /* 取消代博/跳过（2026-09-19 用户定）：被代博的玩家本人点「取消代博」→ 整段代博状态删除，
+         之后轮到他正常等他自己博；若他又 15 秒没动，会重新进入托管（lastAct 判定）。 */
+      const seat = m.s | 0;
+      const pid = (ws.deserializeAttachment() || {}).pid;
+      if (pid && this.rec.roster.findIndex(p => p.id === pid) !== seat) return;   /* 只能取消自己的 */
+      if (this.rec.auto) delete this.rec.auto[seat];
+      this.rec.cancelled = this.rec.cancelled || {};
+      this.rec.cancelled[seat] = Date.now();   /* 时间戳：15 秒宽限期内正常博，超时未动重新托管 */
+      this.rec.lastAct = this.rec.lastAct || {};
+      this.rec.lastAct[seat] = Date.now();
       await this.save();
       this.broadcast();
     } else if (m.t === 'reset') {
@@ -244,7 +286,8 @@ export class RoomDO {
       this.rec.gen = (this.rec.gen || 0) + 1;   /* 世代号：客户端据此识别"新一局"，
                                                    过期快照防护只对同世代生效（防重开局被冻死在旧视图） */
       this.rec.events = [];
-      this.rec.autoAt = {};                     /* 被移出的座次也随新局复活（奖品按上局结算，下一局重新来） */
+      this.rec.auto = {}; this.rec.cancelled = {};   /* 被移出的座次也随新局复活（奖品按上局结算，下一局重新来） */
+      this.rec.lastAct = this.rec.roster.map(() => Date.now());
       this.rec.left = null;
       this.rec.started = false;
       await this.save();

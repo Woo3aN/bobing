@@ -161,7 +161,7 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   await waitFor(() => lastRoom(guest).events.length === 6);
   await sleep(500);
   ok('代博并发去重：同座次连续事件被幂等丢弃',
-    lastRoom(host).events.length === 6 && lastRoom(host).events[5].d[0] === 6,
+    lastRoom(host).events.length === 6,   /* 并发两条谁先到不确定（真实网络），只断言没有双收 */
     'events=' + lastRoom(host).events.length);
   /* 彻底断线（开始代博起 2 分钟没回来 → 跳过点名 kicked + 无法重连）。
      ⚠️ 这几条只在 mock（OFFLINE_MS=2000 启动）验证：线上是真实 120 秒，无法快速等待。 */
@@ -178,6 +178,30 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     try { await connect(code, 'join', '客人乙', 'pThird'); } catch (e) { kickErr2 = e.message; }
     ok('移出后：按名字认领被拒（403）', /403/.test(kickErr1 || ''), kickErr1 || '');
     ok('移出后：原 pid 重连被拒（403）', /403/.test(kickErr2 || ''), kickErr2 || '');
+
+  /* ===== 满 5 把但 2 分钟内回来 → 重连成功（2026-09-19 用户核心关切）=====
+     独立 2 人房间：10 条事件连发（s1 代博 / s0 正常交替）压进 mock 的 2 秒窗口内。 */
+  const code2 = String(1000 + Math.floor(Math.random() * 9000));
+  const h2 = await connect(code2, 'create', '房主', 'qH');
+  const g2c = await connect(code2, 'join', '丙', 'qG');
+  await sleep(300);
+  send(h2, { t: 'start' });
+  await sleep(400);
+  g2c.ws.terminate();   /* 丙掉线 */
+  await waitFor(() => lastRoom(h2).off[1] === true);
+  for (let i = 0; i < 5; i++) {
+    send(h2, { t: 'roll', s: 1, d: [1, 2, 3, 4, 5, 6], a: 1 });
+    send(h2, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6] });
+  }
+  await waitFor(() => lastRoom(h2).events.length === 10);
+  ok('〔2 分钟内〕代博满 5 把（事件交替不触发幂等）', lastRoom(h2).events.length === 10, 'events=' + lastRoom(h2).events.length);
+  let okErr = null, backIn = null;
+  try { backIn = await connect(code2, 'join', '丙', 'qG'); } catch (e) { okErr = e.message; }
+  ok('〔2 分钟内〕满 5 把但未超时 → 重连成功', !!backIn, okErr || '');
+  await sleep(2500);
+  let lateErr = null;
+  try { await connect(code2, 'join', '丙', 'qG2'); } catch (e) { lateErr = e.message; }
+  ok('〔2 分钟后〕重连被拒（403）', /403/.test(lateErr || ''), lateErr || '');
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }
