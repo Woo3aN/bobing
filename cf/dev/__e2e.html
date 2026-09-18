@@ -168,15 +168,15 @@ console.log('E2E-BOOT'); setInterval(() => console.log('E2E heartbeat ' + Date.n
     await fetch('/__kick?code=' + code + '&pid=' + deadPid);   /* 只掐 g2（轮次方） */
     log('[11] 已掐断轮次方（seat ' + deadSeat + '）的连接（禁用其自动重连）…');
 
-    /* [12] 关键回归：掉线是"没有新事件的快照"，按钮必须自己变成「代博中」（全自动处置） */
+    /* [12] 关键回归：掉线是"没有新事件的快照"，按钮必须自己变成自动处置状态（代博即将开始/进行中） */
     const btn1 = f1.contentDocument.getElementById('btn-roll');
     let btnTxt = '';
     for (let k = 0; k < 20; k++) {
       await sleep(500);
       btnTxt = btn1.textContent;
-      if (btnTxt.indexOf('代博中') >= 0) break;
+      if (/代博/.test(btnTxt)) break;
     }
-    if (btnTxt.indexOf('代博中') < 0) fail('掉线后掷骰按钮没有变成「代博中」，实际文案：' + btnTxt);
+    if (!/代博/.test(btnTxt)) fail('掉线后掷骰按钮没有进入自动代博状态，实际文案：' + btnTxt);
     log('[12] 掉线后按钮自动变成「' + btnTxt + '」✓（无新事件也能触发重渲染）');
 
     /* [13] 全自动代博：idlems=3000 → 3 秒后任一在线端代博（发 a 标记事件）→ 两端回放推进。

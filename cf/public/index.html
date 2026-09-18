@@ -1628,7 +1628,13 @@ function applyRoll(pIdx, dice, grade) {
     idleTimer = null;
     if (!state || !state.online || state.phase === 'over') return;
     if (state.busy || state.current !== idleSeat) return;
-    if (NET.cancelled && NET.cancelled(idleSeat)) return;                 /* 本人已取消托管 */
+    /* 本人已取消托管：不处置，但要**持续重调度**——宽限（15 秒）一过若仍没动，重新进入托管
+       （取消后没有事件推进、无人再调 armIdle，不重调度的话发呆的人永远不会再被代博）。 */
+    var cAtNow = NET.cancelled(idleSeat);
+    if (cAtNow && Date.now() - cAtNow < IDLE_MS + 500) {
+      idleTimer = setTimeout(idleFire, Math.max(cAtNow + IDLE_MS - Date.now(), 200) + 100);
+      return;
+    }
     if (state.online.skipSeat === idleSeat && state.online.skipAt &&
         Date.now() - state.online.skipAt < 4000) return;                  /* 已在跳过占位中 */
     var cnt = NET.autoCount(idleSeat);
@@ -1717,7 +1723,10 @@ function finishGame() {
   state.endedAt = now;                 /* 多人局也要算用时 */
   state.solo.endedAt = now;
   var zy = state.zyHolder === null ? null : state.players[state.zyHolder];
+  /* 终局日志必须留下：静默回放（REPLAY_QUIET）恰好打到本局结束也不能吞掉这一条 */
+  var _rq = REPLAY_QUIET; REPLAY_QUIET = false;
   pushSystemLog('🏁 全部奖项各有其主，本局结束。' + (zy ? '状元是 <strong>' + escapeHtml(zy.name) + '</strong>！' : '状元无人博得。'));
+  REPLAY_QUIET = _rq;
   saveGameRecord();
   autoStop(true);                          /* 本局结束 → 自动模式自己收工 */
   renderAll();
@@ -2448,7 +2457,9 @@ function updateRollButton() {
     var dead = !!((state.online.off && state.online.off[state.current]) || beingAuto);
     var pending = state.online.skipSeat === state.current && state.online.skipAt &&
                   (Date.now() - state.online.skipAt < 4000);
-    if ((dead || beingAuto) && !state.busy) {   /* 轮到的玩家掉线/挂机 → 全自动处置；本人可点「取消代博」 */
+    if (dead || beingAuto) {   /* 轮到的玩家掉线/挂机 → 全自动处置；本人可点「取消代博」。
+                                  ⚠️ 不看 busy：代博回放的动画期间（每把 2-4 秒）取消入口必须常在
+                                  （2026-09-19 用户实测：busy 吞掉按钮导致"有时候看不到取消"）。 */
       /* 直接掉线等 5 秒、无操作等 15 秒 → 自动代博 5 把（间隔 0.4 秒）→ 满后自动跳过（2026-09-19 定）。
          被代博的玩家本人（还在线）主按钮 = 取消托管；取消后 15 秒内正常博，再发呆会重新托管。 */
       var who = mine ? '连接不稳' : state.players[state.current].name;
@@ -2877,7 +2888,13 @@ function bindEvents() {
     if (!state) return;
     /* 本局已结束 → 这个按钮是「看结算」入口（回去才能点「再来一局」） */
     if (state.phase === 'over') { showResultModal(); return; }
-    if (state.busy) { skipAnim(); return; }              /* 动画中再点 = 跳过 */
+    if (state.busy) {
+      skipAnim();
+      /* 被托管的玩家本人：跳完当前动画继续走取消流程（否则动画期点取消只跳动画，要多点一次） */
+      var fm = state.online && state.current === state.online.seat &&
+        NET.autoCount && NET.autoCount(state.current) > 0 && !NET.cancelled(state.current);
+      if (!fm) return;
+    }
     /* 掉线/挂机的全自动处置：其他人看到状态展示（点 = 兜底发 skip，服务端校验后接受）；
        被托管的玩家本人点按钮 = 取消托管（服务端删掉该座次的代博状态并广播，
        之后轮到他正常自己博；再 15 秒没动会重新进入托管）。 */
@@ -3628,12 +3645,19 @@ var NET = (function () {
 
   /* 在线状态落盘 + 按需重渲染掷骰按钮。
      ⚠️ 掉线是"没有新事件的快照"，不主动重渲染的话「跳过这一把」永远不出现 ——
-     那正是这个功能要解决的死锁（轮到的玩家掉线，其余人按钮一直停在"等 XX 博…"）。 */
-  function applyOff(arr) {
+     那正是这个功能要解决的死锁（轮到的玩家掉线，其余人按钮一直停在"等 XX 博…"）。
+     ⚠️ 同理 auto/cancelled（托管/取消）也是"没有新事件的快照状态"：代博开始、计数变化、
+     本人点取消 → off 往往**不变**（假死场景恒 false），必须按签名比对主动刷按钮
+     （2026-09-19 用户实测：点了取消按钮不切换、被托管时看不到取消入口，都是这里漏刷）。 */
+  var lastAutoSig = '';
+  function applyOff(arr, autoSig) {
     if (!state || !state.online) return;
     arr = arr || [];
     var sig = arr.join(',');
-    if (state.online.offSig === sig) return;
+    if (autoSig !== undefined) {
+      if (autoSig === lastAutoSig && state.online.offSig === sig) return;
+      lastAutoSig = autoSig;
+    } else if (state.online.offSig === sig) return;
     state.online.offSig = sig;
     state.online.off = arr;
     if (typeof updateRollButton === 'function') updateRollButton();
@@ -3674,7 +3698,8 @@ var NET = (function () {
       if (r.events.length < state.rollCount) return;   /* 同一局里的旧快照 → 丢 */
     }
     lastRoom = r;
-    if (state && state.online) applyOff(r.off);      /* 在线状态给 UI（掉线跳过）用 */
+    if (state && state.online) applyOff(r.off,
+      JSON.stringify(r.auto || {}) + '|' + JSON.stringify(r.cancelled || {}));   /* off + 托管状态都变化时刷按钮 */
     var leaver = takeLeaver(r);                       /* 主动退出 / 超时被移出的人（takeLeaver 返回 left 对象） */
     var leaverName = leaver ? (leaver.name || '有人') : null;
     var leaverKicked = !!(leaver && leaver.kicked);
@@ -3753,6 +3778,13 @@ var NET = (function () {
   var lastRoom = null;                /* 最近一次房间快照：busy 期间挂起的事件靠它重试 */
   function applyRemoteEvents(r) {
     if (!state || !state.online) return;
+    /* 积压 >1 把（典型：断线重连一口气补错过的把次）→ 静默快速回放，直接定位到最新
+       （2026-09-19 用户实测：逐把带动画"快速播已经博过的轮次"看不懂也不必要）；
+       只差 1 把（对手刚博的常规时序）→ 照常有动画有日志。 */
+    var backlog = r.events.length - state.rollCount;
+    var quiet = backlog > 1;
+    var base = state.rollCount;
+    if (quiet) REPLAY_QUIET = true;
     var guard = 0;
     while (state.rollCount < r.events.length && guard++ < 1000) {
       var ev = r.events[state.rollCount];
@@ -3761,25 +3793,26 @@ var NET = (function () {
         /* 座次对不上 = 本端与房间失步（重复跳过之类的竞态已由服务端去重）。
            ⚠️ 直接按事件序列把整局重建，比"退出重进"体验好得多，**也不会连累别人**
            （旧实现在这里调 NET.leave()，一个人的失步会把整局解散掉）。 */
+        REPLAY_QUIET = false;
         toast('正在重新同步…');
         beginGame(r, seat, true, true);
         return;
       }
       /* ⚠️ 本端动画没落定时绝不能把事件丢掉 —— 回合制下对手手快是完全正常的时序。
          挂起：把快照存下来，重试定时器 300ms 后再试（本地计算，零数据库开销）。 */
-      if (state.busy) { lastRoom = r; return; }
+      if (state.busy) { lastRoom = r; REPLAY_QUIET = false; return; }
       var before = state.rollCount;
       NET_APPLY = true;
       try {
         if (ev.skip) doSkip(true);
-        else {
-          if (ev.a) pushSystemLog('⏳ 这一把由大家替 ' + state.players[ev.s].name + ' 代博');
-          doRoll(ev.d, false);
-        }
+        else doRoll(ev.d, quiet);        /* quiet：跳过动画（日志/音效由 REPLAY_QUIET 静默） */
       } finally { NET_APPLY = false; }
       if (state.rollCount === before) break;          /* 事件没能推进本局（如已结束）→ 别空转 */
       if (state.online) state.online.skipSeat = -1;   /* 事件已落地 → 清掉"跳过中"占位 */
     }
+    REPLAY_QUIET = false;
+    if (quiet && state.rollCount > base)
+      pushSystemLog('⏩ 已快速同步 ' + (state.rollCount - base) + ' 把错过的对局');
     lastRoom = r;
   }
   setInterval(function () {
@@ -3872,8 +3905,18 @@ var NET = (function () {
     roster: function () { return cur ? cur.read(codeNow) : null; },
     sendRoll: function (s, dice, auto) { cur.addEvent(codeNow, { s: s, d: dice, a: auto ? 1 : undefined }, null); },
     sendSkip: function (seat) { if (cur && cur.skip) cur.skip(seat); },
-    /* 取消代博/跳过（本人专用，2026-09-19）：服务端删掉该座次的代博状态并广播 → 全端停止托管 */
-    sendCancel: function (seat) { try { this.sock.send(JSON.stringify({ t: 'cancel', s: seat })); } catch (e) {} },
+    /* 取消代博/跳过（本人专用，2026-09-19）：发 cancel → 服务端删代博状态并广播 → 全端停止托管。
+       ⚠️ 同时乐观置位本地 cancelled（时间戳）：不等广播回来按钮就立即切到「轮到你了」，
+       否则假死场景 off 恒定不触发重渲染，点了像没反应（2026-09-19 用户实测）。 */
+    sendCancel: function (seat) {
+      try { this.sock.send(JSON.stringify({ t: 'cancel', s: seat })); } catch (e) {}
+      if (lastRoom) {
+        lastRoom.cancelled = lastRoom.cancelled || {};
+        lastRoom.cancelled[seat] = Date.now();
+        lastRoom.auto = lastRoom.auto || {};
+        delete lastRoom.auto[seat];       /* 乐观删除：本地立即视为已取消 */
+      }
+    },
     /* 某座次本轮代博把数（服务端 auto 状态机计数，快照广播带下来）——
        「代博满 5 把改自动跳过」的判据，全端一致 */
     autoCount: function (s) {
@@ -3883,9 +3926,10 @@ var NET = (function () {
     autoAt: function (s) {
       return (lastRoom && lastRoom.auto && lastRoom.auto[s] && lastRoom.auto[s].at) || 0;
     },
-    /* 某座次是否已被本人取消托管（点了「取消代博」）—— 取消后等他自己博 */
+    /* 某座次是否已被本人取消托管 —— 返回**取消时刻的时间戳**（0 = 未取消）；
+       宽限期（15 秒）内正常自己博，宽限过后若仍没动会重新进入托管 */
     cancelled: function (s) {
-      return !!(lastRoom && lastRoom.cancelled && lastRoom.cancelled[s]);
+      return (lastRoom && lastRoom.cancelled && lastRoom.cancelled[s]) || 0;
     },
     /* 再来一局（联机）：房主清空事件回到大厅，原班人马接着开下一局 */
     rematch: function (cb) {
