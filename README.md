@@ -52,7 +52,11 @@
   同一浏览器开两个标签页就能先试玩（同机演示）。**上面两个网址都支持跨设备联机**
   （GitHub Pages 那份走跨站 WebSocket，照样通），谁从哪个入口进来都能进同一间房。
   房间服务是自建的 Cloudflare Worker + Durable Object（WebSocket 推送，**零月费、零配置**）。
-  支持断线自动重连（手机锁屏/切微信回来照常）、有人掉线可「跳过」他那把不影响别人、
+  **掉线/挂机全自动处置**：轮到某人 15 秒没动静（或直接掉线 5 秒）→ 其他人自动替他博
+  （最多 5 把，间隔 0.4 秒）→ 满 5 把改自动跳过；从开始代博起 2 分钟内回来一切照常，
+  超 2 分钟视为彻底断线（重连被拒、奖品按已博到的结算，下一局照常参与）。
+  被托管的玩家本人随时可点主按钮**取消托管**（像斗地主的「取消托管」），之后正常自己博；
+  再发呆 15 秒会重新托管。重连回来**直接定位到最新一轮**（错过的把次静默同步，不逐把回放）。
   打完一局房主点「再来一局」**原班人马直接开下一局**（不用重建房间）。源码在 `cf/`
 - **自动模式** —— 一键挂机：自动替所有玩家轮流博到本局结束（含收官轮与结算），
   随时 ⏸ 暂停 / ▶ 继续 / ■ 停止（局面保留）；慢 / 中 / 快三档节奏，
@@ -78,8 +82,10 @@
 **联机是可选的外挂后端**（`cf/` 目录，Cloudflare Worker + Durable Object，约 300 行）：
 
 - 一个房间号 = 一个 Durable Object，WebSocket 常驻推送（**不轮询**），房间记录存 DO 的 SQLite
-- 玩家各自本地跑规则引擎，服务端只做「房间记录 + 事件追加」，两端只交换 6 颗骰子点数
-- 免费额度：每天 10 万请求（WebSocket 入向消息按 20:1 折算）—— 一局约 50 个请求当量
+- 玩家各自本地跑规则引擎，服务端只做「房间记录 + 事件追加 + 托管状态」，两端只交换 6 颗骰子点数
+- 免费额度实测口径（6 人局 × 250 掷）：**瓶颈是 SQLite 行写 10 万/天**（每掷一次存一次快照），
+  一局约 280 行 → **每天约 300 局**；DO 请求、Worker 请求、行读、时长各项余量都在百倍以上
+  （WS 消息按 20:1 折算、ping 走 auto-response 不计费、Hibernation 挂机不烧时长）
 - 部署：`cd cf && npx wrangler deploy`（首次需 `npx wrangler login` 授权）
 
 ```
@@ -104,8 +110,11 @@ python -m http.server 8000
 - `?demo=N` —— 直接开一桌 4 人并先博 N 次
 - `?demo=N&solo=1` —— 直接进单人挑战
 - `&open=rules|hist|stat|result` —— 直接打开对应弹层
-- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota|net` —— 自检探针（9 组共 305 项断言）
+- `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota|net` —— 自检探针（9 组共 305 项断言，
+  另有 520/360 窄视口 4 组 176 项）
   仓库自带批量脚本：`bash tools/run_probes.sh`（一条命令跑完全套，含 520/360 窄视口回归）
+- 联机自检：`cd cf && node test-room.js`（协议测试 50 项，需先起 `node mock-server.js`）；
+  改 `cf/src/worker.js` 后记得同步 `cf/public/index.html`（游戏副本）再 `npx wrangler deploy`
 
 ---
 
