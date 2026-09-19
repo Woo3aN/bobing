@@ -152,7 +152,7 @@ python -m http.server 8000
 - `?selftest=exhaustive|flow|steal|input|rules|dice|solo|quota|net` —— 自检探针（9 组共 305 项断言，
   另有 520/360 窄视口 4 组 176 项）
   仓库自带批量脚本：`bash tools/run_probes.sh`（一条命令跑完全套，含 520/360 窄视口回归）
-- 联机自检：`cd cf && node test-room.js`（协议测试 56 项，需先起 `node mock-server.js`）；
+- 联机自检：`cd cf && node test-room.js`（协议测试 57 项，需先起 `node mock-server.js`）；
   托管/取消按钮专项验证：打开 `/dev/__auto.html`（自动跑 6 步：被托管→按钮是取消入口→点击真取消→再托管→跳过阶段同样可取消）
 - 改 `cf/src/worker.js` 后记得同步 `cf/public/index.html`（游戏副本）再 `npx wrangler deploy`
 

@@ -27,6 +27,7 @@ function armAllGoneCheck(rec, delayMs) {
     if (!rec || rec.closed) return;
     const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
     if (!rec.roster.length) { rooms.delete(rec.code); return; }
+    if (settleAllAutoMock(rec)) broadcast(rec.code);
     let allGone = true;
     for (let i = 0; i < rec.roster.length; i++) {
       const t0 = goneAtOf(rec, i);
@@ -37,12 +38,25 @@ function armAllGoneCheck(rec, delayMs) {
   }, delayMs || ((Number(process.env.OFFLINE_MS) || 120000) + 2000)));
 }
 
+/* 与 Worker 的 settleAllAuto 对齐：全员托管 → 托管计数补到 5（跳过阶段），只改状态不造事件 */
+function settleAllAutoMock(rec) {
+  if (!rec || rec.closed || !rec.roster || !rec.roster.length) return false;
+  let changed = false;
+  for (let i = 0; i < rec.roster.length; i++) {
+    const a = rec.auto && rec.auto[i];
+    if (!a) return false;
+    if (a.cnt < 5) { a.cnt = 5; changed = true; }
+  }
+  return changed;
+}
+
 function marks(rec) {
   const live = new Set();
   wss.clients.forEach(c => { if (c.roomCode === rec.code && c.readyState === 1 && c.pid) live.add(c.pid); });
   rec.off = rec.roster.map(p => !live.has(p.id));
   if (rec.cancelled) for (let i = 0; i < rec.off.length; i++)
     if (rec.off[i]) delete rec.cancelled[i];   /* 与 Worker 同步：又掉线 → 重新自动托管 */
+  settleAllAutoMock(rec);                      /* 全员没自由玩家 → 标记为跳过阶段 */
   return rec;
 }
 function broadcast(code) {
@@ -219,17 +233,22 @@ server.on('upgrade', (req, socket, head) => {
           const st5 = r.auto && r.auto[seat] && r.auto[seat].cnt >= 5;
           if (!r.off || (!r.off[seat] && !idleOK && !st5)) return;   /* 与 Worker 同步：满 5 把直接可跳 */
         }
-        {   /* 与 Worker 同步：全场都进入跳过阶段（每座次满 5 把或已移出）→ 不写跳过事件
-               （省额度、不刷提示），静默等 2 分钟解散。注意不是"都进入托管" */
+        {   /* 与 Worker 同步：全场都进入跳过阶段 → 不写事件（省额度/不刷提示）。
+               ⚠️ 但发起者自己若是自由玩家必须放行——他是唯一能推进局面的人
+               （2026-09-19 用户实测：只剩他一个在线，点跳过被拒 → 卡在界面）。 */
           const OFFLINE_MS2 = Number(process.env.OFFLINE_MS) || 120000;
-          let allSkipping = (r.roster.length > 0);
-          for (let i = 0; i < r.roster.length; i++) {
-            const a = r.auto && r.auto[i];
-            const t0 = goneAtOf(r, i);
-            const gone = t0 && (Date.now() - t0 >= OFFLINE_MS2);
-            if (!((a && a.cnt >= 5) || gone)) { allSkipping = false; break; }
+          const senderSeat = pid ? r.roster.findIndex(p => p.id === pid) : seat;
+          const senderFree = senderSeat >= 0 && !(r.auto && r.auto[senderSeat]);
+          if (!senderFree) {
+            let allSkipping = (r.roster.length > 0);
+            for (let i = 0; i < r.roster.length; i++) {
+              const a = r.auto && r.auto[i];
+              const t0 = goneAtOf(r, i);
+              const gone = t0 && (Date.now() - t0 >= OFFLINE_MS2);
+              if (!((a && a.cnt >= 5) || gone)) { allSkipping = false; break; }
+            }
+            if (allSkipping) return;
           }
-          if (allSkipping) return;
         }
         const last = r.events[r.events.length - 1];
         if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */

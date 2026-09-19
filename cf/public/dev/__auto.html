@@ -102,15 +102,16 @@ function mkFrame() {
     NA.sendCancel(seat);
     await sleep(1000);
     log('[5d] 直接 sendCancel 后 autoCount(me)=' + NA.autoCount(seat) + '（应为 0）');
-    /* 再走 UI 点击路径（会被重新托管后再点） */
+    /* 再走 UI 点击路径：断言"点击**瞬间**就清零 + 按钮立刻不再显示取消入口"
+       （乐观置位，不依赖网络往返）。⚠️ 不能在几百毫秒后再断言"仍然是 0"——
+       他没再操作的话很快会被重新托管，那正是修复后的正确行为（2026-09-19）。 */
     fSelf.contentDocument.getElementById('btn-roll').click();
-    await sleep(400);
-    log('[5d] UI 点击后 400ms：autoCount(me)=' + NA.autoCount(seat) + ' 按钮=' + btn());
-    await sleep(1200);
-    if (NA.autoCount(seat) > 0) fail('跳过阶段点取消无效，cnt=' + NA.autoCount(seat));
-    const txt6 = btn();
-    if (/取消自动跳过|取消代博/.test(txt6)) fail('取消后按钮仍是取消入口：' + txt6);
-    log('[6] 跳过阶段点取消 → 托管清零 ✓ 按钮变回「' + txt6 + '」✓');
+    const cntNow = NA.autoCount(seat);
+    const txtNow = btn();
+    if (cntNow > 0) fail('点击后没有立即清零（乐观置位失效）：cnt=' + cntNow);
+    if (/取消自动跳过|取消代博/.test(txtNow)) fail('点击后按钮仍是取消入口：' + txtNow);
+    log('[6] 点击取消 → 立即清零 ✓ 按钮立刻变回「' + txtNow + '」✓');
+    await sleep(1000);
 
     /* [7] 超过彻底断线窗口后：本人也不再能取消（服务端拒绝），按钮显示"已被移出本局"。
        ⚠️ 真实场景是"别人还在玩、我挂机超时"——所以先让对方恢复自由（点一下它的按钮 =

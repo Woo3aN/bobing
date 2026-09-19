@@ -67,6 +67,20 @@ export class RoomDO {
   }
   async save() { await this.ctx.storage.put('rec', this.rec); }
 
+  /* 所有座次都在托管中（没有任何"活着且自由"的人）→ 把托管计数补到 5（跳过阶段）。
+     只改状态、不造事件：服务端不知道轮次，乱发事件会让各端回放失步。 */
+  settleAllAuto() {
+    const r = this.rec;
+    if (!r || r.closed || !r.roster || !r.roster.length) return false;
+    let changed = false;
+    for (let i = 0; i < r.roster.length; i++) {
+      const a = r.auto && r.auto[i];
+      if (!a) return false;                     /* 还有自由玩家 → 不动（他端会正常推进） */
+      if (a.cnt < 5) { a.cnt = 5; changed = true; }
+    }
+    return changed;
+  }
+
   /* 定时检查：所有人都托管满 2 分钟（全员被移出）→ 房间直接解散（用户 2026-09-19 定）。
      ⚠️ 必须有 alarm 兜底：全员离线时没有任何消息能触发服务端代码，只能靠定时器。
      设置点：某座次首次代博时 setAlarm(now + OFFLINE_MS + 2s)。 */
@@ -86,6 +100,7 @@ export class RoomDO {
       await this.ctx.storage.delete('rec');
       return;
     }
+    if (this.settleAllAuto()) { await this.save(); this.broadcast(); }
     let allGone = true;
     for (let i = 0; i < roster.length; i++) {
       const t0 = this.goneAt(i);
@@ -198,6 +213,7 @@ export class RoomDO {
     this.rec.off = this.rec.roster.map(p => !live.has(p.id));
     if (this.rec.cancelled) for (let i = 0; i < this.rec.off.length; i++)
       if (this.rec.off[i]) delete this.rec.cancelled[i];   /* 又掉线了 → 重新自动托管 */
+    this.settleAllAuto();                        /* 全员都没自由玩家了 → 标记为跳过阶段（停止推进） */
     /* 名单里已经没有的人不必再记着（否则反复进退房会把 dead 撑大） */
     if (this.dead && this.dead.size) {
       for (const pid of [...this.dead]) {
@@ -288,19 +304,26 @@ export class RoomDO {
       const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
       const st5 = this.rec.auto && this.rec.auto[seat] && this.rec.auto[seat].cnt >= 5;
       if (!this.rec.off || (!this.rec.off[seat] && !idleOK && !st5)) return;   /* 满 5 把 → 直接可跳 */
-      /* 全场都已进入「自动跳过」阶段（每座次代博满 5 把或已彻底断线）→ 跳过事件没有观众，
-         直接不写：既省额度（每次跳过都是一次 SQLite 行写）也不刷提示（2026-09-19 用户要求），
-         静默等 alarm 到点解散房间。
-         ⚠️ 判据是"都满 5 把"，**不是**"都进入托管"——最后进入托管的那位还要正常代博 5 把。 */
+      /* 全场都已进入「自动跳过」阶段（每座次代博满 5 把或已彻底断线）→ 跳过事件没有观众：
+         不写（省额度、不刷提示），静默等 alarm 到点解散。
+         ⚠️ 判据是"都满 5 把"，**不是**"都进入托管"——最后进入托管的那位还要正常代博 5 把。
+         ⚠️⚠️ 但**发起者自己若是自由玩家，必须放行**：他是唯一还能让局面推进的人
+         （2026-09-19 用户实测：只剩他一个在线、其他人都掉线时点跳过被拒 → 卡在界面上，
+         连他也掉线后更没人能发信号）。 */
       {
-        let allSkipping = (this.rec.roster.length > 0);
-        for (let i = 0; i < this.rec.roster.length; i++) {
-          const a = this.rec.auto && this.rec.auto[i];
-          const t0 = this.goneAt(i);
-          const gone = t0 && (Date.now() - t0 >= OFFLINE_MS);
-          if (!((a && a.cnt >= 5) || gone)) { allSkipping = false; break; }
+        const pidS = (ws.deserializeAttachment() || {}).pid;
+        const senderSeat = pidS ? this.rec.roster.findIndex(p => p.id === pidS) : seat;
+        const senderFree = senderSeat >= 0 && !(this.rec.auto && this.rec.auto[senderSeat]);
+        if (!senderFree) {
+          let allSkipping = (this.rec.roster.length > 0);
+          for (let i = 0; i < this.rec.roster.length; i++) {
+            const a = this.rec.auto && this.rec.auto[i];
+            const t0 = this.goneAt(i);
+            const gone = t0 && (Date.now() - t0 >= OFFLINE_MS);
+            if (!((a && a.cnt >= 5) || gone)) { allSkipping = false; break; }
+          }
+          if (allSkipping) return;
         }
-        if (allSkipping) return;
       }
       const last = this.rec.events[this.rec.events.length - 1];
       if (last && last.skip && last.s === seat) return;      /* 已跳过 → 忽略重复请求 */

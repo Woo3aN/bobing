@@ -2506,25 +2506,42 @@ function updateRollButton() {
         : '取消代博（' + myAuto + '/5）· 我回来了';
       return;
     }
+    /* 全场都进入跳过阶段（含"最后一人都掉线"时服务端补足的状态）→ 没人能推进了：
+       明确告知"停止推进、等解散"，而不是停在「代博中（n/5）」让人以为卡死。 */
+    if (allSkipping()) {
+      b.disabled = true;
+      b.textContent = '全员掉线 · 本局已停止，2 分钟后自动解散';
+      if (!allSkippingToasted) { allSkippingToasted = true; toast('全员掉线，本局已停止推进（2 分钟后自动解散）'); }
+      return;
+    }
     var mine = state.current === state.online.seat;
     var cnt = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(state.current) : 0;
     var beingAuto = cnt > 0;
     var dead = !!((state.online.off && state.online.off[state.current]) || beingAuto);
     var pending = state.online.skipSeat === state.current && state.online.skipAt &&
                   (Date.now() - state.online.skipAt < 4000);
-    if (dead || beingAuto) {   /* 别人掉线/挂机 → 状态展示（自己的取消入口已在上面处理） */
+    if (dead || beingAuto) {   /* 别人掉线/挂机 → 自动处置；我自己自由时还能手动推一把 */
       /* 直接掉线等 5 秒、无操作等 15 秒 → 自动代博 5 把（间隔 0.4 秒）→ 满后 0.2 秒即自动跳过。
          ⚠️ 本人被托管的情况在上面 **已优先返回**（取消入口全覆盖），这里是其他人的视角。
-         ⚠️ 不看 busy：代博回放的动画期间状态也不能乱。 */
+         ⚠️ 不看 busy：代博回放的动画期间状态也不能乱。
+         ⚠️⚠️ 我**自由**（自己没被托管）时按钮必须可点 —— 主动替掉线者跳过这一把：
+         特别是"只剩我一个在线、其他人都掉线"时，我端要是也停摆就没人能推进局面了
+         （2026-09-19 用户实测：卡在「自动跳过中」界面点不动）。 */
       var who = mine ? '连接不稳' : state.players[state.current].name;
-      b.disabled = !!mine ? false : true;
       if (mine) {   /* 轮到我但我没被托管（刚取消/宽限期）→ 正常掷骰 */
+        b.disabled = !!state.busy;
         b.textContent = state.busy ? '骰子飞着呢…' : '轮到你了 · 博！';
         return;
       }
-      b.disabled = true;
-      b.textContent = cnt >= 5 ? (pending ? '已请求跳过…' : who + ' · 自动跳过中…')
-        : cnt > 0 ? who + ' · 代博中（' + cnt + '/5）'
+      /* 我自由 + 该座次确实可跳（满 5 把 / 已掉线）→ 可点 */
+      var otherOff = !!(state.online.off && state.online.off[state.current]);
+      var canPush = (cnt >= AUTO_ROLL_MAX) || otherOff;
+      b.disabled = !canPush;
+      if (canPush) {
+        b.textContent = pending ? '已请求跳过…' : (who + ' · 点此跳过这一把');
+        return;
+      }
+      b.textContent = cnt > 0 ? who + ' · 代博中（' + cnt + '/5）'
         : (pending ? '已请求跳过…' : who + ' · 即将自动代博');
       return;
     }
@@ -3750,6 +3767,7 @@ var NET = (function () {
      本人点取消 → off 往往**不变**（假死场景恒 false），必须按签名比对主动刷按钮
      （2026-09-19 用户实测：点了取消按钮不切换、被托管时看不到取消入口，都是这里漏刷）。 */
   var lastAutoSig = '';
+  var allSkippingToasted = false;   /* 「全员掉线已停止」只提示一次 */
   function applyOff(arr, autoSig) {
     if (!state || !state.online) return;
     arr = arr || [];

@@ -278,6 +278,30 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   send(h5, { t: 'roll', s: 1, d: [6, 6, 6, 6, 6, 6], a: 1 });     /* 上一条是自己的 skip → 必须放行 */
   const back2 = await waitFor(() => lastRoom(h5).events.length === 3, 4000);
   ok('跳过后同座次重新代博不被幂等拦掉（旧判据会卡死整局）', back2, 'events=' + lastRoom(h5).events.length);
+
+  /* ===== 全员都没有自由玩家（最后一人也掉线）→ 服务端把托管计数补到 5（跳过阶段）=====
+     没人能发信号时局面不能"卡在代博中（1/5）"，应标记为停止推进，等 2 分钟解散。
+     服务端不造事件（不知道轮次），只改状态。用查询口读结果（host 已断线收不到广播）。 */
+  const code6 = String(1000 + Math.floor(Math.random() * 9000));
+  const h6 = await connect(code6, 'create', '甲', 'uA');
+  const g6b = await connect(code6, 'join', '乙', 'uB');
+  const g6c = await connect(code6, 'join', '丙', 'uC');
+  await sleep(300);
+  send(h6, { t: 'start' });
+  await sleep(400);
+  g6b.ws.terminate(); g6c.ws.terminate();
+  await waitFor(() => lastRoom(h6).off[1] === true && lastRoom(h6).off[2] === true);
+  send(h6, { t: 'roll', s: 1, d: [1, 2, 3, 4, 5, 6], a: 1 });   /* 三人各建立一次托管 */
+  send(h6, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6], a: 1 });
+  send(h6, { t: 'roll', s: 2, d: [3, 4, 5, 6, 6, 6], a: 1 });
+  await waitFor(() => lastRoom(h6).events.length === 3);
+  await sleep(600);
+  h6.ws.terminate();                                            /* 最后一人也掉线 */
+  await sleep(1200);
+  const q6 = await fetch(WS_URL.replace(/^ws/, 'http') + '?code=' + code6).then(r => r.json()).catch(() => null);
+  const cnts = q6 && q6.auto ? Object.keys(q6.auto).map(k => q6.auto[k].cnt) : [];
+  ok('全员无自由玩家 → 托管计数补到 5（标记停止推进，不再卡在代博中）',
+    cnts.length === 3 && cnts.every(c => c >= 5), JSON.stringify(q6 && q6.auto));
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }
