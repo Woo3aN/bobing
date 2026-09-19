@@ -116,6 +116,14 @@ function mkFrame() {
     log('[6] 点击取消 → 立即清零 ✓ 按钮立刻变回「' + txtNow + '」✓');
     await sleep(1000);
 
+    /* [9] 用户实测场景：全场都挂机（都在跳过阶段）→ 我取消托管 → 局面必须继续推进，
+       不能卡在「XX · 代博中」（取消不产生事件，没人补计时器就会卡死，2026-09-19）。 */
+    const ev9a = (NA.lastRoomSnap() && NA.lastRoomSnap().events) ? NA.lastRoomSnap().events.length : 0;
+    await sleep(4200);
+    const ev9b = (NA.lastRoomSnap() && NA.lastRoomSnap().events) ? NA.lastRoomSnap().events.length : 0;
+    if (ev9b <= ev9a) fail('取消托管后局面没有继续推进（卡住了）：' + ev9a + ' → ' + ev9b);
+    log('[9] 全员挂机后取消托管 → 局面继续推进，不卡住 ✓（' + ev9a + ' → ' + ev9b + ' 条事件）');
+
     /* [7] 超过彻底断线窗口后：本人也不再能取消（服务端拒绝），按钮显示"已被移出本局"。
        ⚠️ 真实场景是"别人还在玩、我挂机超时"——所以先让对方恢复自由（点一下它的按钮 =
        取消托管 + 若轮到它就自己博），否则全场停摆时循环已停、不会再有"被移出"。

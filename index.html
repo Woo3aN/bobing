@@ -2971,6 +2971,10 @@ function bindEvents() {
       NET.sendCancel(mySeat0);
       toast('已取消托管 · 轮到你时正常博！');
       updateRollButton();          /* 立即变回正常按钮（本地 auto 已乐观删除） */
+      /* ⚠️ 取消**不产生事件**，所以没人会去重排自动循环的计时器 —— 不在这里补一次，
+         取消后如果当前轮次还是别人被托管的状态，就再也没人推进了（卡在「XX · 代博中」，
+         2026-09-19 用户实测："全部挂机后一个人回来点取消，卡住"）。 */
+      armIdle();
       setTimeout(function () {
         if (!state || !state.online || state.phase === 'over') return;
         if (state.current !== mySeat0) { updateRollButton(); return; }   /* 轮次不在我这 → 只取消 */
@@ -3811,7 +3815,9 @@ var NET = (function () {
     var ar = !!idleTimer;
     if (ar !== lastAutoRunningFlag) {
       lastAutoRunningFlag = ar;
-      if (!ar && state.current !== undefined && state.online.seat !== state.current) armIdle();
+      /* 循环停了 → 立刻恢复（不管是"不是我的回合"还是"我取消托管后没人推进"）：
+         armIdle 内部自己判断该不该跑，这里只管把计时器补起来。 */
+      if (!ar) armIdle();
       if (typeof updateRollButton === 'function') updateRollButton();
       return;
     }
