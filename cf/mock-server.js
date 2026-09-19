@@ -159,8 +159,7 @@ server.on('upgrade', (req, socket, head) => {
     const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
     const kicked = (i) => { const t0 = goneAtOf(rec, i); return !!t0 && Date.now() - t0 >= OFFLINE_MS; };  /* 首次代博起算 */
     const mineIdx = rec.roster.findIndex(p => p.id === pid);
-    if (mineIdx >= 0 && kicked(mineIdx))
-      return deny('Kicked', 403);
+    /* 与 Worker 同步：被移出者也放进来（观战），不再 403 */
     const mine = mineIdx >= 0;
     if (!mine && rec.started) {
       /* 与 Worker 同步：页面被杀后 PEER 丢 → 按名字认领离线座次（在线同名/不同名/已彻底断线拒绝） */
@@ -177,7 +176,12 @@ server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, ws => {
     ws.roomCode = code; ws.pid = pid;
     marks(rec);
-    {   /* 回线 = 恢复正常：清掉该座次的代博计时（与 Worker 同步） */
+    /* 与 Worker 同步：观战判定（被移出者只读），且观战者不清 auto */
+    const OFFLINE_MS0 = Number(process.env.OFFLINE_MS) || 120000;
+    const myIdx = rec.roster.findIndex(p => p.id === pid);
+    const myGoneAt = myIdx >= 0 ? goneAtOf(rec, myIdx) : 0;
+    ws.spectator = !!(myGoneAt && Date.now() - myGoneAt >= OFFLINE_MS0);
+    if (!ws.spectator) {
       const backIdx = rec.roster.findIndex(p => p.id === pid);
       if (backIdx >= 0 && rec.auto) delete rec.auto[backIdx];
     }
@@ -185,6 +189,7 @@ server.on('upgrade', (req, socket, head) => {
     broadcast(code);
     ws.on('message', data => {
       let m; try { m = JSON.parse(data.toString()); } catch (e) { return; }
+      if (ws.spectator) return;            /* 观战者只读（与 Worker 同步） */
       const r = rooms.get(code);
       if (!r || r.closed) return;
       if (m.t === 'roll') {

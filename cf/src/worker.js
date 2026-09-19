@@ -163,8 +163,8 @@ export class RoomDO {
         return !!(a && a.at && Date.now() - a.at >= OFFLINE_MS);
       };
       const mineIdx = rec.roster.findIndex(p => p.id === pid);
-      if (mineIdx >= 0 && kicked(mineIdx))
-        return new Response('掉线超过两分钟，已被移出本局', { status: 403 });
+      /* ⚠️ 被移出者重连：**放进来观战**，不再 403（用户 2026-09-19 要求）。
+         连接建立时会按同一判据标记 spectator，之后他发的任何消息都会被丢弃。 */
       const mine = mineIdx >= 0;
       if (!mine && rec.started) {
         /* 页面被杀（iOS/安卓切后台内存回收）后 sessionStorage 连 PEER 身份一起丢：
@@ -186,9 +186,16 @@ export class RoomDO {
     const pair = new WebSocketPair();
     const client = pair[0], server = pair[1];
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ pid });
+    /* 观战判定：已在 roster 里但"彻底断线"（第一届代博起超 2 分钟）→ 只读观众 */
+    const OFFLINE_MS0 = Number(this.env && this.env.OFFLINE_MS) || 120000;
+    const myIdx = this.rec.roster.findIndex(p => p.id === pid);
+    const myGoneAt = myIdx >= 0 ? this.goneAt(myIdx) : 0;
+    const spectator = !!(myGoneAt && Date.now() - myGoneAt >= OFFLINE_MS0);
+    server.serializeAttachment({ pid, spec: spectator });
     if (this.dead) this.dead.delete(pid);   /* 回线：从"刚关闭"名单里摘掉 */
-    {   /* 回线 = 恢复正常：清掉该座次的代博计时（2 分钟判定作废，2026-09-18 用户定） */
+    if (!spectator) {
+      /* 回线 = 恢复正常：清掉该座次的代博计时（2 分钟判定作废，2026-09-18 用户定）。
+         ⚠️ 观战者**不能清**——那等于让被移出的人复活（2026-09-19）。 */
       const backIdx = this.rec.roster.findIndex(p => p.id === pid);
       if (backIdx >= 0 && this.rec.auto) delete this.rec.auto[backIdx];
     }

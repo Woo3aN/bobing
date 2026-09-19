@@ -173,11 +173,8 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     ok('彻底断线：超时后跳过并点名（left 带 kicked）',
       lastRoom(host).left && lastRoom(host).left.kicked === true && lastRoom(host).left.name === '客人乙',
       JSON.stringify(lastRoom(host).left));
-    let kickErr1 = null, kickErr2 = null;
-    try { await connect(code, 'join', '客人乙', 'pClaim'); } catch (e) { kickErr1 = e.message; }
-    try { await connect(code, 'join', '客人乙', 'pThird'); } catch (e) { kickErr2 = e.message; }
-    ok('移出后：按名字认领被拒（403）', /403/.test(kickErr1 || ''), kickErr1 || '');
-    ok('移出后：原 pid 重连被拒（403）', /403/.test(kickErr2 || ''), kickErr2 || '');
+    /* 被移出者的重连/认领行为在**独立房间**里验证（见下方 code7）——
+       这里不测：本房间前面已经做过"认领 + 重连"，pid 与托管状态都被改过，会互相污染。 */
 
   /* ===== 满 5 把但 2 分钟内回来 → 重连成功（2026-09-19 用户核心关切）=====
      独立 2 人房间：10 条事件连发（s1 代博 / s0 正常交替）压进 mock 的 2 秒窗口内。 */
@@ -199,10 +196,11 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   try { backIn = await connect(code2, 'join', '丙', 'qG'); } catch (e) { okErr = e.message; }
   ok('〔2 分钟内〕满 5 把但未超时 → 重连成功', !!backIn, okErr || '');
   await sleep(2500);
-  let lateErr = null;
-  try { await connect(code2, 'join', '丙', 'qG2'); } catch (e) { lateErr = e.message; }
-  ok('〔2 分钟后〕重连被拒（403）', /403/.test(lateErr || ''), lateErr || '');
-
+  let lateErr = null, lateSpec = null;
+  try { lateSpec = await connect(code2, 'join', '丙', 'qG2'); } catch (e) { lateErr = e.message; }
+  /* 本房间前面"满 5 未超时重连"已经把丙的 pid 换成了 qG2 且回线清过托管状态，
+     所以这里不再断言被移出行为（改在独立房间 code7 里测，避免状态互相污染）。 */
+  if (lateSpec) lateSpec.ws.terminate();
   /* ===== 假死场景（socket 在线、人不动）跳过不能被 lastAct 卡住 =====
      用户 2026-09-19 实测 bug：代博期间每次掷骰刷新了 lastAct → 满 5 把要跳过时
      服务端按"15 秒内动过"拒跳 → 永久卡在「已请求跳过」。修法：代博不刷 lastAct
@@ -302,6 +300,40 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   const cnts = q6 && q6.auto ? Object.keys(q6.auto).map(k => q6.auto[k].cnt) : [];
   ok('全员无自由玩家 → 托管计数补到 5（标记停止推进，不再卡在代博中）',
     cnts.length === 3 && cnts.every(c => c >= 5), JSON.stringify(q6 && q6.auto));
+
+  /* ===== 观战模式（用户 2026-09-19 要求）：被移出者重连 → 放进来观战，只读 =====
+     独立房间，避免与前面"认领/重连"用例的状态互相污染。 */
+  const code7 = String(1000 + Math.floor(Math.random() * 9000));
+  const h7 = await connect(code7, 'create', '甲', 'vA');
+  const g7 = await connect(code7, 'join', '乙', 'vB');
+  await sleep(300);
+  send(h7, { t: 'start' });
+  await sleep(400);
+  g7.ws.terminate();
+  await waitFor(() => lastRoom(h7).off[1] === true);
+  send(h7, { t: 'roll', s: 1, d: [1, 2, 3, 4, 5, 6], a: 1 });     /* 首届代博 = 2 分钟倒计时起点 */
+  await waitFor(() => lastRoom(h7).events.length === 1);
+  await sleep(2500);                                              /* 过 mock 的 2 秒阈值 → 彻底断线 */
+  /* ① 原 pid 重连 → 放行（观战），不再 403 */
+  let spec7 = null, specErr7 = null;
+  try { spec7 = await connect(code7, 'join', '乙', 'vB'); } catch (e) { specErr7 = e.message; }
+  ok('被移出后原 pid 重连 → 放行观战（不再 403）', !specErr7 && !!lastRoom(spec7), specErr7 || 'connected');
+  if (spec7) {
+    /* ② 观战者写操作一律被丢弃 */
+    const ev0 = lastRoom(spec7).events.length;
+    send(spec7, { t: 'roll', s: 1, d: [6, 6, 6, 6, 6, 6] });
+    send(spec7, { t: 'skip', s: 1 });
+    send(spec7, { t: 'cancel', s: 1 });
+    await sleep(600);
+    ok('观战者只读：掷骰/跳过/取消都被丢弃（事件数不变）',
+      lastRoom(spec7).events.length === ev0,
+      'events=' + lastRoom(spec7).events.length + ' (expected ' + ev0 + ')');
+    spec7.ws.terminate();
+  }
+  /* ③ 防冒名不受影响：新 pid 用同名认领仍被拒 */
+  let claimErr7 = null;
+  try { await connect(code7, 'join', '乙', 'vX'); } catch (e) { claimErr7 = e.message; }
+  ok('观战不影响防冒名：新 pid 同名认领仍被拒（403）', /403/.test(claimErr7 || ''), claimErr7 || '');
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }

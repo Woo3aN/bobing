@@ -1644,6 +1644,12 @@ function applyRoll(pIdx, dice, grade) {
   function armIdle() {
     disarmIdle();
     if (!state || !state.online || state.phase === 'over') return;
+    /* 已被移出（超 2 分钟，正在观战）：本端不再发任何事件——服务端也会丢弃，
+       省流量也省额度（用户 2026-09-19 加了观战模式）。 */
+    if (NET.goneAtOf && state.online.seat >= 0) {
+      var g0 = NET.goneAtOf(state.online.seat);
+      if (g0 && Date.now() - g0 >= OFFLINE_MS) return;
+    }
     idleSeat = state.current;
     if (state.busy) return;                        /* busy：等落定（afterRoll）再计时 */
     if (allSkipping()) return;                     /* 全员跳过阶段：静默等待解散（见 allSkipping） */
@@ -2496,7 +2502,7 @@ function updateRollButton() {
     var myGone = !!(myAuto > 0 && myAt && Date.now() - myAt >= OFFLINE_MS);
     if (myGone) {
       b.disabled = true;
-      b.textContent = '你已掉线太久 · 本局已被移出（下一局可参与）';
+      b.textContent = '观战中 · 你已掉线太久被移出（下一局可参与）';
       return;
     }
     if (myAuto > 0) {
@@ -3809,6 +3815,16 @@ var NET = (function () {
   var lastAutoRunningFlag = null;   /* 我端自动循环是否在跑（变化时刷按钮文案） */
   setInterval(function () {
     if (!state || !state.online || state.phase === 'over') return;
+    /* 「全员掉线 · 本局已停止」用**独立提示**给出，不依赖按钮文案 ——
+       因为我自己也被托管时，按钮优先显示「取消自动跳过 · 我回来了」（用户 2026-09-19 反馈
+       "只看到取消按钮、没看到停止提示"）。 */
+    if (allSkipping()) {
+      if (!allSkippingToasted) {
+        allSkippingToasted = true;
+        toast('全员掉线，本局已停止推进（2 分钟后自动解散）');
+        pushSystemLog('⏸ 全员掉线，本局已停止推进（2 分钟后自动解散）');
+      }
+    } else allSkippingToasted = false;
     /* 自动循环的启停也是"没有事件的状态变化"：切后台回来计时器被冻结/恢复时，
        按钮文案要从「点此跳过」切回「自动跳过中…」（反之亦然）——签名比对后主动重渲染。
        同时顺手把停掉的循环恢复（wake() 里也做，这里是第二道保险）。 */
@@ -3829,7 +3845,7 @@ var NET = (function () {
     if (typeof updateRollButton === 'function') updateRollButton();
     if (goneNotifiedSeat !== me) {
       goneNotifiedSeat = me;
-      toast('你掉线太久，本局已被移出（本局结束后可参与下一局）');
+      toast('你掉线太久，本局已被移出 · 现在只能观战（下一局可正常参与）');
     }
   }, 3000);
 
@@ -4090,7 +4106,8 @@ var NET = (function () {
     autoAt: function (s) {
       return (lastRoom && lastRoom.auto && lastRoom.auto[s] && lastRoom.auto[s].at) || 0;
     },
-    /* 某座次本人最后活动时刻（快照带下来；跳过不算活动） */
+    /* 某座次本人最后活动时刻（快照带下来；跳过不算活动）。
+       目前只作诊断/调试用（判定统一走 goneAtOf = 首次代博）。 */
     lastActOf: function (s) {
       return (lastRoom && lastRoom.lastAct && lastRoom.lastAct[s]) || 0;
     },

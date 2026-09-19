@@ -146,9 +146,9 @@ function mkFrame() {
       if (k % 5 === 0) log('[7d] t=' + (k * 0.7).toFixed(1) + 's cnt=' + NA.autoCount(seat) +
         ' at=' + NA.autoAt(seat) + ' 距今=' + (NA.autoAt(seat) ? ((Date.now() - NA.autoAt(seat)) / 1000).toFixed(1) + 's' : '-') +
         ' 按钮=' + txt7);
-      if (/已被移出/.test(txt7)) break;
+      if (/观战中|被移出/.test(txt7)) break;
     }
-    if (!/已被移出/.test(txt7)) fail('超时后本人按钮没有变成"已被移出"，实际：' + txt7);
+    if (!/观战中|被移出/.test(txt7)) fail('超时后本人按钮没有变成「观战中 · 被移出」，实际：' + txt7);
     log('[7] 超过彻底断线窗口 → 本人按钮 =「' + txt7 + '」✓（不能复活）');
     const cntPre = NA.autoCount(seat);
     fSelf.contentDocument.getElementById('btn-roll').click();   /* 再点也没用 */
