@@ -258,6 +258,26 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     Object.keys(lastRoom(h4).auto || {}).length === 3, JSON.stringify(lastRoom(h4).auto));
   const gone = await waitFor(() => lastRoom(h4).closed === true, 12000);
   ok('全员超时未回 → 房间自动解散', gone, 'closed=' + lastRoom(h4).closed);
+
+  /* ===== 真机 bug 回归（2026-09-19）：同座次「跳过 → 重新代博」不能被幂等拦掉 =====
+     取消托管/跳过都不产生"新座次"的事件，于是重新代博时上一条事件仍是自己
+     （s=1 的 skip）→ 旧判据"同座次连续即丢"会静默拦掉 → 真机上表现为
+     "取消后发呆、按钮停在轮到你了、整局卡住"。 */
+  const code5 = String(1000 + Math.floor(Math.random() * 9000));
+  const h5 = await connect(code5, 'create', '甲', 'tA');
+  const g5 = await connect(code5, 'join', '乙', 'tB');
+  await sleep(300);
+  send(h5, { t: 'start' });
+  await sleep(400);
+  g5.ws.terminate();
+  await waitFor(() => lastRoom(h5).off[1] === true);
+  send(h5, { t: 'roll', s: 1, d: [1, 2, 3, 4, 5, 6], a: 1 });     /* 代博第一把 */
+  await waitFor(() => lastRoom(h5).events.length === 1);
+  send(h5, { t: 'skip', s: 1 });                                  /* 跳过他这一把（掉线可跳） */
+  await waitFor(() => lastRoom(h5).events.length === 2);
+  send(h5, { t: 'roll', s: 1, d: [6, 6, 6, 6, 6, 6], a: 1 });     /* 上一条是自己的 skip → 必须放行 */
+  const back2 = await waitFor(() => lastRoom(h5).events.length === 3, 4000);
+  ok('跳过后同座次重新代博不被幂等拦掉（旧判据会卡死整局）', back2, 'events=' + lastRoom(h5).events.length);
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }

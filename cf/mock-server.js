@@ -189,7 +189,8 @@ server.on('upgrade', (req, socket, head) => {
         }
         if (r.events.length >= 5000) return;
         const lastEv = r.events[r.events.length - 1];
-        if (lastEv && lastEv.s === seat) return;   /* 与 Worker 同步：同座次连续事件幂等（多端并发代博去重） */
+        /* 与 Worker 同步：只拦同类型的连续掷骰（取消后重新代博要放行） */
+        if (lastEv && lastEv.s === seat && !lastEv.skip) return;
         {   /* 与 Worker 同步：代博状态机（满 5 只能跳） */
           r.auto = r.auto || {};
           const st = r.auto[seat];

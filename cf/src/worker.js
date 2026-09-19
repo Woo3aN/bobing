@@ -247,7 +247,10 @@ export class RoomDO {
       /* 幂等：同一座次不会连续出现两条事件（最少 2 人轮换）——代博/跳过时多个在线端
          同时触发是完全正常的时序，只有第一条被接受，其余丢弃，全员回放零失步。 */
       const lastEv = this.rec.events[this.rec.events.length - 1];
-      if (lastEv && lastEv.s === seat) return;
+      /* ⚠️ 只拦**同类型**的连续事件：取消托管不产生事件，"取消后重新代博"上一条仍是
+         自己的 a-roll，用"同座次即拦"会把正常的重新托管静默拦掉（实测：取消后发呆，
+         按钮停在「轮到你了」，整局卡住 —— 2026-09-19 验证页 [4] 抓到）。 */
+      if (lastEv && lastEv.s === seat && !lastEv.skip) return;
       /* 代博状态机（服务端集中）：auto[seat] = { cnt: 本轮代博把数, at: 首把时刻 }。
          满 5 把 = 处置方式改为跳过；回线/取消/reset 时整段删除。 */
       if (m.a) {
