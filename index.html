@@ -2536,12 +2536,18 @@ function updateRollButton() {
       /* 我自由 + 该座次确实可跳（满 5 把 / 已掉线）→ 可点 */
       var otherOff = !!(state.online.off && state.online.off[state.current]);
       var canPush = (cnt >= AUTO_ROLL_MAX) || otherOff;
-      b.disabled = !canPush;
-      if (canPush) {
+      /* ⚠️ 只有"我端自动循环真的停了"（切后台回来、循环被停）才给手动入口；
+         正常推进中继续显示状态文案 —— 用户 2026-09-19 反馈："不该需要我点"。
+         idleTimer 非空 = 我端每 0.2~0.4 秒在自动替 ta 代博/跳过。 */
+      var autoRunning = !!idleTimer;
+      if (canPush && !autoRunning) {
+        b.disabled = false;
         b.textContent = pending ? '已请求跳过…' : (who + ' · 点此跳过这一把');
         return;
       }
-      b.textContent = cnt > 0 ? who + ' · 代博中（' + cnt + '/5）'
+      b.disabled = true;
+      b.textContent = cnt >= AUTO_ROLL_MAX ? (pending ? '已请求跳过…' : who + ' · 自动跳过中…')
+        : cnt > 0 ? who + ' · 代博中（' + cnt + '/5）'
         : (pending ? '已请求跳过…' : who + ' · 即将自动代博');
       return;
     }
@@ -3796,8 +3802,19 @@ var NET = (function () {
      按钮要等下一次别人动作（可能又过几十秒）才变成「你已掉线太久」，看起来就是"延迟"。
      每 3 秒查一次，到点立刻刷按钮 + 提示一次。 */
   var goneNotifiedSeat = -1;
+  var lastAutoRunningFlag = null;   /* 我端自动循环是否在跑（变化时刷按钮文案） */
   setInterval(function () {
     if (!state || !state.online || state.phase === 'over') return;
+    /* 自动循环的启停也是"没有事件的状态变化"：切后台回来计时器被冻结/恢复时，
+       按钮文案要从「点此跳过」切回「自动跳过中…」（反之亦然）——签名比对后主动重渲染。
+       同时顺手把停掉的循环恢复（wake() 里也做，这里是第二道保险）。 */
+    var ar = !!idleTimer;
+    if (ar !== lastAutoRunningFlag) {
+      lastAutoRunningFlag = ar;
+      if (!ar && state.current !== undefined && state.online.seat !== state.current) armIdle();
+      if (typeof updateRollButton === 'function') updateRollButton();
+      return;
+    }
     if (typeof NET === 'undefined' || !NET.autoCount) return;
     var me = state.online.seat;
     if (!(NET.autoCount(me) > 0)) return;
@@ -4124,6 +4141,9 @@ var NET = (function () {
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) return;
       if (cur === WS) WS.wake();
+      /* 切后台会冻结 JS 定时器 → 自动代博/跳过循环停摆。回前台立刻恢复它，
+         用户不用去点那个"点此跳过"兜底按钮（2026-09-19 用户反馈：本该全自动）。 */
+      if (typeof armIdle === 'function') armIdle();
     });
   }
 })();
