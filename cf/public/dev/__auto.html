@@ -77,16 +77,27 @@ function mkFrame() {
     if (!/取消代博|取消自动跳过/.test(txt3)) fail('取消后不动没有重新托管（或按钮不可点）：' + txt3);
     log('[4] 再发呆 → 重新托管，按钮再次是「' + txt3 + '」✓（随时都能再夺回）');
 
-    /* [5] 跑到满 5 把（跳过阶段）→ 按钮必须是「取消自动跳过」且可点 → 点击即取消 */
+    /* [5] 托管期会正常代博 5 把 → 进入「自动跳过」阶段（按钮变「取消自动跳过」且可点）。
+       ⚠️ 全员都到跳过阶段后循环会停止（不再刷提示、省额度），但**最后进入托管的那位
+       仍会正常代博满 5 把**（用户 2026-09-19 明确）——所以这里等得到。 */
     let txt5 = '';
-    for (let k = 0; k < 60; k++) {
+    for (let k = 0; k < 45; k++) {
       await sleep(700);
       if (gOther.state().busy) gOther.skipAnim();
       txt5 = btn();
       if (/取消自动跳过/.test(txt5)) break;
     }
-    if (!/取消自动跳过/.test(txt5)) fail('满 5 把后按钮不是「取消自动跳过」，实际：' + txt5);
-    log('[5] 跳过阶段本人按钮 =「' + txt5 + '」✓');
+    if (!/取消自动跳过/.test(txt5)) fail('代博满 5 把后按钮不是「取消自动跳过」，实际：' + txt5);
+    const dis5 = fSelf.contentDocument.getElementById('btn-roll').disabled;
+    if (dis5) fail('托管期取消入口不可点：' + txt5);
+    log('[5] 托管期按钮 =「' + txt5 + '」且可点 ✓');
+
+    /* [5b] 全员托管 → 自动循环停止（事件不再增长，省额度；等 2 分钟由服务端解散） */
+    const evBefore = (NA.lastRoomSnap() && NA.lastRoomSnap().events) ? NA.lastRoomSnap().events.length : 0;
+    await sleep(3000);
+    const evAfter = (NA.lastRoomSnap() && NA.lastRoomSnap().events) ? NA.lastRoomSnap().events.length : 0;
+    if (evAfter > evBefore) fail('全员托管后事件仍在增长（应停止自动循环）：' + evBefore + ' → ' + evAfter);
+    log('[5b] 全员托管 → 自动循环已停止（事件停在 ' + evAfter + ' 条，不再刷跳过）✓');
     /* 先直接调协议层验证服务端链路（排除 UI） */
     NA.sendCancel(seat);
     await sleep(1000);
@@ -101,11 +112,14 @@ function mkFrame() {
     if (/取消自动跳过|取消代博/.test(txt6)) fail('取消后按钮仍是取消入口：' + txt6);
     log('[6] 跳过阶段点取消 → 托管清零 ✓ 按钮变回「' + txt6 + '」✓');
 
-    /* [7] 超过彻底断线窗口后：本人也不再能取消（服务端拒绝），按钮显示"已被移出本局"
-       （2026-09-19 用户实测发现：人还在页面也不能复活）。
+    /* [7] 超过彻底断线窗口后：本人也不再能取消（服务端拒绝），按钮显示"已被移出本局"。
+       ⚠️ 真实场景是"别人还在玩、我挂机超时"——所以先让对方恢复自由（点一下它的按钮 =
+       取消托管 + 若轮到它就自己博），否则全场停摆时循环已停、不会再有"被移出"。
        用测试钩子把客户端时限调到 2.5 秒（与 mock 的 OFFLINE_MS=2000 对齐），
        不能走 URL 参数——那会在 [2]-[6] 阶段就生效、把正常托管流程吃掉。 */
-    if (g1.contentWindow) { }                                  /* 占位：保持结构清晰 */
+    const fOther = (seat === 0) ? a2.f : a1.f;
+    const bOther = fOther.contentDocument.getElementById('btn-roll');
+    if (bOther && !bOther.disabled) { bOther.click(); await sleep(1500); }
     [a1.f, a2.f].forEach(function (fr) {
       if (fr.contentWindow && fr.contentWindow.__setOfflineMs) fr.contentWindow.__setOfflineMs(2500);
     });

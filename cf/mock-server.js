@@ -14,6 +14,11 @@ const rooms = new Map();   /* code -> rec */
 /* 与 Worker 的 alarm() 对齐：全员托管超时 → 解散房间（全员离线时没人发消息，只能定时检查）。
    ⚠️ 定时器绝不能挂在 rec 上：rec 要 JSON.stringify 广播出去，Timeout 对象会循环引用直接崩 */
 const goneTimers = new Map();
+/* 与 Worker 的 goneAt 对齐：**第一次被代博的时刻**起算 2 分钟 */
+function goneAtOf(rec, i) {
+  const a = rec.auto && rec.auto[i];
+  return (a && a.at) || 0;
+}
 function armAllGoneCheck(rec, delayMs) {
   const key = rec.code;
   if (goneTimers.has(key)) clearTimeout(goneTimers.get(key));
@@ -24,8 +29,8 @@ function armAllGoneCheck(rec, delayMs) {
     if (!rec.roster.length) { rooms.delete(rec.code); return; }
     let allGone = true;
     for (let i = 0; i < rec.roster.length; i++) {
-      const a = rec.auto && rec.auto[i];
-      if (!a || !a.at || Date.now() - a.at < OFFLINE_MS) { allGone = false; break; }
+      const t0 = goneAtOf(rec, i);
+      if (!t0 || Date.now() - t0 < OFFLINE_MS) { allGone = false; break; }
     }
     if (allGone) { rec.closed = true; broadcast(rec.code); return; }
     armAllGoneCheck(rec, OFFLINE_MS);   /* 还没全踢 → 再等一轮 */
@@ -80,7 +85,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(rec
       ? { exists: true, started: !!rec.started, closed: !!rec.closed, count: rec.roster.length,
           roster: rec.roster.map(p => ({ id: p.id, name: p.name })), off: rec.off || [],
-          auto: rec.auto || {}, cancelled: rec.cancelled || {},
+          auto: rec.auto || {}, cancelled: rec.cancelled || {}, lastAct: rec.lastAct || {},
           offlineMs: Number(process.env.OFFLINE_MS) || 120000 }
       : { exists: false }));
     return;
@@ -138,7 +143,7 @@ server.on('upgrade', (req, socket, head) => {
     if (!rec || rec.closed) return deny('No room', 404);
     /* 与 Worker 同步：开始代博起 2 分钟没回来 = 彻底断线，不再放行重连/认领 */
     const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
-    const kicked = (i) => !!(rec.auto && rec.auto[i] && Date.now() - rec.auto[i].at >= OFFLINE_MS);
+    const kicked = (i) => { const t0 = goneAtOf(rec, i); return !!t0 && Date.now() - t0 >= OFFLINE_MS; };  /* 首次代博起算 */
     const mineIdx = rec.roster.findIndex(p => p.id === pid);
     if (mineIdx >= 0 && kicked(mineIdx))
       return deny('Kicked', 403);
@@ -213,15 +218,27 @@ server.on('upgrade', (req, socket, head) => {
           const st5 = r.auto && r.auto[seat] && r.auto[seat].cnt >= 5;
           if (!r.off || (!r.off[seat] && !idleOK && !st5)) return;   /* 与 Worker 同步：满 5 把直接可跳 */
         }
+        {   /* 与 Worker 同步：全场都进入跳过阶段（每座次满 5 把或已移出）→ 不写跳过事件
+               （省额度、不刷提示），静默等 2 分钟解散。注意不是"都进入托管" */
+          const OFFLINE_MS2 = Number(process.env.OFFLINE_MS) || 120000;
+          let allSkipping = (r.roster.length > 0);
+          for (let i = 0; i < r.roster.length; i++) {
+            const a = r.auto && r.auto[i];
+            const t0 = goneAtOf(r, i);
+            const gone = t0 && (Date.now() - t0 >= OFFLINE_MS2);
+            if (!((a && a.cnt >= 5) || gone)) { allSkipping = false; break; }
+          }
+          if (allSkipping) return;
+        }
         const last = r.events[r.events.length - 1];
         if (last && last.skip && last.s === seat) return;   /* 幂等：同一座次只跳一次 */
         if (r.events.length >= 5000) return;
         r.events.push({ s: seat, skip: true });
-        r.lastAct = r.lastAct || {};
-        r.lastAct[seat] = Date.now();
+        /* 与 Worker 同步：跳过不刷新 lastAct（是别人替他跳，不代表本人活动） */
         {   /* 与 Worker 同步：开始代博起超 2 分钟 = 彻底断线点名（kicked 标记，只发一次） */
           const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
-          if (r.auto && r.auto[seat] && Date.now() - r.auto[seat].at >= OFFLINE_MS) {
+          const goneT0m = goneAtOf(r, seat);
+          if (goneT0m && Date.now() - goneT0m >= OFFLINE_MS) {
             /* 与 Worker 同步：只点名一次，之后每轮跳过静默 */
             r.kickNotified = r.kickNotified || {};
             if (!r.kickNotified[seat]) {
@@ -236,10 +253,10 @@ server.on('upgrade', (req, socket, head) => {
         /* 与 Worker 同步：本人取消托管 → 删代博状态，15 秒内正常博，再发呆重新托管 */
         const seat = m.s | 0;
         if (pid && r.roster.findIndex(p => p.id === pid) !== seat) return;
-        {   /* 与 Worker 同步：已彻底断线（托管满 2 分钟）→ 取消无效，已被真正移出 */
+        {   /* 与 Worker 同步：已彻底断线（从本人最后活动起算 2 分钟）→ 取消无效，已被真正移出 */
           const OFFLINE_MS = Number(process.env.OFFLINE_MS) || 120000;
-          const st = r.auto && r.auto[seat];
-          if (st && st.at && Date.now() - st.at >= OFFLINE_MS) return;
+          const goneT0c = goneAtOf(r, seat);
+          if (goneT0c && Date.now() - goneT0c >= OFFLINE_MS) return;
         }
         if (r.auto) delete r.auto[seat];
         r.cancelled = r.cancelled || {};

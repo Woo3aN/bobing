@@ -1586,7 +1586,8 @@ function applyRoll(pIdx, dice, grade) {
        他已经被移出本局，之后每轮默认跳过即可，不用反复刷提示（用户 2026-09-19 定）。 */
     var rr = (typeof NET !== 'undefined' && NET.lastRoomSnap) ? NET.lastRoomSnap() : null;
     var a = rr && rr.auto && rr.auto[state.current];
-    var gone = !!(a && a.at && (Date.now() - a.at >= OFFLINE_MS));
+    var t0 = (typeof NET !== 'undefined' && NET.goneAtOf) ? NET.goneAtOf(state.current) : (a && a.at);
+    var gone = !!(t0 && (Date.now() - t0 >= OFFLINE_MS));
     if (!gone) {
       pushSystemLog('⏭️ ' + p.name + ' 掉线，本把跳过');
       if (!silent) toast(p.name + ' 掉线，跳过这一把');
@@ -1625,11 +1626,27 @@ function applyRoll(pIdx, dice, grade) {
     return (state.online.off && state.online.off[s] === true) ||
            (typeof NET !== 'undefined' && NET.autoCount && NET.autoCount(s) > 0);
   }
+  /* 全场都进入「自动跳过」阶段了吗（每个座次都已被代博满 5 把，或已彻底断线被移出）？
+     是 → 比赛没有观众了：停止自动跳过循环，静默等 2 分钟由服务端解散房间。
+     ⚠️ 别用"都进入托管"当停止条件（用户 2026-09-19 明确）：最后进入托管的那位
+     仍要正常代博 5 把，等他也满了 5 把（进入跳过阶段）才停。 */
+  function allSkipping() {
+    if (typeof NET === 'undefined' || !NET.autoCount) return false;
+    if (!state.players.length) return false;
+    for (var i = 0; i < state.players.length; i++) {
+      var cnt = NET.autoCount(i);
+      var t0 = NET.goneAtOf ? NET.goneAtOf(i) : 0;
+      var gone = t0 > 0 && (Date.now() - t0 >= OFFLINE_MS);   /* 已彻底断线（被移出）也算 */
+      if (!(cnt >= AUTO_ROLL_MAX || gone)) return false;
+    }
+    return true;
+  }
   function armIdle() {
     disarmIdle();
     if (!state || !state.online || state.phase === 'over') return;
     idleSeat = state.current;
     if (state.busy) return;                        /* busy：等落定（afterRoll）再计时 */
+    if (allSkipping()) return;                     /* 全员跳过阶段：静默等待解散（见 allSkipping） */
     var na = needAuto(idleSeat);
     var cnt = na && NET.autoCount ? NET.autoCount(idleSeat) : 0;
     var delay;
@@ -1643,6 +1660,7 @@ function applyRoll(pIdx, dice, grade) {
   function idleFire() {
     idleTimer = null;
     if (!state || !state.online || state.phase === 'over') return;
+    if (allSkipping()) return;                     /* 全员跳过阶段：停手（等解散） */
     if (state.busy || state.current !== idleSeat) return;
     /* 本人已取消托管：不处置，但要**持续重调度**——宽限（15 秒）一过若仍没动，重新进入托管
        （取消后没有事件推进、无人再调 armIdle，不重调度的话发呆的人永远不会再被代博）。 */
@@ -1654,8 +1672,8 @@ function applyRoll(pIdx, dice, grade) {
     if (state.online.skipSeat === idleSeat && state.online.skipAt &&
         Date.now() - state.online.skipAt < 4000) return;                  /* 已在跳过占位中 */
     var cnt = NET.autoCount(idleSeat);
-    var autoAt = typeof NET !== 'undefined' && NET.autoAt ? NET.autoAt(idleSeat) : 0;
-    var expired = autoAt > 0 && Date.now() - autoAt >= OFFLINE_MS;        /* 开始代博起 2 分钟 */
+    var gone0 = typeof NET !== 'undefined' && NET.goneAtOf ? NET.goneAtOf(idleSeat) : 0;
+    var expired = gone0 > 0 && Date.now() - gone0 >= OFFLINE_MS;   /* 从"他最后活动"起算 2 分钟 */
     if (expired || cnt >= AUTO_ROLL_MAX) {
       /* 彻底断线（2 分钟）或满 5 把：自动跳过（发事件 + 占位，等广播推进） */
       state.online.skipSeat = idleSeat; state.online.skipAt = Date.now();
@@ -2472,9 +2490,9 @@ function updateRollButton() {
        用户就永远点不到取消（2026-09-19 实测两轮才定位到）。 */
     var mySeat = state.online.seat;
     var myAuto = typeof NET !== 'undefined' && NET.autoCount ? NET.autoCount(mySeat) : 0;
-    var myAt = typeof NET !== 'undefined' && NET.autoAt ? NET.autoAt(mySeat) : 0;
-    /* ⚠️ 托管满 2 分钟 = 已彻底断线、被真正移出本局：连本人也不能再点取消（服务端也会拒绝）。
-       否则"人还在页面但 2 分钟没动"的玩家一点取消就复活（2026-09-19 用户实测发现）。 */
+    var myAt = typeof NET !== 'undefined' && NET.goneAtOf ? NET.goneAtOf(mySeat) : 0;
+    /* ⚠️ 托管满 2 分钟（从"我最后活动"起算）= 已彻底断线、被真正移出本局：连本人也不能再点取消
+       （服务端也会拒绝）。否则"人还在页面但 2 分钟没动"的玩家一点取消就复活（2026-09-19 实测）。 */
     var myGone = !!(myAuto > 0 && myAt && Date.now() - myAt >= OFFLINE_MS);
     if (myGone) {
       b.disabled = true;
@@ -2922,8 +2940,8 @@ function bindEvents() {
        取消后：若正轮到我 → 顺手替我博这一把；若轮次已在别人 → 只取消，等下次轮到我正常博。 */
     if (state.online && state.online.link === 'ok' && NET.autoCount && NET.autoCount(state.online.seat) > 0) {
       var mySeat0 = state.online.seat;
-      /* 已彻底断线（托管满 2 分钟）→ 不能取消：已被真正移出本局（服务端同样会拒绝） */
-      if (NET.autoAt && NET.autoAt(mySeat0) && Date.now() - NET.autoAt(mySeat0) >= OFFLINE_MS) {
+      /* 已彻底断线（托管满 2 分钟，从"我最后活动"起算）→ 不能取消：已被真正移出本局 */
+      if (NET.goneAtOf && NET.goneAtOf(mySeat0) && Date.now() - NET.goneAtOf(mySeat0) >= OFFLINE_MS) {
         toast('你已掉线太久，本局已被移出（本局结束后可参与下一局）');
         return;
       }
@@ -3306,10 +3324,42 @@ var NET = (function () {
       setTimeout(function () {
         if (self.wantClose || !self.codeNow) return;
         self.open(self.codeNow, 'join', self.nameNow, function (err) {
-          if (err) { self.reconnect(); return; }
-          setLink('ok');          /* 连回来了（漏掉的事件由首帧快照派发补齐） */
+          if (!err) { setLink('ok'); return; }   /* 连回来了（漏掉的事件由首帧快照派发补齐） */
+          /* 重连失败：先查一次服务端原因——若已被移出（掉线超 2 分钟）/ 房间已散，
+             重连没有任何意义，直接停手 + 明确告知 + 回设置页，
+             不要一直停在「重连中…」吊着用户（2026-09-19 用户实测反馈）。 */
+          self.checkGone(function (gone, why) {
+            if (!gone) { self.reconnect(); return; }
+            if (self.pingTimer) { clearInterval(self.pingTimer); self.pingTimer = null; }
+            setLink('dead');
+            toast(why);
+            if (self.forgetRoom) self.forgetRoom();       /* 清掉「回到房间」记忆，避免反复白试 */
+            if (typeof exitToSetup === 'function') exitToSetup();
+          });
         });
       }, 3000);
+    },
+    /* 重连前问服务端：这个座次是不是已经没救了（被移出 / 房间散了）？
+       cb(gone, reason)。网络查不通时按"没被移出"处理（继续常规重连）。 */
+    checkGone: function (cb) {
+      var self = this;
+      if (!self.codeNow || !self.httpBase) { cb(false, ''); return; }
+      fetch(self.httpBase() + '?code=' + self.codeNow).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j || !j.exists) { cb(true, '房间已经散了'); return; }
+        if (j.closed) { cb(true, '房间已经散了'); return; }
+        var lim = j.offlineMs || 120000, i;
+        for (i = 0; i < (j.roster || []).length; i++) {
+          if (j.roster[i].id === PEER) {
+            var a = (j.auto || {})[i];
+            var t0 = a ? (a.at || 0) : 0;
+            var la = (j.lastAct || {})[i] || 0;
+            if (t0 && la && la < t0) t0 = la;               /* 与 kicked 判定一致：取更早的活动时间 */
+            if (t0 && Date.now() - t0 >= lim) { cb(true, '你掉线太久，本局已被移出（等下一局重新加入即可）'); return; }
+            break;
+          }
+        }
+        cb(false, '');
+      }).catch(function () { cb(false, ''); });
     },
     /* 切回前台唤醒（用户 2026-09-18 实测：切出去看个微信，回来还是掉线，两边不同步）：
        iOS/安卓切后台几秒就把 WebSocket 掐了 —— 回来后 3 秒定时器重连太慢，
@@ -3349,17 +3399,20 @@ var NET = (function () {
         if (!err) { self.codeNow = code; self.nameNow = name; cb(null, r); return; }
         if (err !== '连不上房间服务') { cb(err, null); return; }
         /* 连不上 ≠ 房间不存在：问一下服务端到底为什么（4xx 的正文浏览器拿不到）。
-           查询口带回 roster/off/autoAt：据此区分「这局已经开始了」和「你已掉线太久被移出」。 */
+           查询口带回 roster/off/auto：据此区分「这局已经开始了」和「你已掉线太久被移出」。
+           ⚠️ 字段名是 `auto`（{cnt,at} 结构），不是 autoAt —— 名字对不上就永远判不出"被移出"，
+           于是所有人都看到"这局已经开始了"（2026-09-19 实测踩过）。
+           ⚠️ 判据与服务端 kicked() 完全一致：只看 auto[i].at 超时，**不看 off**（假死的 socket 还活着）。 */
         fetch(self.httpBase() + '?code=' + code).then(function (res) { return res.json(); }).then(function (j) {
           if (!j.exists) cb('没有这个房间号', null);
           else if (j.closed) cb('这局已经散了', null);
-          else if (j.started && j.roster && j.off && j.autoAt) {
-            /* 被移出判定：自己的 pid（重连场景）或自己的名字（认领场景）对应的座次已超时 */
+          else if (j.started && j.roster && j.auto) {
             var lim = j.offlineMs || 120000, kickedSelf = false, i;
             for (i = 0; i < j.roster.length; i++) {
               var isMe = j.roster[i].id === PEER || j.roster[i].name === name;
-              var t0 = j.autoAt[i] || 0;
-              if (isMe && j.off[i] && t0 && Date.now() - t0 >= lim) { kickedSelf = true; break; }
+              var a = j.auto[i];
+              var t0 = a ? (a.at || 0) : 0;
+              if (isMe && t0 && Date.now() - t0 >= lim) { kickedSelf = true; break; }
             }
             cb(kickedSelf ? '你掉线太久，已被移出本局（可等下一局）' : '这局已经开始了', null);
           }
@@ -3720,6 +3773,25 @@ var NET = (function () {
     var m = document.getElementById('net-modal'); if (m) m.classList.remove('show');
   }
 
+  /* 「托管满 2 分钟 → 我已被移出」的**到点自检**（2026-09-19 用户反馈"两分钟好像有延迟"）：
+     这个时刻是纯时间流逝，没有任何事件/广播来触发界面刷新 —— 不加定时器的话，
+     按钮要等下一次别人动作（可能又过几十秒）才变成「你已掉线太久」，看起来就是"延迟"。
+     每 3 秒查一次，到点立刻刷按钮 + 提示一次。 */
+  var goneNotifiedSeat = -1;
+  setInterval(function () {
+    if (!state || !state.online || state.phase === 'over') return;
+    if (typeof NET === 'undefined' || !NET.autoCount) return;
+    var me = state.online.seat;
+    if (!(NET.autoCount(me) > 0)) return;
+    var t0 = NET.goneAtOf ? NET.goneAtOf(me) : 0;
+    if (!t0 || Date.now() - t0 < OFFLINE_MS) return;
+    if (typeof updateRollButton === 'function') updateRollButton();
+    if (goneNotifiedSeat !== me) {
+      goneNotifiedSeat = me;
+      toast('你掉线太久，本局已被移出（本局结束后可参与下一局）');
+    }
+  }, 3000);
+
   /* 「谁退出了房间」——记录里带 left{seq,name}，按 seq 只提示一次。
      ⚠️ 首个快照只做基线（否则刚进房就会把历史上的"某人已退出"当成刚发生）。 */
   var seenLeftSeq = 0, leftArmed = false;
@@ -3976,6 +4048,15 @@ var NET = (function () {
     /* 某座次首次被代博的时刻（0 = 还没开始）—— 2 分钟"彻底断线"判定的起点 */
     autoAt: function (s) {
       return (lastRoom && lastRoom.auto && lastRoom.auto[s] && lastRoom.auto[s].at) || 0;
+    },
+    /* 某座次本人最后活动时刻（快照带下来；跳过不算活动） */
+    lastActOf: function (s) {
+      return (lastRoom && lastRoom.lastAct && lastRoom.lastAct[s]) || 0;
+    },
+    /* 「彻底断线」起算点 = **该座次第一次被代博的时刻**（用户 2026-09-19 确认口径）。
+       与服务端 goneAt/kicked 完全一致。 */
+    goneAtOf: function (s) {
+      return this.autoAt(s);
     },
     /* 某座次是否已被本人取消托管 —— 返回**取消时刻的时间戳**（0 = 未取消）；
        宽限期（15 秒）内正常自己博，宽限过后若仍没动会重新进入托管 */

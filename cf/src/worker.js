@@ -70,6 +70,12 @@ export class RoomDO {
   /* 定时检查：所有人都托管满 2 分钟（全员被移出）→ 房间直接解散（用户 2026-09-19 定）。
      ⚠️ 必须有 alarm 兜底：全员离线时没有任何消息能触发服务端代码，只能靠定时器。
      设置点：某座次首次代博时 setAlarm(now + OFFLINE_MS + 2s)。 */
+  /* 某座次"彻底断线"的起算点 = **第一次被代博的时刻**（用户 2026-09-19 确认口径：
+     从他第一次被代博起算 2 分钟；前面的 15 秒挂机判定不算在内）。 */
+  goneAt(i) {
+    const a = this.rec.auto && this.rec.auto[i];
+    return (a && a.at) || 0;
+  }
   async alarm() {
     await this.load();
     if (!this.rec || this.rec.closed) return;
@@ -82,8 +88,8 @@ export class RoomDO {
     }
     let allGone = true;
     for (let i = 0; i < roster.length; i++) {
-      const a = this.rec.auto && this.rec.auto[i];
-      if (!a || !a.at || Date.now() - a.at < OFFLINE_MS) { allGone = false; break; }
+      const t0 = this.goneAt(i);
+      if (!t0 || Date.now() - t0 < OFFLINE_MS) { allGone = false; break; }
     }
     if (allGone) {
       this.rec.closed = true;        /* 全员掉线 → 解散（客户端收到 closed 即回设置页并提示） */
@@ -110,6 +116,7 @@ export class RoomDO {
           roster: rec.roster.map(p => ({ id: p.id, name: p.name })),
           off: rec.off || [],
           auto: rec.auto || {},
+          lastAct: rec.lastAct || {},
           offlineMs: OFFLINE_MS
         } : { exists: false },
         { headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -136,7 +143,10 @@ export class RoomDO {
          重连还是按名字认领都不再放行。座次与已博到的奖品保留（结算按之前博的算），
          之后每轮到自动跳过，游戏照常走完；「再来一局」清空后可正常参与下一局。 */
       const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
-      const kicked = (i) => !!(rec.auto && rec.auto[i] && Date.now() - rec.auto[i].at >= OFFLINE_MS);
+      const kicked = (i) => {
+        const a = rec.auto && rec.auto[i];            /* 第一次代博起算 2 分钟（与 goneAt 一致） */
+        return !!(a && a.at && Date.now() - a.at >= OFFLINE_MS);
+      };
       const mineIdx = rec.roster.findIndex(p => p.id === pid);
       if (mineIdx >= 0 && kicked(mineIdx))
         return new Response('掉线超过两分钟，已被移出本局', { status: 403 });
@@ -275,18 +285,31 @@ export class RoomDO {
       const idleOK = la !== undefined && Date.now() - la >= RoomDO.IDLE_PROXY_MS;
       const st5 = this.rec.auto && this.rec.auto[seat] && this.rec.auto[seat].cnt >= 5;
       if (!this.rec.off || (!this.rec.off[seat] && !idleOK && !st5)) return;   /* 满 5 把 → 直接可跳 */
+      /* 全场都已进入「自动跳过」阶段（每座次代博满 5 把或已彻底断线）→ 跳过事件没有观众，
+         直接不写：既省额度（每次跳过都是一次 SQLite 行写）也不刷提示（2026-09-19 用户要求），
+         静默等 alarm 到点解散房间。
+         ⚠️ 判据是"都满 5 把"，**不是**"都进入托管"——最后进入托管的那位还要正常代博 5 把。 */
+      {
+        let allSkipping = (this.rec.roster.length > 0);
+        for (let i = 0; i < this.rec.roster.length; i++) {
+          const a = this.rec.auto && this.rec.auto[i];
+          const t0 = this.goneAt(i);
+          const gone = t0 && (Date.now() - t0 >= OFFLINE_MS);
+          if (!((a && a.cnt >= 5) || gone)) { allSkipping = false; break; }
+        }
+        if (allSkipping) return;
+      }
       const last = this.rec.events[this.rec.events.length - 1];
       if (last && last.skip && last.s === seat) return;      /* 已跳过 → 忽略重复请求 */
       if (this.rec.events.length >= 5000) return;            /* 兜底上限，同 roll */
       this.rec.events.push({ s: seat, skip: true });
-      this.rec.lastAct = this.rec.lastAct || {};
-      this.rec.lastAct[seat] = Date.now();
+      /* 不刷新 lastAct：跳过是"别人替他跳"，不代表本人活动（刷了会把 2 分钟无限续期） */
       /* 彻底断线点名：开始代博起超 2 分钟（用户 2026-09-18 定）→ left 带 kicked，
          其他人看到「XX 掉线太久，已被移出本局」；此后该座次的重连/认领一律被拒。 */
       {
         const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
-        if (this.rec.auto && this.rec.auto[seat] &&
-            Date.now() - this.rec.auto[seat].at >= OFFLINE_MS) {
+        const goneT0 = this.goneAt(seat);
+        if (goneT0 && Date.now() - goneT0 >= OFFLINE_MS) {
           /* ⚠️ 只点名一次：之后每轮跳过都静默（用户 2026-09-19 定——重复刷"已被移出本局"很丑） */
           this.rec.kickNotified = this.rec.kickNotified || {};
           if (!this.rec.kickNotified[seat]) {
@@ -318,8 +341,8 @@ export class RoomDO {
          这就违背了"2 分钟没回来 = 移出"的规则（2026-09-19 用户实测发现）。 */
       {
         const OFFLINE_MS = Number(this.env && this.env.OFFLINE_MS) || 120000;
-        const st = this.rec.auto && this.rec.auto[seat];
-        if (st && st.at && Date.now() - st.at >= OFFLINE_MS) return;
+        const goneT0 = this.goneAt(seat);      /* 与 kicked 判定同一套起算点 */
+        if (goneT0 && Date.now() - goneT0 >= OFFLINE_MS) return;
       }
       if (this.rec.auto) delete this.rec.auto[seat];
       this.rec.cancelled = this.rec.cancelled || {};
