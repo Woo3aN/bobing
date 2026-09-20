@@ -171,11 +171,20 @@ export class RoomDO {
            新 pid 对不上 roster → 直接 403 的话用户永远回不了房（2026-09-18 用户实测）。
            按名字认领：roster 里有**同名且当前确实离线**的座次 → 顶替它的 pid 重连。
            在线同名 / 不同名 / 已彻底断线（超 2 分钟）→ 仍然拒绝（防冒名顶掉正在玩的人）。 */
+        /* 在线同名 / 不同名 → 拒绝（防冒名顶掉正在玩的人）。
+           已彻底断线（超 2 分钟）的同名座次 → **允许接管进来观战**（只读），
+           用户 2026-09-20 真机反馈：页面被杀后身份丢失，重开走认领被 403 挡在门外，进不去观战。 */
         this.markOffline();   /* 先把 off 刷到最新（此刻新连接还没 accept，不会把自己算在线） */
-        const idx = rec.roster.findIndex((p, i) => p.name === name && this.rec.off && this.rec.off[i] && !kicked(i));
+        let idx = rec.roster.findIndex((p, i) => p.name === name && this.rec.off && this.rec.off[i] && !kicked(i));
+        let byClaim = false;
+        if (idx < 0) {
+          idx = rec.roster.findIndex((p, i) => p.name === name && this.rec.off && this.rec.off[i] && kicked(i));
+          byClaim = idx >= 0;      /* 认领的是"已被移出"的座次 → 连接建立时会判为观战 */
+        }
         if (idx < 0) return new Response('这局已经开始了', { status: 403 });
         this.rec.roster[idx].id = pid;
-        if (this.rec.auto) delete this.rec.auto[idx];
+        /* ⚠️ 只有"能正常玩"的座次才清托管；被移出的座次保留 auto（不清 = 他仍是观战身份，不会复活） */
+        if (this.rec.auto && !byClaim) delete this.rec.auto[idx];
         await this.save();
       } else if (!mine) {
         this.rec.roster.push({ id: pid, name });

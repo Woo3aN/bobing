@@ -162,12 +162,18 @@ server.on('upgrade', (req, socket, head) => {
     /* 与 Worker 同步：被移出者也放进来（观战），不再 403 */
     const mine = mineIdx >= 0;
     if (!mine && rec.started) {
-      /* 与 Worker 同步：页面被杀后 PEER 丢 → 按名字认领离线座次（在线同名/不同名/已彻底断线拒绝） */
+      /* 与 Worker 同步：按名字认领——"活"的同名座次直接接管；
+         只剩"已被移出"的同名座次时也放行（接管后=观战，只读），不再 403。 */
       marks(rec);
-      const idx = rec.roster.findIndex((p, i) => p.name === name && rec.off && rec.off[i] && !kicked(i));
+      let idx = rec.roster.findIndex((p, i) => p.name === name && rec.off && rec.off[i] && !kicked(i));
+      let byClaim = false;
+      if (idx < 0) {
+        idx = rec.roster.findIndex((p, i) => p.name === name && rec.off && rec.off[i] && kicked(i));
+        byClaim = idx >= 0;
+      }
       if (idx < 0) return deny('Started', 403);
       rec.roster[idx].id = pid;
-      if (rec.auto) delete rec.auto[idx];
+      if (rec.auto && !byClaim) delete rec.auto[idx];
     } else if (!mine) {
       rec.roster.push({ id: pid, name });
     }

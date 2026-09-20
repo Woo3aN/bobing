@@ -147,14 +147,22 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   /* 客户端全自动代博：轮到掉线座次 → 任一在线端发 a 标记的 roll（真实骰子）。
      真实轮次：代博乙(s2) → 房主(s0) → 客人(s1) → 又轮到乙 → 代博……事件不连续同座次。 */
   send(guest, { t: 'roll', s: 2, d: [1, 2, 3, 4, 5, 6], a: 1 });
-  await waitFor(() => lastRoom(guest).events.length === 3);
+  if (!await waitFor(() => lastRoom(guest).events.length === 3, 5000)) {
+    /* 线上偶发（首字节/广播延迟）：重发一次。服务端幂等会拦真正的重复，安全。
+       之前这里直接往下走 → events[2] undefined → 整个测试脚本崩（2026-09-20 定位）。 */
+    send(guest, { t: 'roll', s: 2, d: [1, 2, 3, 4, 5, 6], a: 1 });
+    await waitFor(() => lastRoom(guest).events.length === 3, 6000);
+  }
   send(host, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6] });
   await waitFor(() => lastRoom(guest).events.length === 4);
   send(guest, { t: 'roll', s: 1, d: [3, 4, 5, 6, 6, 6] });
   await waitFor(() => lastRoom(guest).events.length === 5);
-  ok('代博：替掉线座次掷骰被接受（a 标记）',
-    lastRoom(host).events[2].a === 1 && lastRoom(host).events[3].a === undefined,
-    JSON.stringify(lastRoom(host).events[2]));
+  {
+    const ev3 = lastRoom(host).events;
+    ok('代博：替掉线座次掷骰被接受（a 标记）',
+      ev3.length >= 4 && !!ev3[2] && ev3[2].a === 1 && ev3[3] && ev3[3].a === undefined,
+      'events=' + ev3.length + ' e2=' + JSON.stringify(ev3[2]));
+  }
   /* 并发去重：两个端同时触发代博 → 两条同座次事件紧挨着 → 只有第一条被接受 */
   send(guest, { t: 'roll', s: 2, d: [6, 6, 6, 6, 6, 6], a: 1 });
   send(host, { t: 'roll', s: 2, d: [5, 5, 5, 5, 5, 5], a: 1 });
@@ -330,10 +338,24 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
       'events=' + lastRoom(spec7).events.length + ' (expected ' + ev0 + ')');
     spec7.ws.terminate();
   }
-  /* ③ 防冒名不受影响：新 pid 用同名认领仍被拒 */
-  let claimErr7 = null;
-  try { await connect(code7, 'join', '乙', 'vX'); } catch (e) { claimErr7 = e.message; }
-  ok('观战不影响防冒名：新 pid 同名认领仍被拒（403）', /403/.test(claimErr7 || ''), claimErr7 || '');
+  /* ③ 页面被杀后身份丢失（iOS 常态）→ 新 pid 用同名认领**已移出**的座次：
+     必须放行（接管进来观战），否则用户被挡在门外（2026-09-20 用户真机反馈） */
+  let claim7 = null, claimErr7 = null;
+  try { claim7 = await connect(code7, 'join', '乙', 'vX'); } catch (e) { claimErr7 = e.message; }
+  ok('同名认领已移出座次 → 放行观战（页面被杀后仍能回来看）',
+    !claimErr7 && !!lastRoom(claim7), claimErr7 || 'connected');
+  if (claim7) {
+    const ev1 = lastRoom(claim7).events.length;
+    send(claim7, { t: 'roll', s: 1, d: [6, 6, 6, 6, 6, 6] });
+    await sleep(500);
+    ok('（认领进来的）观战者同样只读', lastRoom(claim7).events.length === ev1,
+      'events=' + lastRoom(claim7).events.length + ' (expected ' + ev1 + ')');
+    claim7.ws.terminate();
+  }
+  /* ④ 不同名的新玩家仍被拒（房间已开局，防陌生人乱入） */
+  let strangerErr7 = null;
+  try { await connect(code7, 'join', '路人', 'vY'); } catch (e) { strangerErr7 = e.message; }
+  ok('不同名的新面孔仍被拒（防陌生人乱入）', /403/.test(strangerErr7 || ''), strangerErr7 || '');
   } else {
     console.log('  - 跳过「彻底断线点名/移出重连」断言（线上 OFFLINE_MS=120s 无法快速验证，mock 已覆盖）');
   }
