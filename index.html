@@ -36,9 +36,11 @@
   --die:40px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-/* 仓库入口图标（顶部工具栏里的一个 .tbtn）：只补 flex 居中与去下划线，其余沿用 .tbtn 观感 */
-a.tbtn.gh{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;padding:0 9px}
-a.tbtn.gh:hover,a.tbtn.gh:focus-visible{color:var(--gold-l);border-color:var(--gold)}
+/* 仓库入口：正圆图标按钮（与旁边胶囊按钮同高，不带文字） */
+a.tbtn.gh{display:inline-flex;align-items:center;justify-content:center;
+  width:31px;height:31px;padding:0;border-radius:50%;text-decoration:none;flex:0 0 auto}
+a.tbtn.gh svg{display:block}
+a.tbtn.gh:hover,a.tbtn.gh:focus-visible{background:rgba(232,184,75,.16);border-color:var(--gold);color:var(--gold-l)}
 html,body{margin:0;min-height:100%}
 body{
   font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",system-ui,-apple-system,sans-serif;
