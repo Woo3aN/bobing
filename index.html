@@ -1561,7 +1561,9 @@ function applyRoll(pIdx, dice, grade) {
     entry.cls = 'g-zy'; entry.sound = 'fanfare';
     if (prevHolder === null) {
       entry.action = '得状元';
-      entry.msg = '博得状元！' + grade.label;
+      /* 第二行的「状元名称」用简称（short）：五子 →「五子带三」、四点红 →「状元带四」、
+         插金花 →「状元插金花」（用户 2026-09-21 定；第一行仍保留 grade.label 的骰面描述） */
+      entry.msg = '博得状元！' + (grade.short || grade.label);
       if (state.mode === 'solo') state.solo.firstZyRoll = state.rollCount + 1;   /* 第几把博出状元 */
     } else if (isHolder && wasHolder) {
       entry.action = '稳状元';
@@ -1574,12 +1576,21 @@ function applyRoll(pIdx, dice, grade) {
       entry.action = '夺状元';
       entry.msg = '以「' + grade.short + '」夺走了 ' + prevHolder.name + ' 的「' + (prevShort || '状元') + '」！';
     } else if (wasHolder) {
+      /* 自己降级 → 状元被前面的人拿走。这也是一次「易主」，
+         要计进同一个计数里（用户 2026-09-21 反馈：结算面板的易主次数漏掉了这种情况）。 */
+      state.zyStealCount++;
       entry.action = '失状元';
       entry.msg = '又博出' + grade.name + '（' + grade.label + '），自己的状元降级 —— ' +
-        bestP.name + ' 早前博出的「' + bestG.label + '」更大，状元归 ' + bestP.name;
+        bestP.name + ' 早前博出的「' + (bestG.short || bestG.label) + '」' +
+        (compareGrade({ tier: grade.tier, kicker: grade.kicker }, { tier: bestG.tier, kicker: bestG.kicker }) === 0
+          ? '同级，先博者保留' : '更大') +
+        '，状元归 ' + bestP.name;
     } else {
       entry.action = '夺状元失败';
-      entry.msg = '「' + grade.label + '」小于 ' + bestP.name + ' 的「' + bestG.label + '」，状元保住了';
+      /* 双方都写「状元名称」简称（用户 2026-09-21 定）：
+         例：「五子带三」小于 甲 的「状元带四」，状元保住了 */
+      entry.msg = '「' + (grade.short || grade.label) + '」小于 ' + bestP.name +
+        ' 的「' + (bestG.short || bestG.label) + '」，状元保住了';
     }
   } else if (grade.cake) {
     if (state.pool[grade.cake] > 0) {
@@ -4768,6 +4779,37 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     ok('更小的状元不能夺', st.zyHolder === 2 && st.players[3].cakes.zhuangyuan === 0, 'zyHolder=' + st.zyHolder);
     window.__game.rollForced([4, 4, 4, 4, 1, 1]);            /* A：同为插金花 → 平手不夺 */
     ok('同级完全平手不算夺（先到者保留）', st.zyHolder === 2, 'zyHolder=' + st.zyHolder);
+
+    /* ---- 降级易主 + 记录文案（用户 2026-09-21 定）----
+       规则：以各人【最后博出】的状元为准 —— 自己再博出更小的会降级；
+       降级到与别人同级时，先博的那位胜（等于易主）。
+       ⚠️ rollForced 是**按轮换**掷给当前玩家的（2 人局 A→B→A），不能连掷给同一人。 */
+    window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    var st2 = window.__game.state();
+    window.__game.rollForced([4, 4, 4, 4, 4, 2]);            /* ① A：五红带2 —— 持状元 */
+    ok('A 博五红带2 → 持状元', st2.zyHolder === 0, 'zyHolder=' + st2.zyHolder);
+    window.__game.rollForced([4, 4, 4, 4, 5, 6]);            /* ② B：四点红带11（小于五红带2）*/
+    ok('更小的状元夺不动，第二行写明「谁的什么」小于「谁的什么」',
+      st2.zyHolder === 0 && st2.log[0].msg === '「状元带十一」小于 A 的「五红带二」，状元保住了',
+      st2.log[0].msg);
+    window.__game.rollForced([4, 4, 4, 4, 5, 6]);            /* ③ A：自己降级到与 B 同为四点红带11 */
+    ok('自己降级到与别人同级 → 状元易主（先博的 B 拿走）',
+      st2.zyHolder === 1, 'zyHolder=' + st2.zyHolder);
+    ok('易主后明细同步：B 拿到状元、A 被清空',
+      st2.players[1].cakes.zhuangyuan === 1 && st2.players[0].cakes.zhuangyuan === 0,
+      'B=' + st2.players[1].cakes.zhuangyuan + ' A=' + st2.players[0].cakes.zhuangyuan);
+    ok('降级被夺也计入「状元易主」次数（结算面板用这个数）',
+      st2.zyStealCount === 1, 'zyStealCount=' + st2.zyStealCount);
+    ok('降级丢状元的第二行写明来龙去脉',
+      /降级/.test(st2.log[0].msg) && /状元归 B/.test(st2.log[0].msg), st2.log[0].msg);
+
+    /* 首次博出状元的第二行用【简称】（五子带三 / 状元带四 / 状元插金花…） */
+    window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    var st3 = window.__game.state();
+    window.__game.rollForced([5, 5, 5, 5, 5, 3]);            /* A：五子带3 */
+    ok('首次博出状元：第二行 =「博得状元！」+ 简称',
+      st3.log[0].msg === '博得状元！五子带三', st3.log[0].msg);
+    ok('第一行仍是完整骰面描述（五粒五带三）', st3.log[0].label === '五粒五带三', st3.log[0].label);
     ok('夺状元计数 = 2', st.zyStealCount === 2, st.zyStealCount);
     /* ---- 规则：以每个人【最后博出】的状元为准（2026-09-16 用户定）----
        自己再博出更小的也算，状元降级；此时别人早前博的更大，状元就归别人。 */
