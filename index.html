@@ -36,11 +36,13 @@
   --die:40px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-/* 仓库入口：正圆图标按钮（与旁边胶囊按钮同高，不带文字） */
+/* 仓库入口：只留图标本身（无圆环/无底色），盒子与旁边按钮同高，图标放大到原来圆环的大小 */
 a.tbtn.gh{display:inline-flex;align-items:center;justify-content:center;
-  width:31px;height:31px;padding:0;border-radius:50%;text-decoration:none;flex:0 0 auto}
-a.tbtn.gh svg{display:block}
-a.tbtn.gh:hover,a.tbtn.gh:focus-visible{background:rgba(232,184,75,.16);border-color:var(--gold);color:var(--gold-l)}
+  width:31px;height:31px;padding:0;border:0;background:none;border-radius:0;
+  color:var(--paper);opacity:.85;text-decoration:none;flex:0 0 auto;
+  transition:opacity .18s,color .18s}
+a.tbtn.gh svg{display:block;width:30px;height:30px}
+a.tbtn.gh:hover,a.tbtn.gh:focus-visible{opacity:1;color:var(--gold-l);background:none;border:0}
 html,body{margin:0;min-height:100%}
 body{
   font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",system-ui,-apple-system,sans-serif;
@@ -512,7 +514,7 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
     <button class="tbtn on" id="btn-sound" data-page-node-id="yrvLfou7T9QyEtbGEQOzQB">音效 开</button>
     <!-- 仓库入口：与工具按钮同排（样式统一、不挡任何内容），新窗口打开 -->
     <a class="tbtn gh" id="gh-link" href="https://github.com/Woo3aN/bobing" target="_blank" rel="noopener"
-       title="GitHub 仓库 · 源码与更新日志" aria-label="打开 GitHub 仓库"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+       title="GitHub 仓库 · 源码与更新日志" aria-label="打开 GitHub 仓库"><svg viewBox="0 0 16 16" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
   </div>
 
   <!-- 设置页 -->
@@ -2891,7 +2893,11 @@ function refreshSoundBtn() {
   var st = Sfx.status();
   var on = st !== 'off';
   b.className = 'tbtn' + (on ? ' on' : '');
-  b.textContent = !on ? '音效 关' : (st === 'running' ? '音效 开' : '音效 点击开启');
+  /* 只保留「开 / 关」两种文案（用户 2026-09-21 定）：
+     原先还有第三种「音效 点击开启」（音频上下文尚未解锁时提示点一下），
+     但那串字太长，窄屏上会把工具栏里的 GitHub 图标挤到下一行；而且语义上让人以为"还没开"。
+     解锁动作本来就在点击处理里（点一下即解锁），文案不必额外提示。 */
+  b.textContent = on ? '音效 开' : '音效 关';
 }
 function bindEvents() {
   /* 奖项数量：输入即时生效 —— 落到全局 QUOTA、存盘、刷新所有相关文案与规则页 */
