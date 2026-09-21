@@ -37,6 +37,13 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* 仓库入口：只留图标本身（无圆环/无底色），盒子与旁边按钮同高，图标放大到原来圆环的大小 */
+/* 音效按钮：桌面显示文字，手机端只显示喇叭图标（把这一行的空间让给仓库图标）
+   开 = 喇叭 + 声波（金色）；关 = 喇叭 + 斜杠（变暗） */
+#btn-sound{display:inline-flex;align-items:center;gap:5px}
+#btn-sound .ico{display:none;width:17px;height:17px}
+#btn-sound .ico .slash{display:none}
+#btn-sound:not(.on) .ico .wave{display:none}
+#btn-sound:not(.on) .ico .slash{display:block}
 a.tbtn.gh{display:inline-flex;align-items:center;justify-content:center;
   width:31px;height:31px;padding:0;border:0;background:none;border-radius:0;
   color:var(--paper);opacity:.85;text-decoration:none;flex:0 0 auto;
@@ -456,15 +463,18 @@ button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
   /* 手机端把顶栏挤进一行（375–414px 的 iPhone 标准版否则会把仓库图标挤到第二行）：
      只压「间距」与月标尺寸——按钮内边距与字号保持原样（用户 2026-09-21 明确要求不改按钮大小）。
      真正吃空间的是 .spacer（flex:1，把按钮组顶到最右），这里改成固定小间距，按钮组紧跟标题。 */
-  /* 实测（360–390px，安卓主流与 iPhone 标准版）：即使把间距压到 2px、月标缩到 20px，
-     「标题 + 4 按钮 + 仓库图标」仍放不进一行 → 仓库图标会落到第二行。
-     参数取「月标 20px + 间距 4px」：视觉最接近原样，不再为这一行继续牺牲观感。 */
+  /* 手机端顶栏压进一行：间距收紧 + 版本号图标化的音效按钮（见 @media 400 档）。
+     ⚠️ 月标尺寸以 400px 档为准（那里会覆盖这里），此处只兜底 401–600px。 */
   .topbar{gap:4px}
   .moon{width:20px;height:20px}
+  /* 手机端音效按钮只留喇叭图标（省 ~35px），把这一行让给仓库图标 */
+  #btn-sound .ico{display:block}
+  #btn-sound #sound-label{display:none}
+  #btn-sound{padding:7px 9px}
   .brand b{font-size:17px;letter-spacing:1px}
   .brand span{display:none}
   .tbtn{padding:7px 10px;font-size:12px}
-  .moon{width:38px;height:38px}
+  .moon{width:26px;height:26px}   /* 最窄档：再收一档，360px 安卓主流才容得下仓库图标 */
   /* 右列定宽 76px（按钮正好放得下）→ 左侧文字区宽度恒定，状态栏高度只由"行数"决定。
      who 在手机上允许折成 2 行（不再 ellipsis 截断），高度变化只发生在"换名字"这一刻，
      而不会因为"秒表数字多了一位"这种小事去挤动版面。 */
@@ -519,7 +529,7 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
     <button class="tbtn" id="btn-rules" data-page-node-id="wgPzYSnU18o3OMNlYr3bbL">规则</button>
     <button class="tbtn" id="btn-hist" data-page-node-id="m8v5z2KdnDHTrpUOKV0E0k">战绩</button>
     <button class="tbtn" id="btn-stat">概率</button>
-    <button class="tbtn on" id="btn-sound" data-page-node-id="yrvLfou7T9QyEtbGEQOzQB">音效 开</button>
+    <button class="tbtn on" id="btn-sound" title="音效 开 / 关" data-page-node-id="yrvLfou7T9QyEtbGEQOzQB"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M9.2 1.6a.5.5 0 0 1 .8.4v12a.5.5 0 0 1-.8.4L5.6 11.6H2.8a.8.8 0 0 1-.8-.8V5.2c0-.44.36-.8.8-.8h2.8l3.6-2.8z"/><path class="wave" d="M11.6 5.6c.9.7 1.4 1.5 1.4 2.4s-.5 1.7-1.4 2.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path class="slash" d="M2.4 2.4 13.6 13.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span id="sound-label">音效 开</span></button>
     <!-- 仓库入口：与工具按钮同排（样式统一、不挡任何内容），新窗口打开 -->
     <a class="tbtn gh" id="gh-link" href="https://github.com/Woo3aN/bobing" target="_blank" rel="noopener"
        title="GitHub 仓库 · 源码与更新日志" aria-label="打开 GitHub 仓库"><svg viewBox="0 0 16 16" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
@@ -2904,8 +2914,12 @@ function refreshSoundBtn() {
   /* 只保留「开 / 关」两种文案（用户 2026-09-21 定）：
      原先还有第三种「音效 点击开启」（音频上下文尚未解锁时提示点一下），
      但那串字太长，窄屏上会把工具栏里的 GitHub 图标挤到下一行；而且语义上让人以为"还没开"。
-     解锁动作本来就在点击处理里（点一下即解锁），文案不必额外提示。 */
-  b.textContent = on ? '音效 开' : '音效 关';
+     解锁动作本来就在点击处理里（点一下即解锁），文案不必额外提示。
+     ⚠️ 文案写在子元素 #sound-label 里（不能直接赋 textContent —— 那会把按钮里的喇叭图标一起清掉）；
+     button.textContent 仍会聚合到这段文字，所以既有探针断言不受影响。 */
+  var lbl = document.getElementById('sound-label');
+  if (lbl) lbl.textContent = on ? '音效 开' : '音效 关';
+  else b.textContent = on ? '音效 开' : '音效 关';
 }
 function bindEvents() {
   /* 奖项数量：输入即时生效 —— 落到全局 QUOTA、存盘、刷新所有相关文案与规则页 */
