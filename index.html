@@ -456,6 +456,9 @@ button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
   /* 手机端把顶栏挤进一行（375–414px 的 iPhone 标准版否则会把仓库图标挤到第二行）：
      只压「间距」与月标尺寸——按钮内边距与字号保持原样（用户 2026-09-21 明确要求不改按钮大小）。
      真正吃空间的是 .spacer（flex:1，把按钮组顶到最右），这里改成固定小间距，按钮组紧跟标题。 */
+  /* 实测（360–390px，安卓主流与 iPhone 标准版）：即使把间距压到 2px、月标缩到 20px，
+     「标题 + 4 按钮 + 仓库图标」仍放不进一行 → 仓库图标会落到第二行。
+     参数取「月标 20px + 间距 4px」：视觉最接近原样，不再为这一行继续牺牲观感。 */
   .topbar{gap:4px}
   .moon{width:20px;height:20px}
   .brand b{font-size:17px;letter-spacing:1px}
