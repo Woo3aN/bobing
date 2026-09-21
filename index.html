@@ -453,7 +453,12 @@ button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
   .quotaset{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:600px){
-  .topbar{gap:8px}
+  /* 手机端把顶栏挤进一行（375–414px 的 iPhone 标准版否则会把仓库图标挤到第二行）：
+     只压「间距」与月标尺寸——按钮内边距与字号保持原样（用户 2026-09-21 明确要求不改按钮大小）。
+     真正吃空间的是 .spacer（flex:1，把按钮组顶到最右），这里改成固定小间距，按钮组紧跟标题。 */
+  .topbar{gap:4px}
+  .moon{width:20px;height:20px}
+  .brand b{font-size:17px;letter-spacing:1px}
   .brand span{display:none}
   .tbtn{padding:7px 10px;font-size:12px}
   .moon{width:38px;height:38px}
