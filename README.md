@@ -19,7 +19,6 @@
 
 <img src="preview-mobile.png" alt="手机端" width="300"> 
 
-
 | 入口 | 地址 | 说明 |
 |---|---|---|
 | 在线体验（主） | <https://woo3an.top/bobing/> | 联机走同源 WebSocket |
@@ -267,11 +266,6 @@ bobing/
 ## 更新日志
 
 见 [CHANGELOG.md](CHANGELOG.md)。
-
-## 想读源码？
-
-有一份写给"只会 C/C++"的人的 [项目阅读指南](READING.md)：全局地图、分步入口（规则引擎 → 状态 → 界面 → 联机）、
-可动手的小实验，以及 JS 与 C/C++ 的差异对照表。
 
 ## License
 
