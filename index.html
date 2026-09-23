@@ -4,7 +4,7 @@
 <meta charset="utf-8" data-page-node-id="24umd8gCSLjNJXS8GGR1Mv">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" data-page-node-id="ZvJ6uN3dW5TUqR2aDEqeYN">
 <title>中秋博饼</title>
-<meta name="description" content="闽南中秋博饼小游戏 —— 六颗骰子丢进大红碗博状元。2-6 人传阅、单人挑战、状元可夺、实时概率统计，打开就能玩。">
+<meta name="description" content="闽南中秋博饼小游戏 —— 六颗骰子丢进大红碗博状元。2-15 人传阅、单人挑战、状元可夺、实时概率统计，打开就能玩。">
 <meta name="theme-color" content="#5c0709">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -559,6 +559,10 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
         <button class="chip on" data-n="4" data-page-node-id="jJbydhFEHaS9rgR5i5DIDf">4 人</button>
         <button class="chip" data-n="5" data-page-node-id="x2dMqX46cewgtHw3SPHIbg">5 人</button>
         <button class="chip" data-n="6" data-page-node-id="kx5UxfoLWGHSG9fQqvaIfV">6 人</button>
+        <button class="chip" data-n="7">7 人</button>
+        <button class="chip" data-n="8">8 人</button>
+        <button class="chip" data-n="9">9 人</button>
+        <button class="chip" data-n="10">10 人</button>
       </div>
       <h4 style="font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px" data-page-node-id="qqtRbxKDK0mt8Vi8bk3lBs">玩家</h4>
       <div id="setup-players" data-page-node-id="9li9UEPNB1YnBsyQnC6iyU"></div>
@@ -4227,7 +4231,7 @@ var NET = (function () {
 })();
 
 /* ---------- 联机面板 UI ---------- */
-var NET_BUILD = 'v2026.09.23';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
+var NET_BUILD = 'v2026.09.23b';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
 var NETUI = (function () {
   /* 玩家名跨会话记住（localStorage）：断线「按名字认领」重连靠它（2026-09-18）——
      页面被杀后 PEER 身份丢了，服务端靠「同名 + 原座次离线」认人，名字必须与原先一致 */
