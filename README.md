@@ -268,6 +268,11 @@ bobing/
 
 见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 想读源码？
+
+有一份写给"只会 C/C++"的人的 [项目阅读指南](READING.md)：全局地图、分步入口（规则引擎 → 状态 → 界面 → 联机）、
+可动手的小实验，以及 JS 与 C/C++ 的差异对照表。
+
 ## License
 
 [MIT](LICENSE) © WooSaN
