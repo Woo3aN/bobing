@@ -351,7 +351,15 @@ button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
 .sheet{width:100%;max-width:660px;max-height:86vh;overflow-y:auto;border-radius:18px;padding:16px;
   background:linear-gradient(180deg,#3a0a0e,#260609);border:1px solid var(--panel-b);
   box-shadow:0 30px 70px rgba(0,0,0,.65)}
-.sheet h2{font-size:17px;letter-spacing:1.4px;color:var(--gold-l);display:flex;align-items:center;gap:10px}
+/* 弹层标题：粘在滚动容器顶部。
+   .sheet 是滚动容器（max-height:86vh + overflow-y:auto），标题原本在滚动区内部，
+   内容一滚「×」就跟着滚上去（用户 2026-09-23 反馈）。改成 sticky 后标题常驻顶部：
+   · top 取负值抵消 .sheet 的 padding:16px，否则会留一条缝让内容透出来
+   · 必须给背景色，否则滚动内容会从标题下面露出来
+   · 负 margin 让标题背景撑满整宽（不受 padding 限制），圆角与 .sheet 顶部对齐 */
+.sheet h2{font-size:17px;letter-spacing:1.4px;color:var(--gold-l);display:flex;align-items:center;gap:10px;
+  position:sticky;top:-16px;z-index:2;margin:-16px -16px 10px;padding:14px 16px 10px;
+  background:#3a0a0e;border-radius:18px 18px 0 0;border-bottom:1px solid var(--panel-b)}
 .sheet h2 .x{margin-left:auto;font-size:20px;color:var(--muted);padding:0 6px}
 .sheet h4{font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px}
 .sheet p,.sheet li{font-size:12.5px;line-height:1.75;color:rgba(255,248,238,.85)}
