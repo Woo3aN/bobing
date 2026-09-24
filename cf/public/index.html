@@ -2,9 +2,21 @@
 <html lang="zh-CN" data-page-node-id="4LnPiOb06cFtMb2DvLTs3K">
 <head data-page-node-id="SMHbRdgkaBpNIsTSAbCtcE">
 <meta charset="utf-8" data-page-node-id="24umd8gCSLjNJXS8GGR1Mv">
+<!-- ↓↓↓ 夜间模式（强制深色）的刹车，必须紧跟 charset，越早越好 ↓↓↓
+     本页不是浅色页：它自带深红碗 + 鎏金 + 象牙白骰子的暗色设计。
+     浏览器 / 扩展的「自动深色」会把它当成浅色页整体反色 —— 结果就是你看到的
+     「骰子变黑、红金配色失真」。下面两行是两种主流机制的官方退出开关：
+       ① name=color-scheme content=only light
+          → Chrome / Edge 的 Auto Dark Mode 唯一认可的标准退出方式。
+            不写这行，手机端系统深色模式下一律被强制反色。
+       ② name=darkreader-lock
+          → Dark Reader 等反色类浏览器扩展的退出标记。
+     ⚠️ 删掉任意一行，对应的那类设备就会重新「夜间变黑」。 -->
+<meta name="color-scheme" content="only light">
+<meta name="darkreader-lock">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" data-page-node-id="ZvJ6uN3dW5TUqR2aDEqeYN">
 <title>中秋博饼</title>
-<meta name="description" content="闽南中秋博饼小游戏 —— 六颗骰子丢进大红碗博状元。2-6 人传阅、单人挑战、状元可夺、实时概率统计，打开就能玩。">
+<meta name="description" content="闽南中秋博饼小游戏 —— 六颗骰子丢进大红碗博状元。2-15 人传阅、单人挑战、状元可夺、实时概率统计，打开就能玩。">
 <meta name="theme-color" content="#5c0709">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,6 +34,17 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9JyNjMjE3MWYnLz48Y2lyY2xlIGN4PSczMicgY3k9JzMyJyByPScyOScgZmlsbD0nbm9uZScgc3Ryb2tlPScjZThiODRiJyBzdHJva2Utd2lkdGg9JzMnLz48Y2lyY2xlIGN4PScyMScgY3k9JzIzJyByPSc1JyBmaWxsPScjZmZmZGY2Jy8+PGNpcmNsZSBjeD0nNDMnIGN5PScyMycgcj0nNScgZmlsbD0nI2ZmZmRmNicvPjxjaXJjbGUgY3g9JzMyJyBjeT0nNDEnIHI9JzYnIGZpbGw9JyNmZmZkZjYnLz48L3N2Zz4=">
 <style>
 /* ============================================================
+   ⓪ 夜间模式刹车（务必留在样式表最前面）
+   ------------------------------------------------------------
+   与 <head> 里的 color-scheme meta 是同一件事的两道保险：
+   meta 负责「页面级声明」，这里负责「样式级声明」——
+   有的内核只认 meta，有的只认 CSS，两道都写才盖得住。
+   注意 only light 不是「浅色主题」的意思，它说的是
+   「本页只按浅色规则渲染，请勿自动反色」；本页仍是暗色设计。
+   ============================================================ */
+:root{color-scheme:only light}
+html{color-scheme:only light}
+/* ============================================================
    ① 主题变量
    ============================================================ */
 :root{
@@ -36,6 +59,20 @@
   --die:40px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* 仓库入口：只留图标本身（无圆环/无底色），盒子与旁边按钮同高，图标放大到原来圆环的大小 */
+/* 音效按钮：桌面显示文字，手机端只显示喇叭图标（把这一行的空间让给仓库图标）
+   开 = 喇叭 + 声波（金色）；关 = 喇叭 + 斜杠（变暗） */
+#btn-sound{display:inline-flex;align-items:center;gap:5px}
+#btn-sound .ico{display:none;width:17px;height:17px}
+#btn-sound .ico .slash{display:none}
+#btn-sound:not(.on) .ico .wave{display:none}
+#btn-sound:not(.on) .ico .slash{display:block}
+a.tbtn.gh{display:inline-flex;align-items:center;justify-content:center;
+  width:31px;height:31px;padding:0;border:0;background:none;border-radius:0;
+  color:var(--paper);opacity:.85;text-decoration:none;flex:0 0 auto;
+  transition:opacity .18s,color .18s}
+a.tbtn.gh svg{display:block;width:30px;height:30px}
+a.tbtn.gh:hover,a.tbtn.gh:focus-visible{opacity:1;color:var(--gold-l);background:none;border:0}
 html,body{margin:0;min-height:100%}
 body{
   font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",system-ui,-apple-system,sans-serif;
@@ -183,6 +220,39 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
     0 0 0 1px rgba(140,20,20,.35),
     inset 0 1.5px 2px rgba(70,0,0,.55),
     inset 0 -1px 1px rgba(255,255,255,.26)}
+
+/* ------------------------------------------------------------
+   ⓪-b 自动深色兜底（第二道保险）
+   ------------------------------------------------------------
+   适用对象：不认 `color-scheme:only light`、但会读
+   `prefers-color-scheme` 的旧内核 / 部分国产浏览器「智能深色」。
+   这里把最容易被反色弄坏的三处配色（页面底色、骰面、点数）
+   按设计原值再钉一遍 —— 只是重述，不改任何设计意图。
+
+   ⚠️ 用 background-image 而不是 background 简写：
+   简写会把 body 的 background-attachment:fixed 一并重置。
+
+   ⚠️ 骰面用的是写死的 hex 渐变（不是变量），所以必须整个重写：
+   改骰子配色时，这里要和上面的 .face / .pip 同步改。
+   ------------------------------------------------------------ */
+@media (prefers-color-scheme:dark){
+  :root,html,body{color-scheme:only light}
+  /* 页面底色：保持深红釉 */
+  body{color:var(--paper);
+    background-image:
+      radial-gradient(1100px 620px at 50% -12%, #7d141d 0%, rgba(125,20,29,0) 62%),
+      radial-gradient(760px 520px at 6% 104%, #5a0d13 0%, rgba(90,13,19,0) 58%),
+      radial-gradient(620px 420px at 96% 8%, #4a2a05 0%, rgba(74,42,5,0) 55%),
+      linear-gradient(180deg,#1b0508 0%,#250709 46%,#130306 100%)}
+  /* 骰面：保持象牙白（否则夜间被反成黑骰子，就是这次要修的那个 bug） */
+  .face{background-image:
+    radial-gradient(58% 40% at 30% 15%, rgba(255,255,255,.62) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.07) 0%, rgba(150,110,50,0) 72%),
+    linear-gradient(150deg,#fffefb 0%,#fdf9ef 42%,#f6efdd 76%,#eee3c9 100%)}
+  /* 点数：黑点为深褐、红四点为正红，两者都不能被反色 */
+  .pip{background-image:radial-gradient(circle at 38% 32%,#5a4234 0%,#2c1810 56%,#160b05 100%)}
+  .pip.red{background-image:radial-gradient(circle at 38% 32%,#ffa8a8 0%,#e03028 46%,#9c1114 100%)}
+}
 
 /* 结果条 */
 .result{margin:0 auto;width:100%;max-width:560px;min-height:66px;
@@ -337,7 +407,15 @@ button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
 .sheet{width:100%;max-width:660px;max-height:86vh;overflow-y:auto;border-radius:18px;padding:16px;
   background:linear-gradient(180deg,#3a0a0e,#260609);border:1px solid var(--panel-b);
   box-shadow:0 30px 70px rgba(0,0,0,.65)}
-.sheet h2{font-size:17px;letter-spacing:1.4px;color:var(--gold-l);display:flex;align-items:center;gap:10px}
+/* 弹层标题：粘在滚动容器顶部。
+   .sheet 是滚动容器（max-height:86vh + overflow-y:auto），标题原本在滚动区内部，
+   内容一滚「×」就跟着滚上去（用户 2026-09-23 反馈）。改成 sticky 后标题常驻顶部：
+   · top 取负值抵消 .sheet 的 padding:16px，否则会留一条缝让内容透出来
+   · 必须给背景色，否则滚动内容会从标题下面露出来
+   · 负 margin 让标题背景撑满整宽（不受 padding 限制），圆角与 .sheet 顶部对齐 */
+.sheet h2{font-size:17px;letter-spacing:1.4px;color:var(--gold-l);display:flex;align-items:center;gap:10px;
+  position:sticky;top:-16px;z-index:2;margin:-16px -16px 10px;padding:14px 16px 10px;
+  background:#3a0a0e;border-radius:18px 18px 0 0;border-bottom:1px solid var(--panel-b)}
 .sheet h2 .x{margin-left:auto;font-size:20px;color:var(--muted);padding:0 6px}
 .sheet h4{font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px}
 .sheet p,.sheet li{font-size:12.5px;line-height:1.75;color:rgba(255,248,238,.85)}
@@ -446,10 +524,21 @@ button[disabled]{filter:grayscale(.6) brightness(.85);cursor:not-allowed}
   .quotaset{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:600px){
-  .topbar{gap:8px}
+  /* 手机端把顶栏挤进一行（375–414px 的 iPhone 标准版否则会把仓库图标挤到第二行）：
+     只压「间距」与月标尺寸——按钮内边距与字号保持原样（用户 2026-09-21 明确要求不改按钮大小）。
+     真正吃空间的是 .spacer（flex:1，把按钮组顶到最右），这里改成固定小间距，按钮组紧跟标题。 */
+  /* 手机端顶栏压进一行：间距收紧 + 版本号图标化的音效按钮（见 @media 400 档）。
+     ⚠️ 月标尺寸以 400px 档为准（那里会覆盖这里），此处只兜底 401–600px。 */
+  .topbar{gap:4px}
+  .moon{width:20px;height:20px}
+  /* 手机端音效按钮只留喇叭图标（省 ~35px），把这一行让给仓库图标 */
+  #btn-sound .ico{display:block}
+  #btn-sound #sound-label{display:none}
+  #btn-sound{padding:7px 9px}
+  .brand b{font-size:17px;letter-spacing:1px}
   .brand span{display:none}
   .tbtn{padding:7px 10px;font-size:12px}
-  .moon{width:38px;height:38px}
+  .moon{width:26px;height:26px}   /* 最窄档：再收一档，360px 安卓主流才容得下仓库图标 */
   /* 右列定宽 76px（按钮正好放得下）→ 左侧文字区宽度恒定，状态栏高度只由"行数"决定。
      who 在手机上允许折成 2 行（不再 ellipsis 截断），高度变化只发生在"换名字"这一刻，
      而不会因为"秒表数字多了一位"这种小事去挤动版面。 */
@@ -504,7 +593,10 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
     <button class="tbtn" id="btn-rules" data-page-node-id="wgPzYSnU18o3OMNlYr3bbL">规则</button>
     <button class="tbtn" id="btn-hist" data-page-node-id="m8v5z2KdnDHTrpUOKV0E0k">战绩</button>
     <button class="tbtn" id="btn-stat">概率</button>
-    <button class="tbtn on" id="btn-sound" data-page-node-id="yrvLfou7T9QyEtbGEQOzQB">音效 开</button>
+    <button class="tbtn on" id="btn-sound" title="音效 开 / 关" data-page-node-id="yrvLfou7T9QyEtbGEQOzQB"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M9.2 1.6a.5.5 0 0 1 .8.4v12a.5.5 0 0 1-.8.4L5.6 11.6H2.8a.8.8 0 0 1-.8-.8V5.2c0-.44.36-.8.8-.8h2.8l3.6-2.8z"/><path class="wave" d="M11.6 5.6c.9.7 1.4 1.5 1.4 2.4s-.5 1.7-1.4 2.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path class="slash" d="M2.4 2.4 13.6 13.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span id="sound-label">音效 开</span></button>
+    <!-- 仓库入口：与工具按钮同排（样式统一、不挡任何内容），新窗口打开 -->
+    <a class="tbtn gh" id="gh-link" href="https://github.com/Woo3aN/bobing" target="_blank" rel="noopener"
+       title="GitHub 仓库 · 源码与更新日志" aria-label="打开 GitHub 仓库"><svg viewBox="0 0 16 16" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
   </div>
 
   <!-- 设置页 -->
@@ -523,6 +615,15 @@ html:not(.booted) #view-table,html:not(.booted) #fx{display:none !important}
         <button class="chip on" data-n="4" data-page-node-id="jJbydhFEHaS9rgR5i5DIDf">4 人</button>
         <button class="chip" data-n="5" data-page-node-id="x2dMqX46cewgtHw3SPHIbg">5 人</button>
         <button class="chip" data-n="6" data-page-node-id="kx5UxfoLWGHSG9fQqvaIfV">6 人</button>
+        <button class="chip" data-n="7">7 人</button>
+        <button class="chip" data-n="8">8 人</button>
+        <button class="chip" data-n="9">9 人</button>
+        <button class="chip" data-n="10">10 人</button>
+        <button class="chip" data-n="11">11 人</button>
+        <button class="chip" data-n="12">12 人</button>
+        <button class="chip" data-n="13">13 人</button>
+        <button class="chip" data-n="14">14 人</button>
+        <button class="chip" data-n="15">15 人</button>
       </div>
       <h4 style="font-size:13px;margin:16px 0 8px;color:var(--gold-l);letter-spacing:1px" data-page-node-id="qqtRbxKDK0mt8Vi8bk3lBs">玩家</h4>
       <div id="setup-players" data-page-node-id="9li9UEPNB1YnBsyQnC6iyU"></div>
@@ -1533,7 +1634,9 @@ function applyRoll(pIdx, dice, grade) {
     entry.cls = 'g-zy'; entry.sound = 'fanfare';
     if (prevHolder === null) {
       entry.action = '得状元';
-      entry.msg = '博得状元！' + grade.label;
+      /* 第二行的「状元名称」用简称（short）：五子 →「五子带三」、四点红 →「状元带四」、
+         插金花 →「状元插金花」（用户 2026-09-21 定；第一行仍保留 grade.label 的骰面描述） */
+      entry.msg = '博得状元！' + (grade.short || grade.label);
       if (state.mode === 'solo') state.solo.firstZyRoll = state.rollCount + 1;   /* 第几把博出状元 */
     } else if (isHolder && wasHolder) {
       entry.action = '稳状元';
@@ -1546,12 +1649,21 @@ function applyRoll(pIdx, dice, grade) {
       entry.action = '夺状元';
       entry.msg = '以「' + grade.short + '」夺走了 ' + prevHolder.name + ' 的「' + (prevShort || '状元') + '」！';
     } else if (wasHolder) {
+      /* 自己降级 → 状元被前面的人拿走。这也是一次「易主」，
+         要计进同一个计数里（用户 2026-09-21 反馈：结算面板的易主次数漏掉了这种情况）。 */
+      state.zyStealCount++;
       entry.action = '失状元';
       entry.msg = '又博出' + grade.name + '（' + grade.label + '），自己的状元降级 —— ' +
-        bestP.name + ' 早前博出的「' + bestG.label + '」更大，状元归 ' + bestP.name;
+        bestP.name + ' 早前博出的「' + (bestG.short || bestG.label) + '」' +
+        (compareGrade({ tier: grade.tier, kicker: grade.kicker }, { tier: bestG.tier, kicker: bestG.kicker }) === 0
+          ? '同级，先博者保留' : '更大') +
+        '，状元归 ' + bestP.name;
     } else {
       entry.action = '夺状元失败';
-      entry.msg = '「' + grade.label + '」小于 ' + bestP.name + ' 的「' + bestG.label + '」，状元保住了';
+      /* 双方都写「状元名称」简称（用户 2026-09-21 定）：
+         例：「五子带三」小于 甲 的「状元带四」，状元保住了 */
+      entry.msg = '「' + (grade.short || grade.label) + '」小于 ' + bestP.name +
+        ' 的「' + (bestG.short || bestG.label) + '」，状元保住了';
     }
   } else if (grade.cake) {
     if (state.pool[grade.cake] > 0) {
@@ -2883,7 +2995,15 @@ function refreshSoundBtn() {
   var st = Sfx.status();
   var on = st !== 'off';
   b.className = 'tbtn' + (on ? ' on' : '');
-  b.textContent = !on ? '音效 关' : (st === 'running' ? '音效 开' : '音效 点击开启');
+  /* 只保留「开 / 关」两种文案（用户 2026-09-21 定）：
+     原先还有第三种「音效 点击开启」（音频上下文尚未解锁时提示点一下），
+     但那串字太长，窄屏上会把工具栏里的 GitHub 图标挤到下一行；而且语义上让人以为"还没开"。
+     解锁动作本来就在点击处理里（点一下即解锁），文案不必额外提示。
+     ⚠️ 文案写在子元素 #sound-label 里（不能直接赋 textContent —— 那会把按钮里的喇叭图标一起清掉）；
+     button.textContent 仍会聚合到这段文字，所以既有探针断言不受影响。 */
+  var lbl = document.getElementById('sound-label');
+  if (lbl) lbl.textContent = on ? '音效 开' : '音效 关';
+  else b.textContent = on ? '音效 开' : '音效 关';
 }
 function bindEvents() {
   /* 奖项数量：输入即时生效 —— 落到全局 QUOTA、存盘、刷新所有相关文案与规则页 */
@@ -4172,7 +4292,7 @@ var NET = (function () {
 })();
 
 /* ---------- 联机面板 UI ---------- */
-var NET_BUILD = 'v2026.09.19a';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
+var NET_BUILD = 'v2026.09.24';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
 var NETUI = (function () {
   /* 玩家名跨会话记住（localStorage）：断线「按名字认领」重连靠它（2026-09-18）——
      页面被杀后 PEER 身份丢了，服务端靠「同名 + 原座次离线」认人，名字必须与原先一致 */
@@ -4732,6 +4852,37 @@ NETUI.bind();   /* 面板按钮绑定 —— 必须在模块定义之后调用�
     ok('更小的状元不能夺', st.zyHolder === 2 && st.players[3].cakes.zhuangyuan === 0, 'zyHolder=' + st.zyHolder);
     window.__game.rollForced([4, 4, 4, 4, 1, 1]);            /* A：同为插金花 → 平手不夺 */
     ok('同级完全平手不算夺（先到者保留）', st.zyHolder === 2, 'zyHolder=' + st.zyHolder);
+
+    /* ---- 降级易主 + 记录文案（用户 2026-09-21 定）----
+       规则：以各人【最后博出】的状元为准 —— 自己再博出更小的会降级；
+       降级到与别人同级时，先博的那位胜（等于易主）。
+       ⚠️ rollForced 是**按轮换**掷给当前玩家的（2 人局 A→B→A），不能连掷给同一人。 */
+    window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    var st2 = window.__game.state();
+    window.__game.rollForced([4, 4, 4, 4, 4, 2]);            /* ① A：五红带2 —— 持状元 */
+    ok('A 博五红带2 → 持状元', st2.zyHolder === 0, 'zyHolder=' + st2.zyHolder);
+    window.__game.rollForced([4, 4, 4, 4, 5, 6]);            /* ② B：四点红带11（小于五红带2）*/
+    ok('更小的状元夺不动，第二行写明「谁的什么」小于「谁的什么」',
+      st2.zyHolder === 0 && st2.log[0].msg === '「状元带十一」小于 A 的「五红带二」，状元保住了',
+      st2.log[0].msg);
+    window.__game.rollForced([4, 4, 4, 4, 5, 6]);            /* ③ A：自己降级到与 B 同为四点红带11 */
+    ok('自己降级到与别人同级 → 状元易主（先博的 B 拿走）',
+      st2.zyHolder === 1, 'zyHolder=' + st2.zyHolder);
+    ok('易主后明细同步：B 拿到状元、A 被清空',
+      st2.players[1].cakes.zhuangyuan === 1 && st2.players[0].cakes.zhuangyuan === 0,
+      'B=' + st2.players[1].cakes.zhuangyuan + ' A=' + st2.players[0].cakes.zhuangyuan);
+    ok('降级被夺也计入「状元易主」次数（结算面板用这个数）',
+      st2.zyStealCount === 1, 'zyStealCount=' + st2.zyStealCount);
+    ok('降级丢状元的第二行写明来龙去脉',
+      /降级/.test(st2.log[0].msg) && /状元归 B/.test(st2.log[0].msg), st2.log[0].msg);
+
+    /* 首次博出状元的第二行用【简称】（五子带三 / 状元带四 / 状元插金花…） */
+    window.__game.newGame({ players: [{ name: 'A' }, { name: 'B' }], fast: true });
+    var st3 = window.__game.state();
+    window.__game.rollForced([5, 5, 5, 5, 5, 3]);            /* A：五子带3 */
+    ok('首次博出状元：第二行 =「博得状元！」+ 简称',
+      st3.log[0].msg === '博得状元！五子带三', st3.log[0].msg);
+    ok('第一行仍是完整骰面描述（五粒五带三）', st3.log[0].label === '五粒五带三', st3.log[0].label);
     ok('夺状元计数 = 2', st.zyStealCount === 2, st.zyStealCount);
     /* ---- 规则：以每个人【最后博出】的状元为准（2026-09-16 用户定）----
        自己再博出更小的也算，状元降级；此时别人早前博的更大，状元就归别人。 */
