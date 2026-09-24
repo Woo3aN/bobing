@@ -2,6 +2,18 @@
 <html lang="zh-CN" data-page-node-id="4LnPiOb06cFtMb2DvLTs3K">
 <head data-page-node-id="SMHbRdgkaBpNIsTSAbCtcE">
 <meta charset="utf-8" data-page-node-id="24umd8gCSLjNJXS8GGR1Mv">
+<!-- ↓↓↓ 夜间模式（强制深色）的刹车，必须紧跟 charset，越早越好 ↓↓↓
+     本页不是浅色页：它自带深红碗 + 鎏金 + 象牙白骰子的暗色设计。
+     浏览器 / 扩展的「自动深色」会把它当成浅色页整体反色 —— 结果就是你看到的
+     「骰子变黑、红金配色失真」。下面两行是两种主流机制的官方退出开关：
+       ① name=color-scheme content=only light
+          → Chrome / Edge 的 Auto Dark Mode 唯一认可的标准退出方式。
+            不写这行，手机端系统深色模式下一律被强制反色。
+       ② name=darkreader-lock
+          → Dark Reader 等反色类浏览器扩展的退出标记。
+     ⚠️ 删掉任意一行，对应的那类设备就会重新「夜间变黑」。 -->
+<meta name="color-scheme" content="only light">
+<meta name="darkreader-lock">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" data-page-node-id="ZvJ6uN3dW5TUqR2aDEqeYN">
 <title>中秋博饼</title>
 <meta name="description" content="闽南中秋博饼小游戏 —— 六颗骰子丢进大红碗博状元。2-15 人传阅、单人挑战、状元可夺、实时概率统计，打开就能玩。">
@@ -21,6 +33,17 @@
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9JyNjMjE3MWYnLz48Y2lyY2xlIGN4PSczMicgY3k9JzMyJyByPScyOScgZmlsbD0nbm9uZScgc3Ryb2tlPScjZThiODRiJyBzdHJva2Utd2lkdGg9JzMnLz48Y2lyY2xlIGN4PScyMScgY3k9JzIzJyByPSc1JyBmaWxsPScjZmZmZGY2Jy8+PGNpcmNsZSBjeD0nNDMnIGN5PScyMycgcj0nNScgZmlsbD0nI2ZmZmRmNicvPjxjaXJjbGUgY3g9JzMyJyBjeT0nNDEnIHI9JzYnIGZpbGw9JyNmZmZkZjYnLz48L3N2Zz4=">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9JyNjMjE3MWYnLz48Y2lyY2xlIGN4PSczMicgY3k9JzMyJyByPScyOScgZmlsbD0nbm9uZScgc3Ryb2tlPScjZThiODRiJyBzdHJva2Utd2lkdGg9JzMnLz48Y2lyY2xlIGN4PScyMScgY3k9JzIzJyByPSc1JyBmaWxsPScjZmZmZGY2Jy8+PGNpcmNsZSBjeD0nNDMnIGN5PScyMycgcj0nNScgZmlsbD0nI2ZmZmRmNicvPjxjaXJjbGUgY3g9JzMyJyBjeT0nNDEnIHI9JzYnIGZpbGw9JyNmZmZkZjYnLz48L3N2Zz4=">
 <style>
+/* ============================================================
+   ⓪ 夜间模式刹车（务必留在样式表最前面）
+   ------------------------------------------------------------
+   与 <head> 里的 color-scheme meta 是同一件事的两道保险：
+   meta 负责「页面级声明」，这里负责「样式级声明」——
+   有的内核只认 meta，有的只认 CSS，两道都写才盖得住。
+   注意 only light 不是「浅色主题」的意思，它说的是
+   「本页只按浅色规则渲染，请勿自动反色」；本页仍是暗色设计。
+   ============================================================ */
+:root{color-scheme:only light}
+html{color-scheme:only light}
 /* ============================================================
    ① 主题变量
    ============================================================ */
@@ -197,6 +220,39 @@ button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit
     0 0 0 1px rgba(140,20,20,.35),
     inset 0 1.5px 2px rgba(70,0,0,.55),
     inset 0 -1px 1px rgba(255,255,255,.26)}
+
+/* ------------------------------------------------------------
+   ⓪-b 自动深色兜底（第二道保险）
+   ------------------------------------------------------------
+   适用对象：不认 `color-scheme:only light`、但会读
+   `prefers-color-scheme` 的旧内核 / 部分国产浏览器「智能深色」。
+   这里把最容易被反色弄坏的三处配色（页面底色、骰面、点数）
+   按设计原值再钉一遍 —— 只是重述，不改任何设计意图。
+
+   ⚠️ 用 background-image 而不是 background 简写：
+   简写会把 body 的 background-attachment:fixed 一并重置。
+
+   ⚠️ 骰面用的是写死的 hex 渐变（不是变量），所以必须整个重写：
+   改骰子配色时，这里要和上面的 .face / .pip 同步改。
+   ------------------------------------------------------------ */
+@media (prefers-color-scheme:dark){
+  :root,html,body{color-scheme:only light}
+  /* 页面底色：保持深红釉 */
+  body{color:var(--paper);
+    background-image:
+      radial-gradient(1100px 620px at 50% -12%, #7d141d 0%, rgba(125,20,29,0) 62%),
+      radial-gradient(760px 520px at 6% 104%, #5a0d13 0%, rgba(90,13,19,0) 58%),
+      radial-gradient(620px 420px at 96% 8%, #4a2a05 0%, rgba(74,42,5,0) 55%),
+      linear-gradient(180deg,#1b0508 0%,#250709 46%,#130306 100%)}
+  /* 骰面：保持象牙白（否则夜间被反成黑骰子，就是这次要修的那个 bug） */
+  .face{background-image:
+    radial-gradient(58% 40% at 30% 15%, rgba(255,255,255,.62) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(40% 32% at 79% 85%, rgba(150,110,50,.07) 0%, rgba(150,110,50,0) 72%),
+    linear-gradient(150deg,#fffefb 0%,#fdf9ef 42%,#f6efdd 76%,#eee3c9 100%)}
+  /* 点数：黑点为深褐、红四点为正红，两者都不能被反色 */
+  .pip{background-image:radial-gradient(circle at 38% 32%,#5a4234 0%,#2c1810 56%,#160b05 100%)}
+  .pip.red{background-image:radial-gradient(circle at 38% 32%,#ffa8a8 0%,#e03028 46%,#9c1114 100%)}
+}
 
 /* 结果条 */
 .result{margin:0 auto;width:100%;max-width:560px;min-height:66px;
@@ -4236,7 +4292,7 @@ var NET = (function () {
 })();
 
 /* ---------- 联机面板 UI ---------- */
-var NET_BUILD = 'v2026.09.23b';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
+var NET_BUILD = 'v2026.09.24';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
 var NETUI = (function () {
   /* 玩家名跨会话记住（localStorage）：断线「按名字认领」重连靠它（2026-09-18）——
      页面被杀后 PEER 身份丢了，服务端靠「同名 + 原座次离线」认人，名字必须与原先一致 */
