@@ -5,9 +5,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { WebSocketServer } = require('C:/Users/24431/.workbuddy/binaries/node/workspace/node_modules/ws');
+const { WebSocketServer } = require('ws');
 
-const ROOT = 'C:/Users/24431/Desktop/博饼/cf/public';
+const ROOT = path.join(__dirname, 'public');
 const RoomDO = { IDLE_PROXY_MS: Number(process.env.IDLE_PROXY_MS) || 15000 };   /* 与 Worker 对齐（测试可覆盖） */
 const rooms = new Map();   /* code -> rec */
 

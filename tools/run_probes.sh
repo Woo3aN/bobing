@@ -27,7 +27,7 @@ run_probe() {   # mode w h tag
   rm -rf "$ud"
   "$CHROME" --headless=new --disable-gpu --allow-file-access-from-files \
     --user-data-dir="$ud" --window-size="$w,$h" --virtual-time-budget=90000 \
-    --dump-dom "file:///$URLROOT/博饼.html?selftest=$mode" 2>/dev/null \
+    --dump-dom "file:///$URLROOT/index.html?selftest=$mode" 2>/dev/null \
     | grep -o '<pre id="__state">.*</pre>' | tail -1 \
     | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{
         const j=JSON.parse(d.replace(/<[^>]*>/g,''));

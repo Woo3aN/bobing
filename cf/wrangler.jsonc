@@ -4,7 +4,10 @@
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./public",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    /* 这些路径必须先过 Worker（否则静态资源优先命中，`/` 会直接吐出 index.html，
+       而不是 Worker 里写好的 302 → /bobing）。线上实际就是这个值，此前漏提交了。 */
+    "run_worker_first": ["/", "/bobing", "/bobing/*", "/ws"]
   },
   "durable_objects": {
     "bindings": [

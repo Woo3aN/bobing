@@ -33,10 +33,17 @@
 - 改动为**纯新增**，未修改任何既有规则：修复前 / 修复后各视口截图逐字节一致（md5 相同），
   页面内置自检 158 项断言全过（dice 69 / exhaustive 34 / rules 35 / flow 20）。
 
-### 待确认
+### 仓库 / 部署（不改构建号）
 
-- `tools/run_probes.sh` 里指向的仍是 `博饼.html`，而文件已改名为 `index.html`，
-  该脚本目前跑不通（本次未改，等确认后再动）。
+- **`cf/wrangler.jsonc` 补回 `run_worker_first`**：线上一直开着
+  `["/", "/bobing", "/bobing/*", "/ws"]`，仓库里却漏了这项——照仓库配置部署会让静态资源
+  优先命中，`/` 直接吐出 `index.html`，Worker 里写好的 `302 → /bobing` 失效（主页留白被破坏）。
+  此前几次部署是在本地改配置后未提交，所以 git 与线上长期不一致。
+- **`cf/test-room.js`、`cf/mock-server.js` 去掉写死的本机绝对路径**（另一台电脑的 `ws`
+  模块路径、以及 `public` 目录路径），改用 `require('ws')` 与 `path.join(__dirname, 'public')`，
+  换台机器也能直接跑。
+- **`tools/run_probes.sh` 的入口改为 `index.html`**：此前指向 `博饼.html`，
+  而该文件在本仓库从未出现过（全历史零重命名），所以这个脚本一直跑不通。
 
 ---
 

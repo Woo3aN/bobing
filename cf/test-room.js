@@ -5,7 +5,7 @@
    ⚠️ 断言一律用「等条件成立」（waitFor），不要睡固定时间 —— 真实网络多端广播需要更多毫秒，
       固定 sleep 会产生假失败（踩过）。 */
 const WS_URL = process.env.WS_URL || 'ws://127.0.0.1:8788/ws';
-const { WebSocket } = require('C:/Users/24431/.workbuddy/binaries/node/workspace/node_modules/ws');
+const { WebSocket } = require('ws');
 const httpMod = WS_URL.indexOf('wss') === 0 ? require('https') : require('http');
 
 let pass = 0, fail = 0;
