@@ -3,7 +3,12 @@
      node test-room.js                                  # 本地 wrangler dev（默认 ws://127.0.0.1:8788/ws）
      WS_URL=wss://woo3an.top/ws node test-room.js        # 线上
    ⚠️ 断言一律用「等条件成立」（waitFor），不要睡固定时间 —— 真实网络多端广播需要更多毫秒，
-      固定 sleep 会产生假失败（踩过）。 */
+      固定 sleep 会产生假失败（踩过）。
+   ⚠️ 凡是要断言「某个动作必须被拒绝」的用例（skip / 代博 / 取消托管），先确保目标座次
+      **在 15 秒内动作过**：服务端的挂机判定是「15 秒没动作 → 允许别人跳过/代博」（在线也算，
+      见 cf/README 的托管表）。线上跑到这些用例时往往早已超过 15 秒，断言会被正当地推翻
+      （2026-09-24 实测：事件表多出一条 skip → 后续按下标写的断言整体错位 → 2 条假失败）。
+      刷新活动的无副作用办法：发一条 cancel（只清托管 + 打 lastAct 时间戳，不产生事件）。 */
 const WS_URL = process.env.WS_URL || 'ws://127.0.0.1:8788/ws';
 const { WebSocket } = require('ws');
 const httpMod = WS_URL.indexOf('wss') === 0 ? require('https') : require('http');
@@ -34,7 +39,13 @@ function httpGet(pathname) {
 function connect(code, op, name, pid) {
   return new Promise((resolve, reject) => {
     const url = WS_URL + '?code=' + code + '&op=' + op + '&name=' + encodeURIComponent(name) + '&pid=' + pid;
-    const ws = new WebSocket(url);
+    /* ⚠️ perMessageDeflate: false 不能省。
+       ws 客户端默认会与 Cloudflare 协商 permessage-deflate，实测（2026-09-24）会让**个别**连接
+       出现"能发不能收"的假死：某条 socket 拿到开局快照后再也收不到任何广播，而同一房间的另一条
+       连接一切正常 —— 于是断言随机在"某个连接视图滞后"上失败（同一份代码连跑三次分别是
+       2 / 1 / 9 条失败，关掉压缩扩展后 44/44 全过）。
+       真实客户端是浏览器原生 WebSocket，不受此影响（一直正常），所以这只是测试客户端的事。 */
+    const ws = new WebSocket(url, { perMessageDeflate: false });
     const msgs = [];
     let settled = false;
     const to = setTimeout(() => { if (!settled) { settled = true; reject(new Error('连接超时')); } }, 10000);
@@ -139,8 +150,16 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
 
   /* ===== 代博 / 自动跳过 / 彻底断线（2026-09-18：15 秒判定 → 代博 5 把 → 2 分钟没回移出） =====
      mock 用 OFFLINE_MS=2000 启动（真实部署是 120000），2.5 秒即触发"彻底断线"。 */
-  send(host, { t: 'skip', s: 0 });
+  /* ⚠️ 断言"跳过在线玩家会被拒"之前，**必须先刷新房主的活动时间**。
+     服务端的挂机判定是「15 秒没动作 → 允许别人跳过」（在线也算，见 cf/README 的托管表），
+     而本脚本跑到这里，距房主上一次掷骰（上面那次 s=0）往往已超过 15 秒 —— 线上实测
+     （2026-09-24）正因为如此让这条 skip 被**正当地**接受：事件表多出一条 skip，
+     后面按下标写的代博断言整体错位，表现为 2 条假失败。
+     这里用 cancel 刷新 lastAct[0] 且**不产生事件**（cancel 只清托管 + 打时间戳），下标不受影响。 */
+  send(host, { t: 'cancel', s: 0 });
   await sleep(400);
+  send(host, { t: 'skip', s: 0 });
+  await sleep(600);
   ok('跳过在线玩家被拒绝（防抢回合）', lastRoom(host).events.length === 2, 'events=' + lastRoom(host).events.length);
   claimed.ws.terminate();
   await waitFor(() => lastRoom(host).off[2] === true);
@@ -154,19 +173,25 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
     await waitFor(() => lastRoom(guest).events.length === 3, 6000);
   }
   send(host, { t: 'roll', s: 0, d: [2, 3, 4, 5, 6, 6] });
-  await waitFor(() => lastRoom(guest).events.length === 4);
+  /* ⚠️ 必须等**两条连接都**跟上，再去读其中一条的视图做断言。
+     本段以前只等 guest，却立刻读 host —— 线上某条连接的推送偶尔会晚几秒，
+     于是报出"events=2 iProxy=-1"这种看似诡异的下标错位（2026-09-24 实测）。
+     服务端其实早就广播了，只是那条连接还没收到。 */
+  await waitFor(() => lastRoom(guest).events.length === 4 && lastRoom(host).events.length === 4, 20000);
   send(guest, { t: 'roll', s: 1, d: [3, 4, 5, 6, 6, 6] });
-  await waitFor(() => lastRoom(guest).events.length === 5);
+  await waitFor(() => lastRoom(guest).events.length === 5 && lastRoom(host).events.length === 5, 20000);
   {
     const ev3 = lastRoom(host).events;
+    /* 按内容定位代博事件：万一前面哪步多出一条事件，报错信息里能直接看出错位在哪 */
+    const iProxy = ev3.findIndex(e => e.a === 1);
     ok('代博：替掉线座次掷骰被接受（a 标记）',
       ev3.length >= 4 && !!ev3[2] && ev3[2].a === 1 && ev3[3] && ev3[3].a === undefined,
-      'events=' + ev3.length + ' e2=' + JSON.stringify(ev3[2]));
+      'events=' + ev3.length + ' iProxy=' + iProxy + ' e2=' + JSON.stringify(ev3[2]));
   }
   /* 并发去重：两个端同时触发代博 → 两条同座次事件紧挨着 → 只有第一条被接受 */
   send(guest, { t: 'roll', s: 2, d: [6, 6, 6, 6, 6, 6], a: 1 });
   send(host, { t: 'roll', s: 2, d: [5, 5, 5, 5, 5, 5], a: 1 });
-  await waitFor(() => lastRoom(guest).events.length === 6);
+  await waitFor(() => lastRoom(guest).events.length === 6 && lastRoom(host).events.length === 6, 20000);
   await sleep(500);
   ok('代博并发去重：同座次连续事件被幂等丢弃',
     lastRoom(host).events.length === 6,   /* 并发两条谁先到不确定（真实网络），只断言没有双收 */
@@ -176,7 +201,7 @@ const send = (c, o) => c.ws.send(JSON.stringify(o));
   const IS_MOCK = /127\.0\.0\.1|localhost/.test(WS_URL);
   if (IS_MOCK) await sleep(3000);   /* 确保 autoAt[2] 距今超过 mock 的 2 秒阈值 */
   send(host, { t: 'skip', s: 2 });
-  await waitFor(() => lastRoom(guest).events.length === 7);
+  await waitFor(() => lastRoom(guest).events.length === 7 && lastRoom(host).events.length === 7, 20000);
   if (IS_MOCK) {
     ok('彻底断线：超时后跳过并点名（left 带 kicked）',
       lastRoom(host).left && lastRoom(host).left.kicked === true && lastRoom(host).left.name === '客人乙',
