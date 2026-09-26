@@ -1094,10 +1094,501 @@ function compareGrade(a, b) {
 }
 
 /* ============================================================================
+   骰子碰撞音效 · 浏览器端合成引擎
+   把 Python 里调好的两个合成器原样移植过来，用同一份代码在 Node 与浏览器运行。
+
+   · synthG      —— 「叮」系（j1 / j4 / k3 / k4）：频域按实测能量逐 bin 构造 + 模态尖峰
+   · synthModal  —— 早期两层结构（m1）：瞬态 + 衰减正弦
+
+   无任何外部依赖，不需要 Web Audio 的渲染接口 —— 直接算出采样点。
+   ========================================================================== */
+(function (root) {
+  'use strict';
+
+  var SR = 48000;
+
+  /* ---------- 1/3 倍频程目标谱（从录音实测，见 build_audition.py） ---------- */
+  var T_FREQ = [40, 50.4, 63.5, 80, 100.8, 127, 160, 201.6, 254, 320, 403.2, 508,
+    640, 806.3, 1015.9, 1280, 1612.7, 2031.9, 2560, 3225.4, 4063.7,
+    5120, 6450.8, 8127.5, 10240, 12901.9, 16256];
+  var T_DB = [-28.0, -27.0, -24.0, -18.0, -15.5, -18.0, -16.0, -16.0,
+    -21.0, -20.0, -22.0, -22.0, -3.0, -16.0, -17.0, -7.0,
+    -24.0, -28.0, -19.0, -31.0, -7.5, -14.0, -25.0, -29.0,
+    -35.0, -33.0, -48.0];
+
+  /* 模态频率表（synthG 只用频率，电平与 T60 都取自目标谱/全局参数）
+     ⚠️ 必须是 [频率, dB, T60] 的三元组形式 —— synthG 按 modes[i][0] 取频率，
+     写成纯数字数组会取出 undefined 并静默跳过整个共振层（踩过）。 */
+  var MODAL_DONG = [
+    [50, -5.5, 700], [63, 0.0, 650], [80, -4.5, 600], [100, -3.5, 550],
+    [126, -8.2, 480], [160, -12.9, 350], [200, -15.2, 300], [320, -17.4, 260],
+    [640, -11.1, 210], [1280, -13.6, 190], [2560, -17.0, 170], [4064, -2.9, 200],
+    [5120, -15.0, 150], [6451, -25.0, 90], [8128, -27.2, 50]
+  ];
+
+  /* 早期两层结构用的模态（频率, dB, 衰减率） */
+  var MODAL_SET = [
+    [883, -4.0, 220], [1030, -3.0, 190], [2530, 0.0, 74],
+    [3940, -4.6, 68], [5620, -7.1, 66], [7500, -12.0, 153], [9500, -15.0, 300]
+  ];
+
+  var LOG10 = Math.LN10;
+  var HALF = Math.pow(2, 1 / 6);
+
+  /* ---------------------------- FFT（radix-2） ---------------------------- */
+  function makeFFT(N) {
+    var levels = Math.round(Math.log(N) / Math.LN2);
+    var rev = new Uint32Array(N);
+    for (var i = 0; i < N; i++) {
+      var r = 0;
+      for (var j = 0; j < levels; j++) r = (r << 1) | ((i >> j) & 1);
+      rev[i] = r;
+    }
+    var half = N >> 1;
+    var cosT = new Float64Array(half), sinT = new Float64Array(half);
+    for (var k = 0; k < half; k++) {
+      cosT[k] = Math.cos(2 * Math.PI * k / N);
+      sinT[k] = Math.sin(2 * Math.PI * k / N);
+    }
+    function fft(re, im, inverse) {
+      var i, j, len, h, step, k, wr, wi, ur, ui, vr, vi, t;
+      for (i = 0; i < N; i++) if (rev[i] > i) {
+        t = re[i]; re[i] = re[rev[i]]; re[rev[i]] = t;
+        t = im[i]; im[i] = im[rev[i]]; im[rev[i]] = t;
+      }
+      for (len = 2; len <= N; len <<= 1) {
+        h = len >> 1; step = N / len;
+        for (i = 0; i < N; i += len) {
+          for (j = 0; j < h; j++) {
+            k = j * step;
+            wr = cosT[k]; wi = inverse ? sinT[k] : -sinT[k];
+            ur = re[i + j + h]; ui = im[i + j + h];
+            vr = ur * wr - ui * wi; vi = ur * wi + ui * wr;
+            re[i + j + h] = re[i + j] - vr; im[i + j + h] = im[i + j] - vi;
+            re[i + j] += vr; im[i + j] += vi;
+          }
+        }
+      }
+      if (inverse) for (i = 0; i < N; i++) { re[i] /= N; im[i] /= N; }
+    }
+    return { N: N, fft: fft };
+  }
+
+  var _cache = {};
+  function fftOf(N) { return _cache[N] || (_cache[N] = makeFFT(N)); }
+
+  /* 实数 → 半谱（长度 N/2+1） */
+  function rfft(x, N, outRe, outIm) {
+    var re = outRe || new Float64Array(N), im = outIm || new Float64Array(N);
+    for (var i = 0; i < N; i++) { re[i] = i < x.length ? x[i] : 0; im[i] = 0; }
+    fftOf(N).fft(re, im, false);
+    return { re: re, im: im, R: (N >> 1) + 1 };
+  }
+
+  /* 半谱 → 实数（长度 N） */
+  function irfft(sRe, sIm, N, R) {
+    var re = new Float64Array(N), im = new Float64Array(N), i;
+    for (i = 0; i < R; i++) { re[i] = sRe[i]; im[i] = sIm[i]; }
+    for (i = R; i < N; i++) {           /* 共轭对称补全 */
+      re[i] = sRe[N - i];
+      im[i] = -sIm[N - i];
+    }
+    im[0] = 0;
+    if (N % 2 === 0) im[N >> 1] = 0;
+    fftOf(N).fft(re, im, true);
+    return re;
+  }
+
+  /* ----------------------------- 工具 ----------------------------- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(rnd) {
+    var u = 0, v = 0;
+    while (u === 0) u = rnd();
+    while (v === 0) v = rnd();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function nextPow2(n) { var N = 1; while (N < n) N <<= 1; return N; }
+  /* 对数域线性插值，越界取端点（同 numpy.interp） */
+  function interpLog(x, xs, ys) {
+    var n = xs.length;
+    if (x <= Math.log(xs[0])) return ys[0];
+    if (x >= Math.log(xs[n - 1])) return ys[n - 1];
+    var lo = 0, hi = n - 1;
+    while (hi - lo > 1) { var m = (lo + hi) >> 1; if (Math.log(xs[m]) <= x) lo = m; else hi = m; }
+    var x0 = Math.log(xs[lo]), x1 = Math.log(xs[hi]);
+    var w = (x - x0) / (x1 - x0);
+    return ys[lo] + (ys[hi] - ys[lo]) * w;
+  }
+
+  /* ==========================================================================
+     synthG —— 「叮」系合成器
+     ① 宽带层：目标能量 ÷ 该频段 bin 数 = 每个 bin 的能量 → 频谱天然连续
+     ② 共振层：在模态频率处抬高尖峰（spread 摊宽 = 降低 Q，去掉金属的"纯"）
+     ③ 瞬态层：极短宽带噪声，高通后可去掉撞击瞬间的"砰"
+     ④ 低频 / 中高频分开给包络（低频起振可延后 —— 碗体振动是逐渐建立的）
+     ========================================================================== */
+  function synthG(o) {
+    o = o || {};
+    var N = o.N || 16384;
+    var seed = o.seed == null ? 1 : o.seed;
+    var low_t60 = o.low_t60 == null ? 0.13 : o.low_t60;
+    var hi_t60 = o.hi_t60 == null ? 0.20 : o.hi_t60;
+    var hi_scale = o.hi_scale == null ? 1.0 : o.hi_scale;
+    var low_trim = o.low_trim == null ? 0.0 : o.low_trim;
+    var mid_trim = o.mid_trim == null ? 0.0 : o.mid_trim;
+    var noise_gain = o.noise_gain == null ? 0.35 : o.noise_gain;
+    var noise_t20 = o.noise_t20 == null ? 0.0025 : o.noise_t20;
+    var hp_transient = o.hp_transient == null ? 170.0 : o.hp_transient;
+    var low_rise = o.low_rise == null ? 0.028 : o.low_rise;
+    var ding_boost = o.ding_boost == null ? 0.0 : o.ding_boost;
+    /* 共振加强的频段范围 —— 用来"点出主音"：只强化落在 [lo,hi] 的模态，
+       主音高度 = 该范围内那根共振的频率。 */
+    var boostLo = o.boostLo == null ? 2000 : o.boostLo;
+    var boostHi = o.boostHi == null ? 6000 : o.boostHi;
+    var spread = o.spread == null ? 1 : o.spread;
+    /* 共振簇整体频率缩放 —— 直接把"音高"升降，音色性格不变 */
+    var pitchScale = o.pitchScale == null ? 1 : o.pitchScale;
+    var bed = o.bed == null ? 1.0 : o.bed;
+    var modal = o.modal == null ? 1.0 : o.modal;
+    var modes = o.modes || MODAL_DONG;
+    if (o.extraModes) modes = modes.concat(o.extraModes);
+    var t_db = o.t_db || T_DB;
+
+    var R = (N >> 1) + 1;
+    var rnd = mulberry32(seed * 2654435761 % 4294967296);
+    var i, j, f, lf, tgt;
+
+    /* 目标谱：低频 / 中低频可整体下压（"砸"感主要来自这两段） */
+    var tgtArr = t_db.slice();
+    for (i = 0; i < T_FREQ.length; i++) {
+      if (low_trim && T_FREQ[i] < 300) tgtArr[i] -= low_trim;
+      else if (mid_trim && T_FREQ[i] >= 300 && T_FREQ[i] < 1000) tgtArr[i] -= mid_trim;
+    }
+    var lfA = new Float64Array(R), eDb = new Float64Array(R), E = new Float64Array(R);
+    var nbin = new Float64Array(R);
+    nbin.fill(1);
+    for (i = 0; i < R; i++) {
+      f = i * SR / N;
+      lf = Math.log(Math.max(f, 1));
+      lfA[i] = lf;
+      eDb[i] = interpLog(lf, T_FREQ, tgtArr);
+    }
+    if (hi_scale !== 1.0) {
+      var lg3k = Math.log(3000);
+      for (i = 0; i < R; i++) if (lfA[i] > lg3k) eDb[i] += 6.0 * (hi_scale - 1.0);
+    }
+    for (i = 0; i < R; i++) E[i] = Math.pow(10, eDb[i] / 10);
+    /* 每个 1/3 倍频程内的 bin 数（用于把"频段能量"摊到"每 bin 能量"） */
+    for (var ci = 0; ci < T_FREQ.length; ci++) {
+      var c = T_FREQ[ci], lo = c / HALF, hi = c * HALF, cnt = 0;
+      for (i = 0; i < R; i++) { f = i * SR / N; if (f >= lo && f < hi) cnt++; }
+      if (cnt > 0) for (i = 0; i < R; i++) { f = i * SR / N; if (f >= lo && f < hi) nbin[i] = cnt; }
+    }
+
+    var amp = new Float64Array(R);
+    for (i = 0; i < R; i++) amp[i] = Math.sqrt(E[i] / nbin[i]) * bed;
+
+    /* 模态尖峰 */
+    if (modal > 0) {
+      for (var mi = 0; mi < modes.length; mi++) {
+        var f0Raw = modes[mi][0];
+        /* ⚠️ 电平取自**原始频率**处的目标谱、尖峰放在**缩放后**的频率上 ——
+           否则 pitchScale 会顺带把电平也改了（目标谱在中高频是起伏的）。 */
+        var idxLev = Math.round(f0Raw * N / SR);
+        if (!(idxLev >= 0 && idxLev < R)) continue;
+        var tv = eDb[idxLev];
+        if (ding_boost && f0Raw >= boostLo && f0Raw <= boostHi) tv += ding_boost;
+        var f0 = f0Raw * pitchScale;
+        var idx = Math.round(f0 * N / SR);
+        if (!(idx >= 0 && idx < R)) continue;
+        var a0 = Math.pow(10, tv / 20) * modal;
+        for (var off = -spread; off <= spread; off++) {
+          j = idx + off;
+          if (j >= 0 && j < R) amp[j] += (off === 0) ? a0 : a0 * 0.42 / Math.abs(off);
+        }
+      }
+    }
+
+    /* 白噪 → 频域，幅度归一（保留相位） */
+    var w1 = new Float64Array(N);
+    for (i = 0; i < N; i++) w1[i] = gauss(rnd);
+    var W1 = rfft(w1, N);
+    var sRe = new Float64Array(R), sIm = new Float64Array(R);
+    for (i = 0; i < R; i++) {
+      var mag = Math.hypot(W1.re[i], W1.im[i]);
+      var sc = amp[i] / Math.max(mag, 1e-12);
+      sRe[i] = W1.re[i] * sc; sIm[i] = W1.im[i] * sc;
+    }
+
+    /* 低频 / 中高频分开：各自给包络 */
+    var lg300 = Math.log(300);
+    var lRe = new Float64Array(R), lIm = new Float64Array(R);
+    var hRe = new Float64Array(R), hIm = new Float64Array(R);
+    for (i = 0; i < R; i++) {
+      var ml = 1 / (1 + Math.exp((lfA[i] - lg300) / 0.25));
+      lRe[i] = sRe[i] * ml; lIm[i] = sIm[i] * ml;
+      hRe[i] = sRe[i] * (1 - ml); hIm[i] = sIm[i] * (1 - ml);
+    }
+    var yLow = irfft(lRe, lIm, N, R);
+    var yHi = irfft(hRe, hIm, N, R);
+
+    var y = new Float64Array(N);
+    var aLow = LOG10 / low_t60, aHi = LOG10 / hi_t60;
+    var rLow = Math.max(1, Math.round(SR * low_rise));
+    var rHi = Math.max(1, Math.round(SR * 0.0015));
+    for (i = 0; i < N; i++) {
+      var t = i / SR;
+      var eL = Math.exp(-aLow * t), eH = Math.exp(-aHi * t);
+      if (i < rLow) eL *= i / rLow;
+      if (i < rHi) eH *= i / rHi;
+      y[i] = yLow[i] * eL + yHi[i] * eH;
+    }
+
+    /* 瞬态层 */
+    if (noise_gain > 0) {
+      var w2 = new Float64Array(N);
+      for (i = 0; i < N; i++) w2[i] = gauss(rnd);
+      var W2 = rfft(w2, N);
+      var lgHp = Math.log(hp_transient);
+      var aN = LOG10 / noise_t20;
+      var tRe = new Float64Array(R), tIm = new Float64Array(R);
+      for (i = 0; i < R; i++) {
+        var m2 = Math.hypot(W2.re[i], W2.im[i]);
+        var hp = 1 / (1 + Math.exp(-(lfA[i] - lgHp) / 0.30));
+        var sc2 = Math.sqrt(E[i]) * hp / Math.max(m2, 1e-12);
+        tRe[i] = W2.re[i] * sc2; tIm[i] = W2.im[i] * sc2;
+      }
+      var tr = irfft(tRe, tIm, N, R);
+      for (i = 0; i < N; i++) y[i] += noise_gain * tr[i] * Math.exp(-aN * i / SR);
+    }
+
+    return normalize(y);
+  }
+
+  /* ==========================================================================
+     synthModal —— 早期「瞬态 + 共振」两层结构（m1）
+     瞬态层极短宽带「咔」，共振层是稳定相位的衰减正弦 → 音调明确
+     ========================================================================== */
+  function synthModal(o) {
+    o = o || {};
+    var N = o.N || 16384;
+    var seed = o.seed == null ? 1 : o.seed;
+    var noise_t20 = o.noise_t20 == null ? 0.004 : o.noise_t20;
+    var noise_gain = o.noise_gain == null ? 0.55 : o.noise_gain;
+    var life = o.life == null ? 1.0 : o.life;
+    /* 只延长「中高频共振」的余韵（default ≥2000Hz）——
+       m1 的清脆来自 2530/3940/5620Hz 这几根，但它的 T60 只有 ~100ms（−20dB 仅 36ms）。
+       低频那两根（883/1030Hz）不延长，否则会从"清脆"滑向"轰"。 */
+    var hiLife = o.hiLife == null ? 0 : o.hiLife;
+    var hiFrom = o.hiFrom == null ? 2000 : o.hiFrom;
+    var jit = o.jit == null ? 0.012 : o.jit;
+    var modes = o.modes || MODAL_SET;
+    if (o.extraModes) modes = modes.concat(o.extraModes);
+    /* 柔化两件套（用户反馈 m1/r1「有点尖、刺耳」）：
+       spread —— 每根共振展开成 2*spread+1 根、间隔 spreadRatio，把"纯正弦"的
+                 单一锐峰摊开（这正是不刺耳的关键：能量不再集中在一点）。
+       bed    —— 一层衰减慢的宽带噪声（按目标谱整形），把共振间的空隙铺满，
+                 听感更"实"、更接近真实撞击的连续谱。 */
+    var bed = o.bed == null ? 0 : o.bed;
+    var bedT60 = o.bedT60 == null ? 0.045 : o.bedT60;
+    var spread = o.spread == null ? 0 : o.spread;
+    var spreadRatio = o.spreadRatio == null ? 0.012 : o.spreadRatio;
+    var R = (N >> 1) + 1;
+    var rnd = mulberry32(seed * 2654435761 % 4294967296);
+    var y = new Float64Array(N), i;
+
+    /* 瞬态层 */
+    if (noise_gain > 0) {
+      var w = new Float64Array(N);
+      for (i = 0; i < N; i++) w[i] = gauss(rnd);
+      var W = rfft(w, N);
+      var aN = LOG10 / noise_t20;
+      var sRe = new Float64Array(R), sIm = new Float64Array(R);
+      for (i = 0; i < R; i++) {
+        var lf = Math.log(Math.max(i * SR / N, 1));
+        var db = interpLog(lf, T_FREQ, T_DB) / 20;
+        var g = Math.pow(10, db);
+        sRe[i] = W.re[i] * g; sIm[i] = W.im[i] * g;
+      }
+      var tr = irfft(sRe, sIm, N, R);
+      for (i = 0; i < N; i++) y[i] += noise_gain * tr[i] * Math.exp(-aN * i / SR);
+    }
+
+    /* 共振层：衰减正弦（可选展宽） */
+    var r0 = Math.max(1, Math.round(SR * 0.004));   /* 起振 4ms */
+    /* 展宽后的电平补偿：sum(a_k^2) 会变大，除回去以免整体音量被推高 */
+    var spComp = 1;
+    for (var kk = 1; kk <= spread; kk++) spComp += 2 * Math.pow(0.5 / kk, 2);
+    spComp = 1 / Math.sqrt(spComp);
+    for (var mi = 0; mi < modes.length; mi++) {
+      var f0 = modes[mi][0], dbv = modes[mi][1], alpha = modes[mi][2];
+      var LF = (hiLife && f0 >= hiFrom) ? hiLife : life;
+      var a = alpha / LF;
+      var amp = Math.pow(10, dbv / 20) * spComp;
+      for (var k = -spread; k <= spread; k++) {
+        var ak = (k === 0) ? 1 : 0.5 / Math.abs(k);
+        var fj = f0 * (1 + k * spreadRatio) * (1 + (rnd() * 2 - 1) * jit);
+        var ph = rnd() * 6.283185307179586;
+        for (i = 0; i < N; i++) {
+          var t = i / SR;
+          var env = Math.exp(-a * t);
+          if (i < r0) env *= i / r0;
+          y[i] += amp * ak * Math.sin(2 * Math.PI * fj * t + ph) * env;
+        }
+        if (spread === 0) break;            /* 未展宽时只跑 k=0 */
+      }
+    }
+
+    /* 宽带填充层 */
+    if (bed > 0) {
+      var wb = new Float64Array(N);
+      for (i = 0; i < N; i++) wb[i] = gauss(rnd);
+      var WB = rfft(wb, N);
+      var aB = LOG10 / bedT60;
+      var bRe = new Float64Array(R), bIm = new Float64Array(R);
+      for (i = 0; i < R; i++) {
+        var lfb = Math.log(Math.max(i * SR / N, 1));
+        var gb = Math.pow(10, interpLog(lfb, T_FREQ, T_DB) / 20);
+        bRe[i] = WB.re[i] * gb; bIm[i] = WB.im[i] * gb;
+      }
+      var br = irfft(bRe, bIm, N, R);
+      for (i = 0; i < N; i++) y[i] += bed * br[i] * Math.exp(-aB * i / SR);
+    }
+    return normalize(y);
+  }
+
+  function normalize(y) {
+    var pk = 0;
+    for (var i = 0; i < y.length; i++) { var a = Math.abs(y[i]); if (a > pk) pk = a; }
+    if (pk > 0) for (i = 0; i < y.length; i++) y[i] /= pk;
+    return y;
+  }
+
+  /* ------------------------------ 预设 ------------------------------ */
+  var PRESETS = {
+    m1: { label: '上上轮的③ 模态合成', fn: 'modal', o: { seed: 41 } },
+    j1: { label: '③ 轻叮', fn: 'g', o: { seed: 131, ding_boost: 4, low_trim: 4, hi_t60: 0.12, low_t60: 0.08, spread: 1 } },
+    j4: { label: '④ 重叮', fn: 'g', o: { seed: 134, ding_boost: 12, low_trim: 8, hi_t60: 0.10, low_t60: 0.07, spread: 2 } },
+    k3: { label: '⑦ 重叮+收砸(温和)', fn: 'g', o: { seed: 143, ding_boost: 12, low_trim: 8, hi_t60: 0.10, low_t60: 0.07, spread: 2, hp_transient: 900, noise_gain: 0.26, noise_t20: 0.0020, low_rise: 0.040 } },
+    k4: { label: '⑧ 重叮+收砸(彻底)', fn: 'g', o: { seed: 144, ding_boost: 12, low_trim: 8, hi_t60: 0.10, low_t60: 0.07, spread: 2, hp_transient: 1500, noise_gain: 0.16, noise_t20: 0.0014, low_rise: 0.055 } },
+    /* 诊断后的正确修法：k 系列靠「削瞬态」去砸，反而因归一化把低频相对抬高。
+       这里改回原瞬态强度，直接压低频电平 + 缩短低频余韵。 */
+    fix1: { label: '直压低频(不削瞬态)', fn: 'g', o: { seed: 151, ding_boost: 12, low_trim: 18, hi_t60: 0.10, low_t60: 0.050, spread: 2 } },
+    fix2: { label: '直压低频+中低频也压', fn: 'g', o: { seed: 152, ding_boost: 10, low_trim: 16, mid_trim: 6, hi_t60: 0.11, low_t60: 0.055, spread: 2 } },
+    /* 本轮方向（用户：「不是音高，是清脆感；m1 更接近，但 m1 余音比较没有」）：
+       m1 的清脆来自它的**窄带纯共振**（2530/3940/5620Hz），结构是对的；
+       但它的 T60 只有 93–105ms → −20dB 仅 36ms（录音是 64ms、fix2 是 102ms）。
+       这一组只把**中高频共振**的衰减拉长，低频（883/1030Hz）保持原样，
+       以免从"清脆"滑向"轰"。N 加大到 32768 以容纳长尾。 */
+    r1: { label: 'm1 余韵 2.0×（你认可）', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0 } },
+    /* 本轮：在 r1 / m1 上加「一点点低频」。
+       fix2 的实体感来自 **640Hz 那一簇**（目标谱里它是最高的 −3dB，低频段反而被压了）；
+       而 m1 的模态里没有 640Hz —— 它最低才 883Hz（且 T60 仅 31ms）。
+       所以补一根 640Hz 共振，电平/T60 做梯度。
+       alpha = 6.908 / T60(秒)：46→150ms、35→200ms、27→260ms */
+    s1: { label: 'r1 + 640Hz 一点点', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0, extraModes: [[640, -10, 46]] } },
+    s2: { label: 'r1 + 640Hz 中等', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0, extraModes: [[640, -6, 35]] } },
+    /* 本轮（用户：「r1/m1 有点尖、刺耳，想要接近 fix2 的音高」）——
+       刺耳的根源是 m1 的共振是**纯正弦**（相位一致、Q 极高），能量钉在一个频点上，
+       而 2530Hz 恰在人耳最敏感的区间。fix2 之所以柔和，是因为它的共振是摊开的。
+       t1 只把每根共振拆成 3 根、失谐 ±1% → 频谱峰变宽、能量分散，音高不变。
+       t2 在此之上把主音从 2530 移到 3940（更接近 fix2 的主峰）。
+       t3 只加宽带填充层（把共振间的空隙铺满，像真实撞击的连续谱）。
+       t4 两者都上，最柔。 */
+    t1: { label: '展宽·音高不变', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0, spread: 2, spreadRatio: 0.015 } },
+    t2: { label: '展宽+音高偏fix2', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0, spread: 2, spreadRatio: 0.015, modes: [[883, -4, 220], [1030, -3, 190], [2530, -5, 74], [3940, 0, 68], [5620, -5, 66], [7500, -12, 153], [9500, -15, 300]] } },
+    t3: { label: '宽带填充(补低频)', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0, bed: 2.0 } },
+    t4: { label: '展宽+填充(最柔)', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.0, spread: 2, spreadRatio: 0.015, bed: 1.5 } },
+    /* 本轮（用户：「t2 和 t4 不错，余音长一些，但不用太长，大概像 r1 那样」）——
+       r1 的 −20dB 是 58ms，而 t2/t4 虽然数值同为 hiLife 2.0（52–56ms），
+       但加了展宽（5 根失谐共振的拍频起伏）和填充层（45ms 就消失）之后，
+       **主观余韵会打折扣**。所以这里只做温和补偿：2.5× / 3.2×，
+       填充层的衰减（bedT60）按比例一起拉长，免得它先消失、显得尾巴断掉。 */
+    v1: { label: 't2 + 余韵 2.5×', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.5, spread: 2, spreadRatio: 0.015, modes: [[883, -4, 220], [1030, -3, 190], [2530, -5, 74], [3940, 0, 68], [5620, -5, 66], [7500, -12, 153], [9500, -15, 300]] } },
+    v2: { label: 't2 + 余韵 3.5×', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 3.5, spread: 2, spreadRatio: 0.015, modes: [[883, -4, 220], [1030, -3, 190], [2530, -5, 74], [3940, 0, 68], [5620, -5, 66], [7500, -12, 153], [9500, -15, 300]] } },
+    v3: { label: 't4 + 余韵 2.5×', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 2.5, spread: 2, spreadRatio: 0.015, bed: 1.5, bedT60: 0.070 } },
+    v4: { label: 't4 + 余韵 3.5×', fn: 'modal', o: { seed: 41, N: 32768, hiLife: 3.5, spread: 2, spreadRatio: 0.015, bed: 1.5, bedT60: 0.100 } }
+  };
+
+  function render(name, seed) {
+    var p = PRESETS[name];
+    if (!p) return null;
+    var o = {}; for (var k in p.o) o[k] = p.o[k];
+    if (seed != null) o.seed = seed;
+    return p.fn === 'g' ? synthG(o) : synthModal(o);
+  }
+
+  root.DiceSynth = {
+    SR: SR, N: 16384, T_FREQ: T_FREQ, T_DB: T_DB,
+    PRESETS: PRESETS, render: render, synthG: synthG, synthModal: synthModal,
+    /* 调试用：暴露底层，便于与 Python 版逐层比对 */
+    _rfft: rfft, _irfft: irfft, _interpLog: interpLog, _mulberry32: mulberry32, _gauss: gauss
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DiceSynth;
+
+
+/* ============================================================================
    ③ 音效（WebAudio 现场合成，不引外部文件）
    ============================================================================ */
 var Sfx = (function () {
   var ctx = null, enabled = true, primed = false;
+  /* ===== 掷骰碰撞音效 v4 =====
+     按你给的录音实测重建：7 根窄带共振（展宽 5 根、±1.5%）＋ 一层宽带填充，
+     中高频余韵 ×3.5（−20dB≈90ms）。碰撞仍**物理逐次触发**：
+     每次撞击各播一次，且随机取 4 个预渲染变体之一 —— 所以不会听出复读感。 */
+  var SFX_V4 = { N: 32768, hiLife: 3.5, spread: 2, spreadRatio: 0.015,
+                 bed: 1.5, bedT60: 0.100, seed: 41 };
+  var SFX_VARIANTS = 4;
+  var diceBufs = null, diceBuilding = false;
+  function buildDiceBufs() {
+    if (diceBufs || diceBuilding) return diceBufs;
+    if (!window.DiceSynth) return null;
+    var c = build();
+    if (!c) return null;
+    diceBuilding = true;
+    try {
+      var out = [];
+      for (var k = 0; k < SFX_VARIANTS; k++) {
+        var o = {};
+        for (var q in SFX_V4) o[q] = SFX_V4[q];
+        o.seed = SFX_V4.seed + k * 977;
+        var y = window.DiceSynth.synthModal(o);
+        var ab = c.createBuffer(1, y.length, window.DiceSynth.SR);
+        var f32 = new Float32Array(y.length);
+        for (var i = 0; i < y.length; i++) f32[i] = y[i];
+        if (ab.copyToChannel) ab.copyToChannel(f32, 0); else ab.getChannelData(0).set(f32);
+        out.push(ab);
+      }
+      diceBufs = out;
+    } catch (e) { diceBufs = null; }
+    diceBuilding = false;
+    return diceBufs;
+  }
+  /* 预热：页面空闲时先把 4 个变体渲染好，免得第一次撞击才现算 */
+  function warmDice() { try { buildDiceBufs(); } catch (e) { } }
+  function playDice(at, gain) {
+    var arr = buildDiceBufs();
+    if (!arr || !arr.length) return false;
+    try {
+      var s = ctx.createBufferSource();
+      s.buffer = arr[(Math.random() * arr.length) | 0];
+      s.playbackRate.value = 0.97 + Math.random() * 0.06;   /* 轻微变调，避免复读感 */
+      var g = ctx.createGain();
+      g.gain.value = gain == null ? 1 : gain;
+      s.connect(g); g.connect(ctx.destination);
+      s.start(at == null ? ctx.currentTime : at);
+      return true;
+    } catch (e) { return false; }
+  }
   function build() {
     if (ctx) return ctx;
     var AC = window.AudioContext || window.webkitAudioContext;
@@ -1253,6 +1744,8 @@ var Sfx = (function () {
     o.start(at); o.stop(at + 0.12);
   }
   return {
+    /* v4：空闲时预热碰撞音缓冲（模块外通过 Sfx.warmup() 调用） */
+    warmup: function () { warmDice(); },
     setEnabled: function (v) { enabled = !!v; if (v) unlock(); },
     isEnabled: function () { return enabled; },
     isReady: isReady,
@@ -1281,7 +1774,10 @@ var Sfx = (function () {
     hit: function (strength) {
       if (!ensure()) return;
       var s = Math.max(.12, Math.min(1, strength == null ? 1 : strength));
-      ceramicHit(ctx.currentTime + 0.003, 2050 + Math.random() * 950, 0.19 * s, 0.02 + Math.random() * 0.022);
+      var at = ctx.currentTime + 0.003;
+      /* v4：按录音实测重建的碰撞音（渲染失败时退回原合成，保证一定有声音） */
+      if (playDice(at, 0.62 * s)) return;
+      ceramicHit(at, 2050 + Math.random() * 950, 0.19 * s, 0.02 + Math.random() * 0.022);
     },
     /* 最后停稳：两声干净的瓷音收尾（动画在最后一颗骰子落定时调用） */
     settle: function (gain) {
@@ -3238,6 +3734,9 @@ function bindEvents() {
   document.addEventListener('pointerdown', onceRefresh);
   document.addEventListener('touchstart', onceRefresh);
   refreshSoundBtn();
+  /* 音效预热（空闲时渲染，不阻塞首屏；失败无害，首次撞击会自行渲染） */
+  if (window.requestIdleCallback) requestIdleCallback(function () { Sfx.warmup(); }, { timeout: 2000 });
+  else setTimeout(function () { Sfx.warmup(); }, 1200);
   var rsz;
   window.addEventListener('resize', function () {
     clearTimeout(rsz);
@@ -4292,7 +4791,7 @@ var NET = (function () {
 })();
 
 /* ---------- 联机面板 UI ---------- */
-var NET_BUILD = 'v2026.09.24';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
+var NET_BUILD = 'v2026.09.26';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
 var NETUI = (function () {
   /* 玩家名跨会话记住（localStorage）：断线「按名字认领」重连靠它（2026-09-18）——
      页面被杀后 PEER 身份丢了，服务端靠「同名 + 原座次离线」认人，名字必须与原先一致 */
