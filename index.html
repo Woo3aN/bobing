@@ -1575,12 +1575,17 @@ var Sfx = (function () {
   }
   /* 预热：页面空闲时先把 4 个变体渲染好，免得第一次撞击才现算 */
   function warmDice() { try { buildDiceBufs(); } catch (e) { } }
+  var lastDiceIdx = -1;
   function playDice(at, gain) {
     var arr = buildDiceBufs();
     if (!arr || !arr.length) return false;
     try {
+      var idx = (Math.random() * arr.length) | 0;
+      /* 连续两次调用不撞到同一变体（摇骰要连播两声） */
+      if (arr.length > 1 && idx === lastDiceIdx) idx = (idx + 1) % arr.length;
+      lastDiceIdx = idx;
       var s = ctx.createBufferSource();
-      s.buffer = arr[(Math.random() * arr.length) | 0];
+      s.buffer = arr[idx];
       s.playbackRate.value = 0.97 + Math.random() * 0.06;   /* 轻微变调，避免复读感 */
       var g = ctx.createGain();
       g.gain.value = gain == null ? 1 : gain;
@@ -1765,8 +1770,13 @@ var Sfx = (function () {
     shake: function () {
       if (!ensure()) return;
       var t = ctx.currentTime + 0.008;
-      ceramicHit(t, 1850 + Math.random() * 260, 0.22, 0.05);
-      ceramicHit(t + 0.045, 2250 + Math.random() * 300, 0.15, 0.042);
+      /* 音色与 hit() 统一为 v4；音量沿用原来的比例（第一声略重于碰撞、第二声略轻） */
+      if (playDice(t, 0.72)) {
+        playDice(t + 0.045, 0.49);
+      } else {
+        ceramicHit(t, 1850 + Math.random() * 260, 0.22, 0.05);
+        ceramicHit(t + 0.045, 2250 + Math.random() * 300, 0.15, 0.042);
+      }
       bowlBody(t, 0.026);
     },
     /* 单次碰撞：动画按每次触地的时间点调用，越弹越轻（声画同步）。
@@ -1793,7 +1803,9 @@ var Sfx = (function () {
       var at = t, i;
       for (i = 0; i < hits; i++) {
         at += span / hits * (0.55 + Math.random() * 0.9);
-        ceramicHit(at, 1700 + Math.random() * 1000, 0.16 * (1 - i / hits * 0.5), 0.045 + Math.random() * 0.05);
+        var amp = 0.52 * (1 - i / hits * 0.5);
+        /* 与 hit() 同一音色；渲染失败时退回原合成 */
+        if (!playDice(at, amp)) ceramicHit(at, 1700 + Math.random() * 1000, amp * 0.31, 0.045 + Math.random() * 0.05);
       }
       bowlBody(t, 0.05);
     },
