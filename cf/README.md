@@ -26,7 +26,7 @@ woo3an.top/ws?...       Worker → 每个房间号一个 Durable Object
 |---|---|
 | `src/worker.js` | Worker 入口 + `RoomDO`（建房/加入/开局/掷骰广播/重连/解散） |
 | `wrangler.jsonc` | 绑定：静态资源 ASSETS、Durable Object ROOMS、自定义域名 woo3an.top |
-| `public/index.html` | 游戏本体（由项目根 `博饼.html` 同步而来，别直接改） |
+| `public/index.html` | 游戏本体（由项目根 `index.html` 同步而来，别直接改） |
 | `test-room.js` | 服务端协议测试（Node ws 客户端，57 项断言，含掉线托管/取消/全员解散） |
 | `mock-server.js` | 本地模拟房间服务（协议与 Worker 一致，供浏览器 e2e 测试用） |
 | `dev/__e2e.html` | 浏览器端到端测试页（双实例建房→加入→对博→重连，23 步） |
@@ -76,5 +76,5 @@ node mock-server.js        # 另开一个终端
 
 - 服务端**不跑游戏规则**（只做房间记录 + 事件追加），规则在客户端，与 CloudBase 版一致。
   因此：无防作弊，只适合熟人局。
-- `public/index.html` 是同步产物，改游戏请改项目根的 `博饼.html` 再复制过来。
+- `public/index.html` 是同步产物，改游戏请改项目根的 `index.html` 再复制过来。
 - 免费额度用尽会拒绝服务（不会产生账单），下月重置。
