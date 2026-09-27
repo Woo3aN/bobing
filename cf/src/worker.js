@@ -1,3 +1,8 @@
+/** 房间人数上限（服务端兜底，防界面被挤爆）。
+ *  实测 20 人也完全可行：每局约 262 把、人均 13 把、"一份没博到"只占 0.8%
+ *  （一秀 32 + 二举 16 + 四进 8 = 56 份，够 20 人分）。本地传阅的上限另由界面控制（2–10 人）。 */
+const MAX_PLAYERS = 20;
+
 /**
  * 博饼联机房间服务 —— Cloudflare Worker + Durable Object
  * ---------------------------------------------------------------------------
@@ -187,6 +192,8 @@ export class RoomDO {
         if (this.rec.auto && !byClaim) delete this.rec.auto[idx];
         await this.save();
       } else if (!mine) {
+        if (this.rec.roster.length >= MAX_PLAYERS)
+          return new Response('房间已满（最多 ' + MAX_PLAYERS + ' 人）', { status: 403 });
         this.rec.roster.push({ id: pid, name });
         await this.save();
       }

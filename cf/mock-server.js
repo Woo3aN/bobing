@@ -8,6 +8,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 
 const ROOT = path.join(__dirname, 'public');
+const MAX_PLAYERS = 20;   /* 与 Worker 同步：房间人数上限 */
 const RoomDO = { IDLE_PROXY_MS: Number(process.env.IDLE_PROXY_MS) || 15000 };   /* 与 Worker 对齐（测试可覆盖） */
 const rooms = new Map();   /* code -> rec */
 
@@ -175,6 +176,7 @@ server.on('upgrade', (req, socket, head) => {
       rec.roster[idx].id = pid;
       if (rec.auto && !byClaim) delete rec.auto[idx];
     } else if (!mine) {
+      if (rec.roster.length >= MAX_PLAYERS) return deny('Full', 403);
       rec.roster.push({ id: pid, name });
     }
   }
