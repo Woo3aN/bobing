@@ -1,10 +1,23 @@
 # 更新日志
 
 中秋博饼从零开始的完整演进记录。
-**日志最新版本：v2026.10.02** ｜ **游戏构建版本（联机面板底部显示）：v2026.10.02**
+**日志最新版本：v2026.10.03** ｜ **游戏构建版本（联机面板底部显示）：v2026.10.02**
 （构建版本只在游戏代码变动时更新；文档、素材、仓库设置这类改动记日志但不改构建号。）
 
 ---
+
+## v2026.10.03 · 推送即上线（GitHub Actions 部署 Worker）
+
+游戏此前只能本机 `wrangler deploy`，跟博客那边（push → Actions 自动部署）不一致。
+补上 `.github/workflows/deploy.yml`，两个站点现在都是推到 `main` 就上线：
+
+- 只在 `index.html`、`cf/src/`、`cf/public/`、`cf/wrangler.jsonc` 变动时跑，改文档不触发部署。
+- 部署前先把仓库根的 `index.html` 同步到 `cf/public/index.html`——以前靠手动 cp，
+  忘了就会上线旧的游戏页，现在这步在 CI 里做。
+- 部署后冒烟检查线上 `/bobing/` 是否 200。
+- 需要一个仓库密钥 `CLOUDFLARE_API_TOKEN`（Settings → Secrets and variables → Actions）。
+  没配的话任务会直接报错提示，不会静默失败。
+- 备用入口 `woo3an.github.io/bobing/` 仍由 `pages.yml` 发布，不受影响。
 
 ## v2026.10.02 · Worker 改名 `bobing-game`，与博客分开部署
 

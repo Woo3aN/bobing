@@ -1,0 +1,55 @@
+name: 部署到 Cloudflare
+
+# 推到 main 就上线（只在线上真正用到的文件变动时跑；改文档不部署）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'cf/src/**'
+      - 'cf/public/**'
+      - 'cf/wrangler.jsonc'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 4fbd588701e01fbe0f3a2cce7c02d7b5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # 游戏本体是仓库根的 index.html，Worker 的静态资源目录是 cf/public。
+      # 部署前同步一次，免得忘了手动 cp 就上线旧版本。
+      - name: 同步游戏本体
+        run: |
+          cp index.html cf/public/index.html
+          node --check cf/src/worker.js
+
+      - name: 检查密钥
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
+        run: |
+          echo "::error::缺少仓库密钥 CLOUDFLARE_API_TOKEN。"
+          echo "::error::去 Settings → Secrets and variables → Actions 添加后重跑本任务。"
+          exit 1
+
+      - name: 部署
+        working-directory: cf
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        # --no-bundle：worker.js 单文件无 import，跳过打包器。
+        run: npx --yes wrangler@4 deploy --no-bundle
+
+      - name: 冒烟检查
+        run: |
+          sleep 15
+          curl -sSfL -o /dev/null -w '线上 /bobing/ -> %{http_code}\n' https://woo3an.top/bobing/

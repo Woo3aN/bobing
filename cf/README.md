@@ -38,6 +38,9 @@ woo3an.top/ws?...      Worker → 每个房间号一个 Durable Object
 
 改路由请改仓库里的 `wrangler.jsonc`，别只改 Cloudflare 控制台（下次部署会被冲掉）。
 
+两边都是推到 `main` 自动部署（本仓库 `.github/workflows/deploy.yml`，博客那边
+`.github/workflows/deploy.yml`），用的都是同名仓库密钥 `CLOUDFLARE_API_TOKEN`。
+
 房间记录的数据结构与游戏里的 Local / CloudBase 传输层完全一致，
 游戏侧 `onRoom(r)` 事件回放逻辑零改动 —— 传输层是可插拔的。
 
@@ -76,8 +79,9 @@ woo3an.top/ws?...      Worker → 每个房间号一个 Durable Object
 # 本地起真实 Worker（workerd）
 npx wrangler dev --port 8788
 
-# 部署（需先 npx wrangler login 授权一次）
-npx wrangler deploy
+# 部署：推到 main 由 .github/workflows/deploy.yml 自动跑下面这条，
+# 本机手动部署才需要敲（需先 npx wrangler login 授权一次）
+npx wrangler deploy --no-bundle
 
 # 服务端协议测试（本地或线上）
 node test-room.js

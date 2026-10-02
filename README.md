@@ -188,16 +188,20 @@ cd cf && node mock-server.js        # 默认 127.0.0.1:8911
 
 ## 部署
 
-```bash
-# 联机服务（Cloudflare Worker + Durable Object，Worker 名 bobing-game）
-cd cf && npx wrangler deploy        # 首次需 npx wrangler login
+**推到 `main` 就上线**：`.github/workflows/deploy.yml` 会自动把游戏部署到 Cloudflare
+（`index.html`、`cf/src/`、`cf/public/`、`cf/wrangler.jsonc` 有变动才跑，改文档不部署）。
+备用入口由 `pages.yml` 同步更新，都不用手敲命令。
 
-# 静态站点（GitHub Pages，本仓库即发布源）
-cp 博饼.html publish/index.html
-cd publish && git add -A && git commit -m "..." && git push
+```bash
+# 本机手动部署（Worker 名 bobing-game）
+cd cf && npx wrangler deploy --no-bundle
 ```
 
-> 改 `cf/src/worker.js` 后记得同步 `cf/public/index.html`（游戏副本）再部署。
+首次用 Actions 前，去仓库 **Settings → Secrets and variables → Actions** 添加一个仓库密钥
+`CLOUDFLARE_API_TOKEN`（Cloudflare 里给的 Workers 部署令牌）。
+
+> 部署流程会先把仓库根的 `index.html` 同步到 `cf/public/index.html`（Worker 的静态目录），
+> 所以不用手动 cp，也不会上线旧版本。
 >
 > **线上分工**：`woo3an.top/bobing/` 与 `/ws` 归本仓库的 Worker `bobing-game`；
 > `woo3an.top` 的根路径是博客，归另一个 Worker `rhinelab-blog`
@@ -234,8 +238,8 @@ bobing/
 │   ├── mock-server.js   本地模拟服务（协议与线上一致）
 │   ├── test-room.js     协议测试
 │   ├── dev/__e2e.html   浏览器端到端测试
-│   └── public/          部署产物（index.html 为游戏副本）
-└── publish/             静态站点发布源（GitHub Pages）
+│   └── public/          部署产物（index.html 为游戏副本，CI 自动同步）
+└── .github/workflows/   推送即上线（deploy.yml → Cloudflare，pages.yml → 备用入口）
 ```
 
 ## 运行成本
