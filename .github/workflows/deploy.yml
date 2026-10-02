@@ -35,19 +35,20 @@ jobs:
           cp index.html cf/public/index.html
           node --check cf/src/worker.js
 
-      - name: 检查密钥
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
-        run: |
-          echo "::error::缺少仓库密钥 CLOUDFLARE_API_TOKEN。"
-          echo "::error::去 Settings → Secrets and variables → Actions 添加后重跑本任务。"
-          exit 1
-
       - name: 部署
         working-directory: cf
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        # --no-bundle：worker.js 单文件无 import，跳过打包器。
-        run: npx --yes wrangler@4 deploy --no-bundle
+        run: |
+          # secrets 上下文不能用在 if: 里，所以密钥检查放在这里做，
+          # 免得 wrangler 报一串看不懂的鉴权错误。
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::缺少仓库密钥 CLOUDFLARE_API_TOKEN"
+            echo "::error::去 Settings → Secrets and variables → Actions 添加后重跑本任务"
+            exit 1
+          fi
+          # --no-bundle：worker.js 单文件无 import，跳过打包器。
+          npx --yes wrangler@4 deploy --no-bundle
 
       - name: 冒烟检查
         run: |
