@@ -189,7 +189,7 @@ cd cf && node mock-server.js        # 默认 127.0.0.1:8911
 ## 部署
 
 ```bash
-# 联机服务（Cloudflare Worker + Durable Object）
+# 联机服务（Cloudflare Worker + Durable Object，Worker 名 bobing-game）
 cd cf && npx wrangler deploy        # 首次需 npx wrangler login
 
 # 静态站点（GitHub Pages，本仓库即发布源）
@@ -198,6 +198,11 @@ cd publish && git add -A && git commit -m "..." && git push
 ```
 
 > 改 `cf/src/worker.js` 后记得同步 `cf/public/index.html`（游戏副本）再部署。
+>
+> **线上分工**：`woo3an.top/bobing/` 与 `/ws` 归本仓库的 Worker `bobing-game`；
+> `woo3an.top` 的根路径是博客，归另一个 Worker `rhinelab-blog`
+> （仓库 `Woo3aN/rhinelab-blog-theme`）。两个 Worker 名字不同、各部署各的，
+> 不会互相覆盖——细节见 [`cf/README.md`](cf/README.md)。
 
 ## 自检
 

@@ -26,12 +26,17 @@ woo3an.top/ws?...      Worker → 每个房间号一个 Durable Object
 | Worker 名 | 路由 | 仓库 | 内容 |
 |---|---|---|---|
 | `rhinelab-blog` | `woo3an.top/*` | Woo3aN/rhinelab-blog-theme（`cf-deploy/`） | 博客 + `/lab/` |
-| `bobing-game` | `woo3an.top/bobing*`、`woo3an.top/ws` | Woo3aN/bobing（`cf/`） | 博饼游戏 + 房间服务 |
+| `bobing-game` | `woo3an.top/bobing*`、`woo3an.top/ws*` | Woo3aN/bobing（`cf/`） | 博饼游戏 + 房间服务 |
 
 ⚠️ 两个仓库的 Worker **名字必须不同**——名字就是部署单元 ID，
 同名部署 = 后部署的把先部署的整个覆盖掉（2026-10-02 之前两边都叫
-`bobing`，游戏一上线就把博客盖没了）。改路由请改仓库里的
-`wrangler.jsonc`，别只改 Cloudflare 控制台（下次部署会被冲掉）。
+`bobing`，游戏一上线就把博客盖没了）。
+
+⚠️ **route pattern 必须带 `*`**：pattern 匹配的是完整 URL，写死 `woo3an.top/ws`
+只匹配不带 query 的 `/ws`；游戏连的是 `/ws?code=1234&op=...`，不带 `*` 就会漏回
+博客的 `woo3an.top/*`、拿到博客的 404 页，还会被边缘缓存住（握手一直 404）。
+
+改路由请改仓库里的 `wrangler.jsonc`，别只改 Cloudflare 控制台（下次部署会被冲掉）。
 
 房间记录的数据结构与游戏里的 Local / CloudBase 传输层完全一致，
 游戏侧 `onRoom(r)` 事件回放逻辑零改动 —— 传输层是可插拔的。
@@ -41,9 +46,10 @@ woo3an.top/ws?...      Worker → 每个房间号一个 Durable Object
 | 文件 | 作用 |
 |---|---|
 | `src/worker.js` | Worker 入口 + `RoomDO`（建房/加入/开局/掷骰广播/重连/解散） |
-| `wrangler.jsonc` | 绑定：静态资源 ASSETS、Durable Object ROOMS、自定义域名 woo3an.top |
+| `wrangler.jsonc` | Worker 名 `bobing-game`、静态资源 ASSETS、Durable Object ROOMS、路由 `woo3an.top/bobing*` 与 `woo3an.top/ws*` |
 | `public/index.html` | 游戏本体（由项目根 `index.html` 同步而来，别直接改） |
-| `test-room.js` | 服务端协议测试（Node ws 客户端，57 项断言，含掉线托管/取消/全员解散） |
+| `test-room.js` | 服务端协议测试（Node ws 客户端，44 项断言，含掉线托管/取消/全员解散） |
+| `ws-probe.js` | 线上 WebSocket 直连探针：只做一次 WS 升级、不碰 HTTP 预检，判断握手有没有被路由或缓存拦掉（`node ws-probe.js`） |
 | `mock-server.js` | 本地模拟房间服务（协议与 Worker 一致，供浏览器 e2e 测试用） |
 | `dev/__e2e.html` | 浏览器端到端测试页（双实例建房→加入→对博→重连，23 步） |
 | `public/dev/__auto.html` | 托管/取消按钮专项验证页（9 步，线上也可打开自测） |

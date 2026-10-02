@@ -6,6 +6,28 @@
 
 ---
 
+## v2026.10.02 · Worker 改名 `bobing-game`，与博客分开部署
+
+此前本仓库与博客仓库（`Woo3aN/rhinelab-blog-theme`）用**同一个 Worker 名 `bobing`**
+部署到 woo3an.top：名字就是部署单元 ID，谁后部署谁把对方整个覆盖掉——游戏一上线，
+博客就没了（根路径 520）。现在按「一个服务一个 Worker」拆开，各自独立仓库、独立部署：
+
+| Worker | 路由 | 仓库 | 内容 |
+| --- | --- | --- | --- |
+| `rhinelab-blog` | `woo3an.top/*` | rhinelab-blog-theme 的 `cf-deploy/` | 博客、`/lab/` 三维档案 |
+| `bobing-game` | `woo3an.top/bobing*`、`woo3an.top/ws*` | 本仓库 `cf/` | 博饼页、房间服务 |
+
+- 本仓库只改 `cf/wrangler.jsonc` 的 `name`（`bobing` → `bobing-game`），代码与游戏页没动；
+  博客那边改名 `rhinelab-blog`，并删掉它那份博饼页与 `RoomDO`（房间服务只留一份：
+  两个 Worker 的 DO 存储互相隔离，两边都存会让同一个房间号出现两份房间数据）。
+- **route pattern 必须带 `*`**：pattern 匹配完整 URL，写死 `woo3an.top/ws` 只匹配不带
+  query 的 `/ws`，而游戏连的是 `/ws?code=1234&op=...`——会漏回博客的 `woo3an.top/*`，
+  拿到博客的 404 页，还被边缘缓存住（`CF-Cache-Status: HIT`，加随机 query 也一样），
+  WebSocket 握手一直 404。改成 `ws*` 后线上协议测试 44 项全通过。
+- 新增 `cf/ws-probe.js`：线上 WebSocket 直连探针（只做一次 WS 升级、不碰 HTTP 预检），
+  用来快速区分「握手被拦」和「游戏本身有 bug」。
+- 顺带修掉一处旧注释：根路径不再是「留给将来的主页」，现在是博客。
+
 ## v2026.10.02 · 碰撞声换成真实录音采样（fc150）
 
 用户反馈合成音色「还是难听」「不像录音」，经多轮 A/B 后改为直接采样：

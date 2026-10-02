@@ -35,7 +35,8 @@ export default {
       return env.ROOMS.get(id).fetch(request);
     }
     if (env.ASSETS) {
-      /* 游戏挂在 /bobing，根路径留给将来的主页（2026-09-17 用户定） */
+      /* 线上根路径归博客 Worker rhinelab-blog（woo3an.top/*），请求到不了这里；
+         这条 302 只对本机 wrangler dev 和 *.workers.dev 生效。 */
       if (url.pathname === '/' ) return Response.redirect(url.origin + '/bobing', 302);
       const isHtml = url.pathname === '/bobing' || url.pathname === '/bobing/' ||
         url.pathname === '/index.html' || url.pathname.endsWith('.html');
