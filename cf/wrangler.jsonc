@@ -28,6 +28,10 @@
      此前 woo3an.top/* 全域接管把博客盖掉了）。改这里 = 改线上路由，别只改控制台。 */
   "routes": [
     { "pattern": "woo3an.top/bobing*", "zone_name": "woo3an.top" },
-    { "pattern": "woo3an.top/ws", "zone_name": "woo3an.top" }
+    /* ⚠️ 必须带 `*`：route pattern 匹配的是完整 URL，写死 `woo3an.top/ws`
+       只匹配不带 query 的 /ws。游戏连的是 `/ws?code=1234&op=...`，
+       不带 * 就会漏回博客的 `woo3an.top/*`，拿到博客的 404 页还会被缓存住
+       （2026-10-02 实测：WebSocket 握手直接 404）。 */
+    { "pattern": "woo3an.top/ws*", "zone_name": "woo3an.top" }
   ]
 }
