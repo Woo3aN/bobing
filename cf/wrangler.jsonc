@@ -1,5 +1,9 @@
 {
-  "name": "bobing",
+  /* Worker 名字 = 部署单元的唯一 ID。2026-10-02 之前本仓库与博客仓库的
+     cf-deploy/ 都叫 "bobing"，谁后部署谁覆盖对方（游戏一上线就把博客盖掉）。
+     两个站点现在拆成两个 Worker：这里是游戏，博客是 rhinelab-blog。
+     改名只需要改这里，路由在下面的 routes。 */
+  "name": "bobing-game",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-01",
   "assets": {
