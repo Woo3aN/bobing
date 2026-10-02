@@ -10,12 +10,28 @@ Hibernation 挂机不烧时长）。详见根目录 `publish/README.md` 的额�
 ## 架构
 
 ```
-woo3an.top/bobing/      游戏本体（public/index.html；/ 302 → /bobing，根路径留给将来的主页）
-woo3an.top/ws?...       Worker → 每个房间号一个 Durable Object
+woo3an.top/            博客（另一个 Worker rhinelab-blog，仓库 Woo3aN/rhinelab-blog-theme，
+                       本 Worker 不处理根路径）
+woo3an.top/bobing/     游戏本体（public/index.html）
+woo3an.top/ws?...      Worker → 每个房间号一个 Durable Object
                        · WebSocket 常驻推送（无轮询）
                        · 房间记录 {code, host, started, closed, roster, events} 存 DO SQLite
                        · Hibernation API：空闲不计时长
 ```
+
+## 部署边界（2026-10-02 拆分）
+
+`woo3an.top` 一个域名两个 Worker，按路径分工，**各自独立仓库、独立部署**：
+
+| Worker 名 | 路由 | 仓库 | 内容 |
+|---|---|---|---|
+| `rhinelab-blog` | `woo3an.top/*` | Woo3aN/rhinelab-blog-theme（`cf-deploy/`） | 博客 + `/lab/` |
+| `bobing-game` | `woo3an.top/bobing*`、`woo3an.top/ws` | Woo3aN/bobing（`cf/`） | 博饼游戏 + 房间服务 |
+
+⚠️ 两个仓库的 Worker **名字必须不同**——名字就是部署单元 ID，
+同名部署 = 后部署的把先部署的整个覆盖掉（2026-10-02 之前两边都叫
+`bobing`，游戏一上线就把博客盖没了）。改路由请改仓库里的
+`wrangler.jsonc`，别只改 Cloudflare 控制台（下次部署会被冲掉）。
 
 房间记录的数据结构与游戏里的 Local / CloudBase 传输层完全一致，
 游戏侧 `onRoom(r)` 事件回放逻辑零改动 —— 传输层是可插拔的。
