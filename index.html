@@ -1663,13 +1663,31 @@ var Sfx = (function () {
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
     return ctx;
   }
+  /* 上下文恢复。iOS 挂起音频时 state 可能是 'suspended'，也可能是 Safari 特有的
+     'interrupted' —— 只判断 'suspended' 会漏掉后者，表现就是"退出浏览器再打开没声音"。
+     设备被系统彻底收走时是 'closed'，那个实例再也起不来（resume 只会抛
+     Failed to start the audio device），只能重建一个。 */
+  function revive() {
+    var c = build();
+    if (!c) return null;
+    if (c.state === 'closed') {
+      ctx = null;                 /* 旧实例已废，下面 build() 会新建 */
+      c = build();
+      if (!c) return null;
+    }
+    if (c.state !== 'running') {
+      try {
+        var rp = c.resume();
+        /* 不在用户手势时机里的 resume 可能被 iOS 拒绝，别让它变成未处理的 rejection */
+        if (rp && rp.catch) rp.catch(function () { });
+      } catch (e) { }
+    }
+    return c;
+  }
   function ensure() {
     if (!enabled) return null;
     try {
-      var c = build();
-      if (!c) return null;
-      if (c.state === 'suspended') c.resume();
-      return c;
+      return revive();
     } catch (e) { window.__logErr('audio: ' + e.message); return null; }
   }
   /* 首次手势的同步调用栈里解锁：resume + 播一段 1 采样的静音把音频通道顶开。
@@ -1701,12 +1719,15 @@ var Sfx = (function () {
     document.addEventListener('touchstart', unlock, { passive: true });
     document.addEventListener('pointerdown', unlock, { passive: true });
     document.addEventListener('click', unlock, { passive: true });
-    /* 切出去再回来，iOS 会把 AudioContext 挂起 —— 不恢复就永久静音 */
+    /* 切出去再回来，iOS 会把 AudioContext 挂起 —— 不恢复就永久静音。
+       这里不自己判断状态：ensure() 内部覆盖 suspended / interrupted / closed。 */
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) return;
-      var c = ensure();
-      if (c && c.state !== 'running') { try { c.resume(); } catch (e) { } }
+      ensure();
     });
+    /* Safari 关闭标签再打开、前进后退回来都走 bfcache：这条路径不一定发
+       visibilitychange，但一定会发 pageshow —— 不监听它就一直不恢复声音。 */
+    window.addEventListener('pageshow', function () { ensure(); });
   }
   function burst(at, dur, freq, gain) {
     var c = ctx, n = Math.floor(c.sampleRate * dur);
@@ -4858,7 +4879,7 @@ var NET = (function () {
 })();
 
 /* ---------- 联机面板 UI ---------- */
-var NET_BUILD = 'v2026.10.02';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
+var NET_BUILD = 'v2026.10.04';   /* 版本号显示在联机面板底部：用户可对照确认 WebView 没有跑旧缓存 */
 var NETUI = (function () {
   /* 玩家名跨会话记住（localStorage）：断线「按名字认领」重连靠它（2026-09-18）——
      页面被杀后 PEER 身份丢了，服务端靠「同名 + 原座次离线」认人，名字必须与原先一致 */

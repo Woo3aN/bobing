@@ -1,10 +1,29 @@
 # 更新日志
 
 中秋博饼从零开始的完整演进记录。
-**日志最新版本：v2026.10.03** ｜ **游戏构建版本（联机面板底部显示）：v2026.10.02**
+**日志最新版本：v2026.10.04** ｜ **游戏构建版本（联机面板底部显示）：v2026.10.04**
 （构建版本只在游戏代码变动时更新；文档、素材、仓库设置这类改动记日志但不改构建号。）
 
 ---
+
+## v2026.10.04 · iOS 回到前台没声音：补上 pageshow 与被中断的上下文
+
+用户反馈「手机端打开有时没声音，比如退出 Safari 再打开」。用同一段脚本把**旧版与新版**
+分别跑一遍（人为把 AudioContext 挂起，再派发回到前台该发的事件）后，定位到两处漏洞：
+
+- **只认 `suspended`，漏掉 iOS 特有的 `interrupted`。** 切后台、被系统收走音频会话时，
+  Safari 给出的 state 是 `interrupted`；而 `ensure()` 里写的是 `if (state === 'suspended') resume()`，
+  这类上下文永远不会被唤醒。改成「只要不是 `running` 就 resume」——`closed` 是设备彻底失效
+  （resume 只会抛 `Failed to start the audio device`），那种情况重建实例。
+- **没监听 `pageshow`。** Safari 关闭标签再打开、前进后退回来走的是 bfcache：这条路径
+  不一定发 `visibilitychange`，但一定会发 `pageshow`。不监听它就一直不恢复——这正是
+  「退出浏览器再打开没声音」的直接原因。对照实验里旧版在这一步停在 `suspended`，新版回到 `running`。
+
+顺带：`resume()` 的 rejection 现在会被吞掉（不在用户手势时机里调用时 iOS 会拒绝，
+不该变成未处理的 rejection）。
+
+回归工具：`tools/audio-recovery-check.js`（CDP 驱动，挂起后依次派发
+`visibilitychange` / `pageshow` / `pointerdown`，三条路径都应回到 `running`）。
 
 ## v2026.10.03 · 推送即上线（GitHub Actions 部署 Worker）
 
