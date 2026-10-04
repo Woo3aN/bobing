@@ -218,6 +218,11 @@ bash tools/run_probes.sh
 cd cf && node mock-server.js &
 WS_URL=ws://127.0.0.1:8911/ws node test-room.js
 
+# 音频恢复路径回归（把 AudioContext 挂起，再走各条"回到前台"的唤醒路径）
+# 需先起一个调试版 Chrome，且要带 --autoplay-policy=no-user-gesture-required，
+# 否则没有用户手势时 resume 会被浏览器挡下、测试假红 —— 见脚本头部注释。
+NODE_PATH=cf/node_modules node tools/audio-recovery-check.js 9338 "https://woo3an.top/bobing/"
+
 # 浏览器打开：
 #   cf/dev/__e2e.html        端到端 23 步（建房→加入→对博→掉线托管→重连→再来一局）
 #   cf/public/dev/__auto.html 托管/取消/观战专项 9 步（线上也可直接打开自测）
@@ -227,9 +232,10 @@ WS_URL=ws://127.0.0.1:8911/ws node test-room.js
 
 ```
 bobing/
-├── 博饼.html            游戏本体（单文件、零依赖，所有功能都在这里）
+├── index.html           游戏本体（单文件、零依赖，所有功能都在这里）
 ├── tools/
 │   ├── run_probes.sh    一键跑全套浏览器探针
+│   ├── audio-recovery-check.js  音频恢复路径回归（挂起 → 各条唤醒路径）
 │   ├── gen_bowl.js      碗与骰子的几何生成器
 │   └── bowl_base.html   建模基线（重建碗时从这里改）
 ├── cf/                  联机服务
